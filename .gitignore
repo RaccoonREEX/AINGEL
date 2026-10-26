@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+*.py[cod]
+.env
+.env.*
+!.env.example
+*.sqlite3
+private-media/
+node_modules/
+dist/
+.gradle/
+local.properties
+*.apk
+*.jks
+*.keystore
+test-results/
