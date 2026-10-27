@@ -14,6 +14,11 @@ Muse Image routine cards; haptic keyword cues after measured reliability; bounde
 
 ## WON'T in this event
 
-Halo hardware/firmware, diagnosis, medication dosing, emergency dispatch, facial recognition, certified navigation/fall detection, continuous cloud recording, universal sign translation, custom foundation-model training. Halo remains a labeled future concept.
+Halo hardware/firmware, diagnosis, medication dosing, emergency dispatch, public/unconsented face identification, certified navigation/fall detection, continuous cloud recording, universal sign translation, custom foundation-model training. Halo remains a labeled future concept.
 
 No new feature enters P0 without removing an equal-or-larger item and recording the demo consequence.
+
+
+## User-authorized scope amendment
+
+The user subsequently explicitly requested Google Authenticator 2FA and photo-based family recognition for memory/visual support. TOTP is implemented. Family recognition is implemented as local, consented, profile-scoped experimental matching only; never a biometric sign-in mechanism or identification of strangers. This supersedes the earlier blanket facial-recognition exclusion while preserving privacy and no-medical-advice constraints. The user also specified 1–4 accepted caregivers; readiness and invitation-slot enforcement implement that limit.

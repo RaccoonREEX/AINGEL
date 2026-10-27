@@ -44,9 +44,13 @@ Start with user/assisted profile and accessibility preferences. Add memory event
 
 Missing memory yields a deterministic no-evidence result; an LLM never supplies a missing factual location. Last-seen evidence is historical, never proof of current position or completed medical routines. Do not fabricate confidence from prose. Deleting evidence invalidates linked memory claims. Use UTC storage and user timezone presentation.
 
-## Status at takeover
+## Current local implementation
 
-Implemented now: authenticated Django/DRF scene endpoint, bounded image normalization, explicit mock adapter, server-side Meta HTTP adapter with synthetic-fixture gate and ten passing boundary tests. One separate real Spark 1.3 synthetic-image request succeeded in 3,453 ms; this used Django APIClient, not a browser or Android. SQLite is local only. No Android APK, web product, deployment or complete memory/Care flow exists yet. Roadmap diagrams are not deployed functionality.
+React/TypeScript/Vite interface and Django/DRF/Daphne service run on loopback. Implemented: sessions/CSRF/TOTP, profile-scoped caregiver invitations and separate permissions, routines/messages, human-confirmed structured memories and private evidence, local audit history, real Spark/SAM/Voice adapters and caption relay, and opt-in experimental local family matching. SQLite supports local persistence; secrets and facial templates are encrypted with a separate local Fernet key. Health/profile text is not encrypted at field level yet.
+
+55 backend tests pass. Real synthetic-input Meta validations are recorded in the smoke result JSON files; these are not benchmarks. Ask currently dispatches explicitly selected local tools rather than an autonomous model loop. React English/Spanish resources and narrow-frame layout were checked. No Android APK, production PostgreSQL/Redis, HTTPS deployment or full accessibility audit exists yet. Future architecture diagrams are not claims of deployed infrastructure.
+
+Family matching was explicitly added by a later user request: owner opt-in, individual adult self-enrollment, local YuNet/SFace embeddings, possible-match wording, 30-day expiry and revocation; never biometric authentication. TOTP and matching have separate code paths. See SECURITY_AND_FAMILY.md.
 
 ## Acceptance gates
 

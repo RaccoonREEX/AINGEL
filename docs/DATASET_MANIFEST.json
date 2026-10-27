@@ -1,0 +1,16 @@
+{
+  "dataset": "VizWiz VQA validation annotations",
+  "source": "https://vizwiz.cs.colorado.edu/VizWiz_final/vqa_data/Annotations.zip",
+  "official_page": "https://vizwiz.org/tasks-and-datasets/vqa/",
+  "license": "CC-BY-4.0",
+  "attribution": "Danna Gurari et al., VizWiz Grand Challenge: Answering Visual Questions from Blind People, CVPR 2018; VizWiz project",
+  "archive_sha256": "dbc32fc1e3f1b1039aea906030d569d6c238b4ddb2eea5e3453a6a565c829ec9",
+  "validation_records": 4319,
+  "local_subset_records": 30,
+  "unanswerable_subset": 15,
+  "answerable_subset": 15,
+  "images_downloaded": 0,
+  "training_performed": false,
+  "inference_performed": false,
+  "purpose": "Prepare balanced answerability evaluation; image privacy screening and actual evaluation remain pending."
+}

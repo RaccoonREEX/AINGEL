@@ -1,0 +1,23 @@
+{
+  "name": "aingel-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 5173 --strictPort",
+    "build": "tsc -b && vite build",
+    "typecheck": "tsc -b"
+  },
+  "dependencies": {
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@vitejs/plugin-react": "latest",
+    "prettier": "^3.6.2",
+    "typescript": "latest",
+    "vite": "latest"
+  }
+}

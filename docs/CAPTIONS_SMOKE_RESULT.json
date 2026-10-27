@@ -1,0 +1,12 @@
+{
+  "fixture": "OS-synthesized English speech, original test script; no microphone or personal audio",
+  "expected_script": "This is a synthetic test. The blue square is on the left.",
+  "transport": "Django session -> local WebSocket relay -> actual Meta Voice Transcribe",
+  "model": "muse-voice-transcribe-1.0",
+  "audio_seconds": 4.455,
+  "partial_events": 10,
+  "completed_turns": [
+    "This is a synthetic test. The blue square is on the left."
+  ],
+  "success": true
+}

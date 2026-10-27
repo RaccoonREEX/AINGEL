@@ -13,4 +13,6 @@ local.properties
 *.apk
 *.jks
 *.keystore
+.local/
+*.tsbuildinfo
 test-results/

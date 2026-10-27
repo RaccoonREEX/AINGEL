@@ -1,6 +1,6 @@
 # Dataset audit — 2026-10-26
 
-No datasets downloaded. No training is necessary for P0. Below are license triage decisions, not declarations that all downstream uses are cleared. Unknown terms mean DO NOT USE YET. Size/consent details marked pending must be resolved before acquisition.
+Update: only VizWiz validation annotations have been acquired, with 30 records retained locally and no images downloaded. No training has occurred. See DATASET_MANIFEST.json and SECURITY_AND_FAMILY.md for the separately licensed facial model weights. No training is necessary for P0. Below are license triage decisions, not declarations that all downstream uses are cleared. Unknown terms mean DO NOT USE YET. Size/consent details marked pending must be resolved before acquisition.
 
 | Dataset / primary source | Population / language / modality / size | Access / exact terms observed | Commercial / training / redistribution | Bias / consent risk | Relevance / recommendation / download |
 |---|---|---|---|---|---|
@@ -23,3 +23,8 @@ No datasets downloaded. No training is necessary for P0. Below are license triag
 Resolve the LSEC record's actual license, participant consent and allowed commercial/model-training use through metadata or authors before downloading. Research PUCE, EPN and UPS projects as reference leads, not automatically licensed corpora. Invite Deaf-community review only with explicit authorization to contact people. Do not transfer LSA/ASL performance claims to LSEC.
 
 For memory, test factual retrieval with synthetic events, including empty, stale and conflicting evidence. For hearing, use consenting speakers or synthetic scripted audio to measure transcript accuracy/latency; no deafness classifier. For color, evaluate deterministic region sampling under varied lighting. Prefer original phrase boards and user-configured schedules over medical datasets. Track attribution per actual artifact, not merely by dataset family.
+
+
+## Acquired evaluation subset
+
+`prepare_vizwiz_eval.py` downloaded the official annotation archive after verifying the task's CC BY 4.0 statement. It read the 4,319 validation annotations and kept 15 answerable plus 15 unanswerable examples in ignored local storage. No image zip was downloaded and nothing was sent to a cloud model. `evaluate_vizwiz.py` accepts complete, unique per-image boolean predictions and computes subset answerability accuracy; it does not impersonate official VQA/AP scoring. No predictions or accuracy are fabricated. Actual image screening, inference and community validation remain pending.

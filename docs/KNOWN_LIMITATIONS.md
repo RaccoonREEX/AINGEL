@@ -1,12 +1,16 @@
-# Known limitations — 2026-10-26
+# Límites actuales — 2026-10-26
 
-- Only backend scaffold and research exist. No Android build, React UI, Care, memory engine, SAM parser or live captions yet.
-- Ten tests verify local auth/media/provider boundaries using stubs. One actual synthetic-image Meta call succeeded; this is not a quality benchmark or browser/Android end-to-end result.
-- The live runner loads a user-supplied local key into process memory for each run. No persistent service secret setup exists. Browser login alone does not grant backend API authentication.
-- Account free credits carry a product-improvement warning; personal-media enablement is blocked pending review.
-- Synthetic flag is a caller assertion, not content verification.
-- Two accepted request locales are not complete UI/AI/TTS language support.
-- Local SQLite, session plumbing and in-process throttling are development choices; public login/bootstrap, stable secrets, production isolation and global quotas remain pending.
-- No memory/no-hallucination acceptance test can pass until factual memory retrieval exists. It is explicitly required for the next slices.
-- Dataset review is triage, with unresolved licenses/consent details; no dataset downloaded.
-- Entry track remains unverified; submission form has no selected track. No agreement, publication or submission performed.
+- Esta entrega es una web local con backend funcional. No hay APK ni despliegue público todavía.
+- 55 pruebas pasan y tres llamadas Meta reales se han verificado con material sintético. No equivalen a una evaluación general de precisión ni a un producto clínico certificado.
+- Los datos reales siguen fuera de los flujos Meta hasta aclarar el uso de contenido asociado a créditos gratuitos. La casilla de material sintético es una declaración del usuario, no un detector de datos sensibles.
+- Preguntar usa herramientas estructuradas locales para buscar recuerdos, rutinas y mensajes; aún no hay conversación libre con selección autónoma de herramientas por un agente.
+- Rutinas: los avisos requieren la pantalla Hoy abierta. No hay alarmas de fondo, push, llamadas automáticas ni verificación de ingesta de medicinas.
+- Memorias: observaciones comunicadas por el usuario, búsqueda exacta por objeto y retención de siete días. No hay extracción automática de sucesos ni vídeo continuo.
+- Reconocimiento facial local experimental: consentimiento individual, un registro por cuidador, máximo cuatro en el círculo, plantillas cifradas por treinta días. Falta medir precisión con familiares reales, falsos positivos, sesgos e iluminación; no hay liveness. No sirve para confirmar identidad ni autenticar.
+- Google Authenticator: flujo TOTP/QR/recuperación/replay validado en pruebas automatizadas. Falta probar el escaneo con un teléfono real. No hay recuperación administrativa ni restablecimiento por correo.
+- Subtítulos: relay real verificado con WAV sintético. El micrófono del navegador y la lectura de voz necesitan prueba manual en los dispositivos objetivo. AudioContext debe soportar 24 kHz; ante incompatibilidad, se muestra error.
+- Solo hay interfaz implementada en español e inglés. Otros idiomas están auditados/planificados; Android TTS, RTL completo y TalkBack no están validados.
+- SQLite, HTTP loopback y límites por proceso son configuración de pruebas. La base local de perfiles/rutinas contiene texto sin cifrado de campo; solo los secretos TOTP y plantillas faciales tienen cifrado de aplicación. No exponer a Internet.
+- El borrado físico de registros vencidos se ejecuta al arrancar localmente o mediante el comando de limpieza. Programar y verificar limpieza diaria, respaldo seguro y restauración antes de producción.
+- VizWiz: treinta anotaciones preparadas para evaluación, sin fotos, entrenamiento ni precisión publicada. LSEC, corpus clínicos y recursos restringidos siguen sin incorporarse.
+- Repositorio aún local, sin publicación, licencia propia por decidir y revisión completa de terceros pendiente. Track de inscripción no verificado; no se ha enviado ninguna candidatura ni aceptado términos nuevos.

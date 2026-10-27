@@ -1,57 +1,75 @@
-# AINGEL
+# AINGEL · versión local para pruebas
 
 **Adaptive Intelligence for Navigation, Guidance & Everyday Living**
 
-AINGEL translates the world into what you can perceive. One adaptive multimodal accessibility companion, with evidence-backed memory as its intended core. Built for the Meta Global AI Developer Hackathon 2026.
+AINGEL adapta la información a cómo cada persona puede ver, escuchar, comunicar y recordar. Estado actual: aplicación web funcional y backend local; Android y despliegue público siguen pendientes.
 
-**Current state: initial research and backend scene slice, not a complete MVP.** Android, React UI, Care, memory and realtime captions are not implemented. One actual Meta scene call has succeeded using a synthetic image. No deployment or APK exists.
+## Abrir y probar
 
-Start with the [takeover report](docs/TAKEOVER_REPORT.md), [architecture](docs/ARCHITECTURE.md), [verified rules](docs/HACKATHON_RULES.md), [models](docs/META_MODELS.md), [scope](docs/SCOPE.md) and [dated roadmap](docs/ROADMAP.md).
+La aplicación local está en **http://127.0.0.1:5173/**. Para volver a arrancarla en Windows:
 
-## Implemented
+```powershell
+.\Start-Aingel.ps1
+```
 
-- Django/DRF authenticated multipart scene endpoint and public minimal health endpoint.
-- Image byte/format/pixel checks, re-encoding without source metadata, no persistence.
-- Explicit mock result that never claims to have analyzed an image.
-- Server-only Meta Responses adapter with a fixed destination, timeout, sanitized failures, model provenance and measured request latency. A live synthetic-image request succeeded with Spark 1.3 in 3,453 ms; see [validation](docs/META_LIVE_VALIDATION.md).
-- English/Spanish request locale validation; this is not a translated user interface.
+El lanzador conserva la base de datos, aplica migraciones, crea cuentas sintéticas solo la primera vez y limpia registros vencidos. Busca el archivo de clave Meta ya autorizado en el Escritorio; también acepta `-ModelKeyFile '<ruta local>'`. Sin clave, visión usa un modo de prueba explícito y los subtítulos no simulan inferencia.
 
-## Local setup (PowerShell)
+Las cuentas sintéticas y sus contraseñas están **solo** en `.local/demo-accounts.json`, ignorado por Git. `aingel.demo` es el usuario principal, `familia.demo` tiene permiso para configurar pero no para ver recuerdos y `externo.demo` no tiene acceso. También puedes crear cuentas desde la interfaz. No uses datos reales todavía en pruebas que envíen contenido a Meta.
 
-Requires Python 3.12. From this directory:
+[Guía de pruebas paso a paso](docs/TESTING_GUIDE.md) · [Estado y límites](docs/KNOWN_LIMITATIONS.md).
+
+## Funciones disponibles
+
+- Registro, inicio/cierre de sesión, CSRF y verificación TOTP compatible con Google Authenticator. QR local, secreto cifrado, recuperación de un solo uso, rechazo de códigos reutilizados y límite de intentos. Cada cuenta activa su propio 2FA desde Seguridad.
+- Un perfil principal por cuenta y acceso delegado a otros perfiles. Círculo de **1 a 4 cuidadores aceptados**. Cero miembros es borrador; nunca se impide revocar al último cuidador. Las invitaciones privadas vencen a los 7 días y reservan plaza.
+- Permisos independientes de configuración y lectura de recuerdos. Invitación/gestión de miembros solo por el principal; el familiar puede salir por sí mismo.
+- Preferencias de accesibilidad, zona horaria, necesidades de apoyo, alergias comunicadas y contacto de referencia. Sin diagnóstico ni alertas de emergencia automáticas.
+- Rutinas de sueño, despertar, medicinas, baño, comidas, agua, citas y otras actividades, con días/horarios e instrucciones humanas. Confirmaciones manuales con autor; los avisos requieren tener abierta la pantalla Hoy.
+- Mensajes con autor, fecha e idioma original; consultas locales de rutinas/mensajes y búsqueda exacta del último recuerdo de un objeto. Sin evidencia, no se inventa una ubicación.
+- Recuerdos confirmados por el principal, fotos privadas opcionales, eliminación y retención de 7 días. El cuidador con permiso de lectura no puede crear memorias por la persona.
+- Visión real con `muse-spark-1.3`, búsqueda de objetos con `sam-3.1`, recuadros y máscaras decodificadas mediante el parser oficial, lectura opcional del resultado con la voz del navegador.
+- Subtítulos en vivo con `muse-voice-transcribe-1.0`, AudioWorklet PCM24kHz y relay WebSocket autenticado. Sin grabación; una sesión por cuenta, máximo 10 minutos.
+- Reconocimiento **experimental y local** de familiares con YuNet/SFace. Desactivado por defecto; requiere autorización del principal y registro de la propia foto por el familiar adulto. Plantillas cifradas por 30 días, revocables. No se conservan las fotos ni se envían a Meta. Resultados posibles, sin garantía de identidad ni liveness.
+- Interfaz centralizada en español/inglés, texto grande, contraste y diseño adaptable. No implica soporte completo de los 19 idiomas previstos ni certificación de accesibilidad.
+
+## Verificación realizada
+
+55 pruebas backend pasan, compilación TypeScript/Vite y comprobación de dependencias correctas. En Edge: login, cambio de idioma, configuración por familiar, bloqueo de recuerdos, guardado y consulta sin evidencia, descripción real de una imagen sintética. En un marco real de 390 px, el documento móvil no presenta desbordamiento horizontal. TalkBack y lectores de pantalla no se han auditado todavía.
+
+Llamadas reales, todas con material sintético: Spark en web (2.156 s observados), SAM con máscara y caja (1.437 s), Voice por el relay local (4.455 s de audio, 10 parciales y frase final correcta). No son benchmarks de precisión. Los informes están en `docs/*SMOKE_RESULT.json`.
+
+## Instalación desde cero
+
+Python 3.12 y Node compatible con Vite (20.19+ o 22.12+):
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r backend\requirements.lock.txt
-$env:AINGEL_AI_MODE = 'mock'
-# Supply a locally generated stable random secret before using persistent sessions.
-$env:DJANGO_SECRET_KEY = '<local-random-secret>'
-Set-Location backend
-..\.venv\Scripts\python.exe manage.py migrate
-..\.venv\Scripts\python.exe manage.py test
-..\.venv\Scripts\python.exe manage.py runserver 127.0.0.1:8010 --noreload
+Set-Location web
+npm ci
+npm run build
+Set-Location ..
+.\Start-Aingel.ps1
 ```
 
-`GET /api/health/` checks the process. The scene endpoint requires an authenticated Django session with CSRF. An interactive login/bootstrap UI is not implemented yet. Tests use an isolated in-memory database and authentication fixtures. Do not expose this development server publicly.
+El reconocimiento facial requiere instalar los pesos oficiales localmente:
 
-## Configuration
+```powershell
+.\.venv\Scripts\python.exe backend\scripts\setup_face_models.py
+```
 
-`.env.example` documents variables; this scaffold reads the process environment and does **not** auto-load `.env` files. Keep keys out of shell history, frontend variables, screenshots and Git. Configure secrets through a local environment/secret manager, never by pasting them into chat.
+Modelos, claves, contraseñas de prueba, base local y medios están excluidos de Git. El lanzador solo escucha en loopback. `Stop-Aingel.ps1` detiene únicamente los procesos que haya iniciado y registrado el lanzador; servidores iniciados en una terminal se detienen desde esa terminal.
 
-| Variable | Purpose |
-|---|---|
-| `AINGEL_AI_MODE` | `mock` default or `meta`; unknown values fail closed |
-| `MODEL_API_KEY` | Meta credential, server environment only |
-| `DJANGO_SECRET_KEY` | Stable random server secret; absent value is ephemeral for scaffold checks |
-| `DJANGO_DEBUG` | Off by default |
-| `AINGEL_SYNTHETIC_TESTS_ONLY` | Must remain `1`; personal-content enablement is not implemented |
+## Variables y secretos
 
-Real mode requires a configured key and `synthetic=true` per request. This flag records a caller assertion; it cannot technically verify whether media is synthetic. Use only known fixtures until the account's free-credit/privacy warning is resolved. There is no automatic fallback to mock on a Meta failure.
+`.env.example` documenta variables, pero no hay carga automática de `.env`. `MODEL_API_KEY` solo existe en el proceso servidor. `AINGEL_AI_MODE=mock|meta`; `AINGEL_SYNTHETIC_TESTS_ONLY=1` limita los envíos de prueba por aserción del usuario, sin detector automático de contenido sensible. El aviso de uso de contenido con créditos gratuitos sigue pendiente para datos reales.
 
-## Validation and next delivery
+`DJANGO_SECRET_KEY` debe ser estable. El lanzador la conserva en `.local/server-secret.txt`; la clave Fernet de TOTP/plantillas está en `.local/encryption.key`. Conserva ambas de forma privada con los respaldos. Fuera del modo local, configura `AINGEL_ENCRYPTION_KEY` mediante gestión de secretos. No publiques esta configuración como un despliegue seguro.
 
-Ten backend tests passed on 2026-10-26: auth rejection, explicit mock provenance, invalid/oversize media, unsupported locale, missing credential, privacy gate, Meta request/response contract, incomplete-response rejection and upstream-error sanitization. One separate live Meta smoke check succeeded. These do not establish AI accuracy or end-to-end product operation.
+## Datos y documentación
 
-Next gate: React test surface with HTTP-session login/CSRF, then Android camera/TTS. The opt-in [live smoke runner](backend/scripts/smoke_meta.py) accepts a local credential-file path and never prints/saves its secret. [API](docs/API.md), [deployment](docs/DEPLOYMENT.md), [accessibility](docs/ACCESSIBILITY.md), [localization](docs/LOCALIZATION.md), [privacy](docs/PRIVACY.md), [datasets](docs/DATASET_RESEARCH.md), [demo](docs/DEMO_SCRIPT.md), [limits](docs/KNOWN_LIMITATIONS.md).
+Se preparó un subconjunto local de 30 anotaciones de validación VizWiz (CC BY 4.0), con manifiesto y herramienta de evaluación de respuesta/no respuesta. No se descargaron fotos del corpus ni se entrenó un modelo. LSEC y los corpus clínicos/restringidos siguen fuera de uso. Los pesos faciales no son un dataset de familiares.
 
-Screenshots, demo link, Android minimum version/signing/build instructions and production URL will be added only when those artifacts exist. [Halo](docs/HALO_VISION.md) is future hardware, not a working device. Repository license selection and third-party notices are pending before publication.
+[Arquitectura](docs/ARCHITECTURE.md) · [API](docs/API.md) · [Privacidad](docs/PRIVACY.md) · [2FA y rostros](docs/SECURITY_AND_FAMILY.md) · [Datasets](docs/DATASET_RESEARCH.md) · [Accesibilidad](docs/ACCESSIBILITY.md) · [Idiomas](docs/LOCALIZATION.md) · [Reglas](docs/HACKATHON_RULES.md) · [Despliegue](docs/DEPLOYMENT.md) · [Halo futuro](docs/HALO_VISION.md).
+
+No hay APK, dominio público, notificaciones en segundo plano ni validación de precisión facial con familiares reales. Halo es un concepto futuro. La selección de licencia del proyecto y revisión completa de avisos de terceros quedan pendientes antes de publicar.

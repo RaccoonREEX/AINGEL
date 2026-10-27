@@ -15,7 +15,9 @@ from .scene import SceneUnavailable, describe_scene, normalize_image
 def fixture_image():
     buffer = io.BytesIO()
     Image.new("RGB", (32, 32), "blue").save(buffer, format="PNG")
-    return SimpleUploadedFile("fixture.png", buffer.getvalue(), content_type="image/png")
+    return SimpleUploadedFile(
+        "fixture.png", buffer.getvalue(), content_type="image/png"
+    )
 
 
 class SceneContractTests(TestCase):
@@ -24,13 +26,17 @@ class SceneContractTests(TestCase):
         self.user = get_user_model().objects.create_user(username="fixture-user")
 
     def test_anonymous_upload_denied(self):
-        response = self.client.post("/api/v1/scene/", {"image": fixture_image(), "locale": "en-US"})
+        response = self.client.post(
+            "/api/v1/scene/", {"image": fixture_image(), "locale": "en-US"}
+        )
         self.assertEqual(response.status_code, 403)
 
     @patch.dict(os.environ, {"AINGEL_AI_MODE": "mock"})
     def test_mock_is_explicit_and_claims_no_scene(self):
         self.client.force_authenticate(self.user)
-        response = self.client.post("/api/v1/scene/", {"image": fixture_image(), "locale": "es-EC"})
+        response = self.client.post(
+            "/api/v1/scene/", {"image": fixture_image(), "locale": "es-EC"}
+        )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["mode"], "mock")
         self.assertIn("no se analizó", response.data["text"])
@@ -39,9 +45,13 @@ class SceneContractTests(TestCase):
 
     def test_invalid_image_rejected(self):
         self.client.force_authenticate(self.user)
-        response = self.client.post("/api/v1/scene/", {
-            "image": SimpleUploadedFile("bad.png", b"not an image"), "locale": "en-US",
-        })
+        response = self.client.post(
+            "/api/v1/scene/",
+            {
+                "image": SimpleUploadedFile("bad.png", b"not an image"),
+                "locale": "en-US",
+            },
+        )
         self.assertEqual(response.data["error"], "image_invalid")
 
     def test_oversized_image_rejected(self):
@@ -51,7 +61,9 @@ class SceneContractTests(TestCase):
 
     def test_unsupported_locale_rejected(self):
         self.client.force_authenticate(self.user)
-        response = self.client.post("/api/v1/scene/", {"image": fixture_image(), "locale": "xx"})
+        response = self.client.post(
+            "/api/v1/scene/", {"image": fixture_image(), "locale": "xx"}
+        )
         self.assertEqual(response.status_code, 400)
 
 
@@ -66,12 +78,28 @@ class MetaBoundaryTests(SimpleTestCase):
         with self.assertRaisesRegex(SceneUnavailable, "privacy_review_required"):
             describe_scene(b"fixture", "en-US", False)
 
-    @patch.dict(os.environ, {"AINGEL_AI_MODE": "meta", "MODEL_API_KEY": "test-only", "AINGEL_SYNTHETIC_TESTS_ONLY": "1"})
+    @patch.dict(
+        os.environ,
+        {
+            "AINGEL_AI_MODE": "meta",
+            "MODEL_API_KEY": "test-only",
+            "AINGEL_SYNTHETIC_TESTS_ONLY": "1",
+        },
+    )
     @patch("assistance.scene.httpx.Client")
     def test_fixed_meta_destination_and_response_parsing(self, client):
         client.return_value.__enter__.return_value.post.return_value = httpx.Response(
-            200, request=httpx.Request("POST", "https://api.meta.ai/v1/responses"),
-            json={"status": "completed", "output": [{"type": "message", "content": [{"type": "output_text", "text": "A blue square."}]}]},
+            200,
+            request=httpx.Request("POST", "https://api.meta.ai/v1/responses"),
+            json={
+                "status": "completed",
+                "output": [
+                    {
+                        "type": "message",
+                        "content": [{"type": "output_text", "text": "A blue square."}],
+                    }
+                ],
+            },
         )
         result = describe_scene(b"synthetic", "en-US", True)
         call = client.return_value.__enter__.return_value.post.call_args
@@ -81,19 +109,36 @@ class MetaBoundaryTests(SimpleTestCase):
         self.assertFalse(call.kwargs["json"]["store"])
         self.assertEqual(result["text"], "A blue square.")
 
-    @patch.dict(os.environ, {"AINGEL_AI_MODE": "meta", "MODEL_API_KEY": "test-only", "AINGEL_SYNTHETIC_TESTS_ONLY": "1"})
+    @patch.dict(
+        os.environ,
+        {
+            "AINGEL_AI_MODE": "meta",
+            "MODEL_API_KEY": "test-only",
+            "AINGEL_SYNTHETIC_TESTS_ONLY": "1",
+        },
+    )
     @patch("assistance.scene.httpx.Client")
     def test_incomplete_response_is_not_presented_as_success(self, client):
         client.return_value.__enter__.return_value.post.return_value = httpx.Response(
-            200, request=httpx.Request("POST", "https://api.meta.ai/v1/responses"),
+            200,
+            request=httpx.Request("POST", "https://api.meta.ai/v1/responses"),
             json={"status": "incomplete", "output": []},
         )
         with self.assertRaisesRegex(SceneUnavailable, "^meta_incomplete$"):
             describe_scene(b"synthetic", "en-US", True)
 
-    @patch.dict(os.environ, {"AINGEL_AI_MODE": "meta", "MODEL_API_KEY": "test-only", "AINGEL_SYNTHETIC_TESTS_ONLY": "1"})
+    @patch.dict(
+        os.environ,
+        {
+            "AINGEL_AI_MODE": "meta",
+            "MODEL_API_KEY": "test-only",
+            "AINGEL_SYNTHETIC_TESTS_ONLY": "1",
+        },
+    )
     @patch("assistance.scene.httpx.Client")
     def test_provider_error_does_not_escape(self, client):
-        client.return_value.__enter__.return_value.post.side_effect = httpx.ConnectError("sensitive upstream body")
+        client.return_value.__enter__.return_value.post.side_effect = (
+            httpx.ConnectError("sensitive upstream body")
+        )
         with self.assertRaisesRegex(SceneUnavailable, "^meta_unavailable$"):
             describe_scene(b"synthetic", "en-US", True)

@@ -37,7 +37,12 @@ def normalize_image(upload) -> bytes:
                 output = io.BytesIO()
                 clean.save(output, format="JPEG", quality=85)
                 return output.getvalue()
-    except (UnidentifiedImageError, OSError, Image.DecompressionBombError, Image.DecompressionBombWarning):
+    except (
+        UnidentifiedImageError,
+        OSError,
+        Image.DecompressionBombError,
+        Image.DecompressionBombWarning,
+    ):
         raise ValueError("image_invalid") from None
 
 
@@ -71,10 +76,19 @@ def describe_scene(image: bytes, locale: str, synthetic: bool) -> dict:
         "store": False,
         "reasoning": {"effort": "minimal"},
         "max_output_tokens": 1000,
-        "input": [{"role": "user", "content": [
-            {"type": "input_text", "text": instruction},
-            {"type": "input_image", "image_url": "data:image/jpeg;base64," + base64.b64encode(image).decode("ascii")},
-        ]}],
+        "input": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "input_text", "text": instruction},
+                    {
+                        "type": "input_image",
+                        "image_url": "data:image/jpeg;base64,"
+                        + base64.b64encode(image).decode("ascii"),
+                    },
+                ],
+            }
+        ],
     }
     started = time.monotonic()
     try:
@@ -91,12 +105,19 @@ def describe_scene(image: bytes, locale: str, synthetic: bool) -> dict:
             raise SceneUnavailable("meta_incomplete")
         text = "\n".join(
             part["text"]
-            for item in data.get("output", []) if item.get("type") == "message"
-            for part in item.get("content", []) if part.get("type") == "output_text"
+            for item in data.get("output", [])
+            if item.get("type") == "message"
+            for part in item.get("content", [])
+            if part.get("type") == "output_text"
         ).strip()
         if not text:
             raise SceneUnavailable("meta_empty_response")
     except (httpx.HTTPError, ValueError, TypeError, KeyError, AttributeError):
         # Provider bodies can contain private payloads. Never expose or log them here.
         raise SceneUnavailable("meta_unavailable") from None
-    return {"text": text, "mode": "meta", "model": "muse-spark-1.3", "latency_ms": round((time.monotonic() - started) * 1000)}
+    return {
+        "text": text,
+        "mode": "meta",
+        "model": "muse-spark-1.3",
+        "latency_ms": round((time.monotonic() - started) * 1000),
+    }
