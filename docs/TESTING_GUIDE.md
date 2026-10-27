@@ -58,3 +58,7 @@ npm run build
 ```
 
 La configuración es local. No expongas estos servidores a Internet. Los próximos hitos son validación con usuarios, Android, permisos/privacidad de datos reales, despliegue HTTPS y cierre de brechas de accesibilidad.
+
+## APK nativo
+
+[Guía Android y conexión USB para la última fase](ANDROID_TESTING.md). El celular Samsung ya se conectó y pasó una prueba instrumentada de sesión y MFA contra el backend. Faltan cámara, micrófono, escaneo real de Authenticator y TalkBack.

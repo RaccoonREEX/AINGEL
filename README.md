@@ -2,7 +2,7 @@
 
 **Adaptive Intelligence for Navigation, Guidance & Everyday Living**
 
-AINGEL adapta la información a cómo cada persona puede ver, escuchar, comunicar y recordar. Estado actual: aplicación web funcional y backend local; Android y despliegue público siguen pendientes.
+AINGEL adapta la información a cómo cada persona puede ver, escuchar, comunicar y recordar. Estado actual: aplicación web y backend local funcionales, más APK Android debug compilado. Instalado en un Samsung con Android 16, con prueba instrumentada de sesión/cuidado/memoria/MFA aprobada; el despliegue público sigue pendiente.
 
 ## Abrir y probar
 
@@ -29,12 +29,12 @@ Las cuentas sintéticas y sus contraseñas están **solo** en `.local/demo-accou
 - Recuerdos confirmados por el principal, fotos privadas opcionales, eliminación y retención de 7 días. El cuidador con permiso de lectura no puede crear memorias por la persona.
 - Visión real con `muse-spark-1.3`, búsqueda de objetos con `sam-3.1`, recuadros y máscaras decodificadas mediante el parser oficial, lectura opcional del resultado con la voz del navegador.
 - Subtítulos en vivo con `muse-voice-transcribe-1.0`, AudioWorklet PCM24kHz y relay WebSocket autenticado. Sin grabación; una sesión por cuenta, máximo 10 minutos.
-- Reconocimiento **experimental y local** de familiares con YuNet/SFace. Desactivado por defecto; requiere autorización del principal y registro de la propia foto por el familiar adulto. Plantillas cifradas por 30 días, revocables. No se conservan las fotos ni se envían a Meta. Resultados posibles, sin garantía de identidad ni liveness.
+- Reconocimiento **experimental y local** de familiares con YuNet/SFace. Desactivado por defecto; requiere autorización del principal y registro de 1–3 fotos propias distintas por el familiar adulto, con filtros de nitidez y consistencia. Plantillas cifradas por 30 días, revocables. No se conservan las fotos ni se envían a Meta. Resultados posibles, sin garantía de identidad ni liveness.
 - Interfaz centralizada en español/inglés, texto grande, contraste y diseño adaptable. No implica soporte completo de los 19 idiomas previstos ni certificación de accesibilidad.
 
 ## Verificación realizada
 
-55 pruebas backend pasan, compilación TypeScript/Vite y comprobación de dependencias correctas. En Edge: login, cambio de idioma, configuración por familiar, bloqueo de recuerdos, guardado y consulta sin evidencia, descripción real de una imagen sintética. En un marco real de 390 px, el documento móvil no presenta desbordamiento horizontal. TalkBack y lectores de pantalla no se han auditado todavía.
+62 pruebas backend y seis pruebas JVM Android pasan, compilación TypeScript/Vite y comprobación de dependencias correctas. En Edge: login, cambio de idioma, configuración por familiar, bloqueo de recuerdos, guardado y consulta sin evidencia, descripción real de una imagen sintética. En un marco real de 390 px, el documento móvil no presenta desbordamiento horizontal. TalkBack y lectores de pantalla no se han auditado todavía.
 
 Llamadas reales, todas con material sintético: Spark en web (2.156 s observados), SAM con máscara y caja (1.437 s), Voice por el relay local (4.455 s de audio, 10 parciales y frase final correcta). No son benchmarks de precisión. Los informes están en `docs/*SMOKE_RESULT.json`.
 
@@ -72,4 +72,4 @@ Se preparó un subconjunto local de 30 anotaciones de validación VizWiz (CC BY 
 
 [Arquitectura](docs/ARCHITECTURE.md) · [API](docs/API.md) · [Privacidad](docs/PRIVACY.md) · [2FA y rostros](docs/SECURITY_AND_FAMILY.md) · [Datasets](docs/DATASET_RESEARCH.md) · [Accesibilidad](docs/ACCESSIBILITY.md) · [Idiomas](docs/LOCALIZATION.md) · [Reglas](docs/HACKATHON_RULES.md) · [Despliegue](docs/DEPLOYMENT.md) · [Halo futuro](docs/HALO_VISION.md).
 
-No hay APK, dominio público, notificaciones en segundo plano ni validación de precisión facial con familiares reales. Halo es un concepto futuro. La selección de licencia del proyecto y revisión completa de avisos de terceros quedan pendientes antes de publicar.
+Existe un APK debug nativo con cámara, audio, sesión, MFA, círculo y reconocimiento familiar conectados al backend. [Instalación y pruebas Android](docs/ANDROID_TESTING.md). Instalado y arrancado en Samsung SM-F721B/Android 16; falta validar cámara, micrófono y precisión con familiares. No hay dominio público, notificaciones en segundo plano ni validación de precisión facial con familiares reales. Halo es un concepto futuro. La selección de licencia del proyecto y revisión completa de avisos de terceros quedan pendientes antes de publicar.

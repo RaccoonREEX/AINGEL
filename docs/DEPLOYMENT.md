@@ -1,6 +1,6 @@
 # Deployment â€” pending
 
-No public deployment, domain, TLS configuration, Docker image or APK exists yet. Local React/Vite and Django/Daphne run on loopback with persistent session/encryption secrets and SQLite. Start-Aingel.ps1 bootstraps migrations/demo/retention and launches hidden services; do not expose these development servers.
+No public deployment, domain, TLS configuration, Docker image exists yet; an Android debug APK is built locally, installed on Samsung SM-F721B/Android 16 and has passed a native backend integration test (camera/audio/family accuracy still pending). Local React/Vite and Django/Daphne run on loopback with persistent session/encryption secrets and SQLite. Start-Aingel.ps1 bootstraps migrations/demo/retention and launches hidden services; do not expose these development servers.
 
 Production gate: verified VPS destination and domain, Dockerized ASGI service, PostgreSQL, private evidence directory/object store, HTTPS reverse proxy with WSS and upload/time limits, stable secret manager, debug disabled, explicit hosts/origins, secure cookies, process limits, global quotas and provider budget policy. Use Redis when channel/rate coordination needs it. Do not interpret billing email alerts as hard spending caps.
 

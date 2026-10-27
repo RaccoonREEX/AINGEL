@@ -1,0 +1,33 @@
+{
+  "date": "2026-10-27",
+  "version": "0.2.0-local",
+  "artifact": "android/app/build/outputs/apk/debug/app-debug.apk",
+  "apk_sha256": "d74bcf8d6817f1e52861c16d7636dec0ed4ccafb69cd1ae9a5231712b2dbccf9",
+  "apk_bytes": 19364369,
+  "backend_tests_passed": 62,
+  "android_jvm_tests_passed": 6,
+  "android_lint_errors": 0,
+  "device": {
+    "model": "Samsung SM-F721B",
+    "android": "16",
+    "installed": true,
+    "cold_start_ok": true,
+    "test_methods_passed": [
+      "DeviceBackendTest.nativeSessionCareMemoryAndMfaRoundTrip",
+      "NativeScreenTest.registrationProfileSettingsAndSecurityScreens",
+      "PhotoOrientationTest.rotateAndMirrorGalleryPhotosBeforeStrippingMetadata"
+    ]
+  },
+  "secret_scan": {
+    "source_web_apk": "passed",
+    "method": "Exact-match scan for active local Meta key, encryption/server keys and demo passwords; APK entries decompressed"
+  },
+  "pending": [
+    "Actual Google Authenticator QR scan",
+    "Camera and microphone permission/hardware checks",
+    "Consented family recognition accuracy and unknown-person evaluation",
+    "TalkBack and accessibility device audit",
+    "Background notifications",
+    "Production deployment"
+  ]
+}

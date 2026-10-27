@@ -41,3 +41,9 @@ Memory POST: entity, location, observed_at ISO8601, confirmed=true, note opciona
 Conectar WebSocket con cookie de sesión y Origin permitido; enviar `{type:'start',locale:'es-EC',synthetic:true}` como JSON. Esperar `{type:'ready',sample_rate:24000}` y enviar PCM16 mono little-endian en tiempo real, hasta 9600 bytes por frame. El servidor añade la autorización Meta a su handshake, sin exponerla. Los eventos transcript parciales reemplazan la hipótesis previa; speechComplete finaliza por turnId. `{type:'stop'}` drena resultados y cierra. Una sesión por usuario, diez minutos máximo, sin persistencia.
 
 Los límites distribuidos, paginación completa, política de sesión, OpenAPI y versión de contratos Android son trabajo previo a producción. Esta API aún no representa un servicio público desplegado.
+
+## Registro facial de varias fotos
+
+`POST profiles/{id}/faces/` recibe multipart con uno a tres campos repetidos `image`, `display_name`, `consent=true`, `own_photo=true`. Solo la cuenta del propio familiar adulto aceptado puede registrar sus fotos. Tamaño combinado máximo 5 MiB. Rechaza fotos normalizadas idénticas, falta de un único rostro claro, nitidez Laplaciana <30 y similitud entre tomas <0.4. Son controles heurísticos pendientes de calibración. El lote se valida antes de reemplazar el registro anterior y la escritura vuelve a verificar consentimiento/membresía bajo bloqueo del perfil.
+
+La plantilla cifrada v2 contiene hasta tres vectores normalizados. Las plantillas anteriores de un vector siguen siendo legibles. GET y POST exponen `sample_count`, nunca vectores. La consulta compara un puntaje por persona (media de las dos mejores tomas disponibles), exige 0.55 y margen 0.10 respecto a la siguiente persona; las capturas borrosas se abstienen. Más tomas de una persona no cuentan como identidades adicionales. No hay resultados de precisión verificados ni liveness.

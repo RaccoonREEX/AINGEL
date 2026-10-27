@@ -1,14 +1,14 @@
 """Opt-in, one-profile family matching. No cloud calls and no face-photo persistence."""
 
 from datetime import timedelta
-import io
+import hashlib
 import json
 import threading
 
 import cv2
 from cryptography.fernet import InvalidToken
 from django.conf import settings
-from django.shortcuts import get_object_or_404
+from django.db import transaction
 from django.utils import timezone
 import numpy as np
 from rest_framework.decorators import api_view
@@ -19,7 +19,7 @@ from rest_framework.decorators import throttle_classes
 
 from assistance.scene import normalize_image
 from .crypto import decrypt, encrypt
-from .models import FamilyFace
+from .models import FamilyFace, Profile
 from .permissions import access, audit
 
 _lock = threading.Lock()
@@ -61,6 +61,11 @@ def embeddings(image_bytes):
             result.append(
                 {
                     "embedding": (feature / norm).tolist(),
+                    "sharpness": float(
+                        cv2.Laplacian(
+                            cv2.cvtColor(aligned, cv2.COLOR_BGR2GRAY), cv2.CV_64F
+                        ).var()
+                    ),
                     "box": [
                         max(0, float(face[0]) / w),
                         max(0, float(face[1]) / h),
@@ -75,12 +80,21 @@ def embeddings(image_bytes):
 def candidate_match(query, candidates):
     scores = []
     for candidate in candidates:
-        score = float(
-            np.dot(
-                np.asarray(query, dtype=np.float32),
-                np.asarray(candidate["embedding"], dtype=np.float32),
-            )
+        samples = candidate.get("samples") or [candidate["embedding"]]
+        similarities = sorted(
+            (
+                float(
+                    np.dot(
+                        np.asarray(query, dtype=np.float32),
+                        np.asarray(sample, dtype=np.float32),
+                    )
+                )
+                for sample in samples
+            ),
+            reverse=True,
         )
+        # One score per person: extra samples cannot hide an ambiguous second person.
+        score = float(np.mean(similarities[:2]))
         scores.append((score, candidate))
     scores.sort(key=lambda pair: pair[0], reverse=True)
     if (
@@ -92,9 +106,36 @@ def candidate_match(query, candidates):
     return scores[0][1]
 
 
+def decode_samples(ciphertext):
+    value = json.loads(decrypt(ciphertext))
+    samples = (
+        value.get("samples")
+        if isinstance(value, dict) and value.get("version") == 2
+        else [value]
+    )
+    matrix = np.asarray(samples, dtype=np.float32)
+    if (
+        matrix.ndim != 2
+        or matrix.shape[1] != 128
+        or not 1 <= len(matrix) <= 3
+        or not np.isfinite(matrix).all()
+    ):
+        raise ValueError("invalid_face_template")
+    norms = np.linalg.norm(matrix, axis=1)
+    if np.any(norms <= 0):
+        raise ValueError("invalid_face_template")
+    return (matrix / norms[:, None]).tolist()
+
+
 def enrollment_data(face):
+    try:
+        sample_count = len(decode_samples(face.embedding_encrypted))
+    except (ValueError, TypeError, InvalidToken):
+        # Leave revocation available if a stored template/key is damaged.
+        sample_count = 0
     return {
         "id": face.id,
+        "sample_count": sample_count,
         "member_id": face.member_id,
         "username": face.member.user.username,
         "display_name": face.display_name,
@@ -132,24 +173,55 @@ def family_faces(request, profile_id):
         "own_photo"
     ) not in [True, "true"]:
         raise ValidationError("face_consent_required")
-    image = request.FILES.get("image")
+    images = request.FILES.getlist("image")
     label = request.data.get("display_name", "")
-    if not image or not isinstance(label, str) or not label.strip() or len(label) > 100:
+    if (
+        not 1 <= len(images) <= 3
+        or not isinstance(label, str)
+        or not label.strip()
+        or len(label) > 100
+    ):
         raise ValidationError("face_enrollment_invalid")
+    if sum(image.size for image in images) > 5 * 1024 * 1024:
+        raise ValidationError("face_images_too_large")
+    samples = []
+    seen = set()
     try:
-        features = embeddings(normalize_image(image))
+        for image in images:
+            normalized = normalize_image(image)
+            digest = hashlib.sha256(normalized).digest()
+            if digest in seen:
+                raise ValidationError("face_duplicate_photo")
+            seen.add(digest)
+            features = embeddings(normalized)
+            if len(features) != 1:
+                raise ValidationError("face_single_clear_face_required")
+            if features[0].get("sharpness", 100) < 30:
+                raise ValidationError("face_photo_blurry")
+            sample = features[0]["embedding"]
+            if any(float(np.dot(sample, previous)) < 0.4 for previous in samples):
+                raise ValidationError("face_photos_inconsistent")
+            samples.append(sample)
     except (ValueError, cv2.error):
         raise ValidationError("face_image_invalid") from None
-    if len(features) != 1:
-        raise ValidationError("face_single_clear_face_required")
-    face, _ = FamilyFace.objects.update_or_create(
-        member=member,
-        defaults={
-            "display_name": label.strip(),
-            "embedding_encrypted": encrypt(json.dumps(features[0]["embedding"])),
-            "expires_at": timezone.now() + timedelta(days=30),
-        },
-    )
+    with transaction.atomic():
+        locked = Profile.objects.select_for_update().get(pk=profile.pk)
+        if (
+            not locked.face_recognition_enabled
+            or not locked.members.filter(pk=member.pk).exists()
+        ):
+            raise ValidationError("face_feature_disabled")
+        face, _ = FamilyFace.objects.update_or_create(
+            member=member,
+            defaults={
+                "display_name": label.strip(),
+                "embedding_encrypted": encrypt(
+                    json.dumps({"version": 2, "samples": samples})
+                ),
+                "expires_at": timezone.now() + timedelta(days=30),
+                "consented_at": timezone.now(),
+            },
+        )
     audit(profile, request.user, "face.consented_enrolled", member.id)
     return Response(enrollment_data(face), status=201)
 
@@ -168,10 +240,12 @@ def face_consent(request, profile_id):
             or request.data.get("consent") is not True
         ):
             raise PermissionDenied("current_password_and_consent_required")
-    else:
-        FamilyFace.objects.filter(member__profile=profile).delete()
-    profile.face_recognition_enabled = enabled
-    profile.save(update_fields=["face_recognition_enabled"])
+    with transaction.atomic():
+        profile = Profile.objects.select_for_update().get(pk=profile.pk)
+        if not enabled:
+            FamilyFace.objects.filter(member__profile=profile).delete()
+        profile.face_recognition_enabled = enabled
+        profile.save(update_fields=["face_recognition_enabled"])
     audit(
         profile,
         request.user,
@@ -202,7 +276,7 @@ def recognize_family(request, profile_id):
                     "id": str(face.id),
                     "display_name": face.display_name,
                     "relationship": face.member.relationship,
-                    "embedding": json.loads(decrypt(face.embedding_encrypted)),
+                    "samples": decode_samples(face.embedding_encrypted),
                 }
             )
         detected = embeddings(normalize_image(image))
@@ -210,7 +284,11 @@ def recognize_family(request, profile_id):
         raise ValidationError("face_processing_failed") from None
     results = []
     for detection in detected:
-        match = candidate_match(detection["embedding"], candidates)
+        match = (
+            candidate_match(detection["embedding"], candidates)
+            if detection.get("sharpness", 100) >= 30
+            else None
+        )
         results.append(
             {
                 "box": detection["box"],

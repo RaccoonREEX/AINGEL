@@ -12,6 +12,7 @@ type FaceState = {
     display_name: string;
     relationship: string;
     expires_at: string;
+    sample_count: number;
   }[];
 };
 type Match = {
@@ -141,12 +142,18 @@ export default function FamilyFaces({
                   <input required name="display_name" maxLength={100} />
                 </label>
                 <label className="field">
-                  {t("facePhoto")}
+                  {t("facePhoto")} · {t("faceSamplesHint")}
                   <input
                     required
                     type="file"
                     accept="image/jpeg,image/png,image/webp"
                     name="image"
+                    multiple
+                    onChange={(e) => {
+                      if ((e.target.files?.length ?? 0) > 3) {
+                        e.target.value = "";
+                      }
+                    }}
                   />
                 </label>
                 <label className="check">
@@ -185,7 +192,7 @@ export default function FamilyFaces({
             {state.enrollments.map((x) => (
               <div className="list-row" key={x.id}>
                 <strong>
-                  {x.display_name} · {x.relationship}
+                  {x.display_name} · {x.relationship} ({x.sample_count})
                 </strong>
                 <p>
                   {t("expires")}: {date(x.expires_at)}

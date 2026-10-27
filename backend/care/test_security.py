@@ -130,9 +130,9 @@ class MFATests(TestCase):
         self.assertEqual(other.get("/api/v1/profiles/").status_code, 403)
 
 
-def photo():
+def photo(color="white"):
     data = io.BytesIO()
-    Image.new("RGB", (128, 128), "white").save(data, format="PNG")
+    Image.new("RGB", (128, 128), color).save(data, format="PNG")
     return SimpleUploadedFile("synthetic.png", data.getvalue(), "image/png")
 
 
@@ -287,3 +287,113 @@ class FamilyFaceTests(TestCase):
         )
         self.client.force_authenticate(self.outsider)
         self.assertEqual(self.client.get(self.base).status_code, 404)
+
+
+class MultiPhotoTests(TestCase):
+    setUp = FamilyFaceTests.setUp
+    enable = FamilyFaceTests.enable
+
+    # Synthetic vectors isolate enrollment/access logic; these are not accuracy tests.
+    def enroll(self, images):
+        self.enable()
+        self.client.force_authenticate(self.family)
+        return self.client.post(
+            self.base,
+            {
+                "image": images,
+                "display_name": "Synthetic family",
+                "consent": "true",
+                "own_photo": "true",
+            },
+            format="multipart",
+        )
+
+    @patch(
+        "care.faces.embeddings",
+        return_value=[
+            {"embedding": [1.0] + [0.0] * 127, "sharpness": 80, "box": [0, 0, 1, 1]}
+        ],
+    )
+    def test_three_distinct_photos_store_encrypted_samples_and_match_one_person(
+        self, inference
+    ):
+        from .faces import decode_samples
+
+        result = self.enroll([photo("white"), photo("red"), photo("blue")])
+        self.assertEqual(result.status_code, 201)
+        self.assertEqual(result.data["sample_count"], 3)
+        self.assertEqual(
+            len(decode_samples(FamilyFace.objects.get().embedding_encrypted)), 3
+        )
+        self.assertEqual(inference.call_count, 3)
+        self.client.force_authenticate(self.owner)
+        result = self.client.post(
+            self.base + "recognize/", {"image": photo(), "consent": "true"}
+        )
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual(
+            result.data["faces"][0]["candidate"]["display_name"], "Synthetic family"
+        )
+        self.assertNotIn("samples", str(result.data))
+
+    @patch(
+        "care.faces.embeddings",
+        return_value=[{"embedding": [1.0] + [0.0] * 127, "sharpness": 80}],
+    )
+    def test_duplicate_photos_rejected_atomically(self, _):
+        result = self.enroll([photo(), photo()])
+        self.assertEqual(result.status_code, 400)
+        self.assertFalse(FamilyFace.objects.exists())
+
+    @patch(
+        "care.faces.embeddings",
+        return_value=[{"embedding": [1.0] + [0.0] * 127, "sharpness": 2}],
+    )
+    def test_blurry_enrollment_rejected(self, _):
+        self.assertEqual(self.enroll([photo()]).status_code, 400)
+        self.assertFalse(FamilyFace.objects.exists())
+
+    @patch(
+        "care.faces.embeddings",
+        side_effect=[
+            [{"embedding": [1.0] + [0.0] * 127}],
+            [{"embedding": [0.0, 1.0] + [0.0] * 126}],
+        ],
+    )
+    def test_inconsistent_faces_rejected(self, _):
+        self.assertEqual(self.enroll([photo(), photo("red")]).status_code, 400)
+        self.assertFalse(FamilyFace.objects.exists())
+
+    @patch("care.faces.embeddings")
+    def test_more_than_three_images_rejected_before_inference(self, inference):
+        self.assertEqual(
+            self.enroll(
+                [photo(), photo("red"), photo("blue"), photo("green")]
+            ).status_code,
+            400,
+        )
+        inference.assert_not_called()
+
+    def test_multisample_matching_still_rejects_ambiguous_people(self):
+        vector = [1.0] + [0.0] * 127
+        self.assertIsNone(
+            candidate_match(vector, [{"samples": [vector] * 3}, {"samples": [vector]}])
+        )
+        self.assertEqual(
+            candidate_match(vector, [{"id": "one", "samples": [vector] * 3}])["id"],
+            "one",
+        )
+
+    def test_legacy_and_invalid_template_decoding(self):
+        import json
+        from .faces import decode_samples
+
+        vector = [1.0] + [0.0] * 127
+        self.assertEqual(decode_samples(encrypt(json.dumps(vector))), [vector])
+        for value in [
+            [],
+            [0.0] * 128,
+            {"version": 2, "samples": [[float("nan")] * 128]},
+        ]:
+            with self.assertRaises(ValueError):
+                decode_samples(encrypt(json.dumps(value)))

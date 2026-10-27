@@ -15,4 +15,5 @@ local.properties
 *.keystore
 .local/
 *.tsbuildinfo
+**/build/
 test-results/
