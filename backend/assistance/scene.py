@@ -69,7 +69,8 @@ def describe_scene(image: bytes, locale: str, synthetic: bool) -> dict:
     payload = {
         "model": "muse-spark-1.3",
         "store": False,
-        "max_output_tokens": 600,
+        "reasoning": {"effort": "minimal"},
+        "max_output_tokens": 1000,
         "input": [{"role": "user", "content": [
             {"type": "input_text", "text": instruction},
             {"type": "input_image", "image_url": "data:image/jpeg;base64," + base64.b64encode(image).decode("ascii")},

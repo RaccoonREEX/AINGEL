@@ -45,4 +45,4 @@ payload = {
 }
 ```
 
-Official SDK examples support OpenAI-compatible clients configured to Meta's base URL. Compatibility is not OpenAI inference. We will start with direct HTTP to keep provider boundaries explicit. No API key has been created, retrieved or placed in this repository.
+Official SDK examples support OpenAI-compatible clients configured to Meta's base URL. Compatibility is not OpenAI inference. The backend uses direct HTTP to Meta. The user created a key and supplied its local file location; the live smoke runner reads it into process memory. No key is stored in this repository. One actual Spark scene call succeeded; see [validation](META_LIVE_VALIDATION.md).

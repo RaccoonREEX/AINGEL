@@ -1,0 +1,11 @@
+{
+  "fixture": "original 640x480 white canvas, blue square left, red circle right",
+  "transport": "Django APIClient -> scene endpoint -> actual Meta HTTPS API",
+  "http_status": 200,
+  "result": {
+    "text": "No se ven obstáculos. Se ve un cuadrado azul y un círculo rojo sobre fondo blanco. No estoy seguro si hay algo más.",
+    "mode": "meta",
+    "model": "muse-spark-1.3",
+    "latency_ms": 3453
+  }
+}

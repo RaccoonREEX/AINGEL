@@ -1,8 +1,8 @@
 # Known limitations — 2026-10-26
 
 - Only backend scaffold and research exist. No Android build, React UI, Care, memory engine, SAM parser or live captions yet.
-- Nine tests verify local auth/media/provider boundaries using stubs; no live Meta call or AI quality result.
-- No server key configured. No claim that a browser login grants backend API authentication.
+- Ten tests verify local auth/media/provider boundaries using stubs. One actual synthetic-image Meta call succeeded; this is not a quality benchmark or browser/Android end-to-end result.
+- The live runner loads a user-supplied local key into process memory for each run. No persistent service secret setup exists. Browser login alone does not grant backend API authentication.
 - Account free credits carry a product-improvement warning; personal-media enablement is blocked pending review.
 - Synthetic flag is a caller assertion, not content verification.
 - Two accepted request locales are not complete UI/AI/TTS language support.

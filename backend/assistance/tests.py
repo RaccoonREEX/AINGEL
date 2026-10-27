@@ -77,8 +77,19 @@ class MetaBoundaryTests(SimpleTestCase):
         call = client.return_value.__enter__.return_value.post.call_args
         self.assertEqual(call.args[0], "https://api.meta.ai/v1/responses")
         self.assertEqual(call.kwargs["json"]["model"], "muse-spark-1.3")
+        self.assertEqual(call.kwargs["json"]["reasoning"], {"effort": "minimal"})
         self.assertFalse(call.kwargs["json"]["store"])
         self.assertEqual(result["text"], "A blue square.")
+
+    @patch.dict(os.environ, {"AINGEL_AI_MODE": "meta", "MODEL_API_KEY": "test-only", "AINGEL_SYNTHETIC_TESTS_ONLY": "1"})
+    @patch("assistance.scene.httpx.Client")
+    def test_incomplete_response_is_not_presented_as_success(self, client):
+        client.return_value.__enter__.return_value.post.return_value = httpx.Response(
+            200, request=httpx.Request("POST", "https://api.meta.ai/v1/responses"),
+            json={"status": "incomplete", "output": []},
+        )
+        with self.assertRaisesRegex(SceneUnavailable, "^meta_incomplete$"):
+            describe_scene(b"synthetic", "en-US", True)
 
     @patch.dict(os.environ, {"AINGEL_AI_MODE": "meta", "MODEL_API_KEY": "test-only", "AINGEL_SYNTHETIC_TESTS_ONLY": "1"})
     @patch("assistance.scene.httpx.Client")

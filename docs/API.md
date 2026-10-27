@@ -8,4 +8,4 @@ Max one 5 MiB JPEG/PNG/WebP; decoded image max 12 million pixels. Re-encode JPEG
 
 Errors use stable codes: `image_too_large`, `image_format_unsupported`, `image_invalid` (400); credential, privacy, provider/empty/incomplete response or invalid AI mode (503). Standard DRF serializer/auth/CSRF/throttle responses use its normal format. Clients must translate errors using resource keys, not show raw provider messages.
 
-Contract tests use an HTTP stub. Live Meta output/schema and latency still require validation. Memory, Care, login/bootstrap and audio WebSocket routes do not exist yet.
+Contract tests use an HTTP stub. One separate actual Spark 1.3 call succeeded through this endpoint using a synthetic image (3,453 ms adapter latency); broad output/schema coverage and quality evaluation remain pending. Memory, Care, login/bootstrap and audio WebSocket routes do not exist yet.

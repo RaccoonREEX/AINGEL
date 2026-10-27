@@ -46,7 +46,7 @@ Missing memory yields a deterministic no-evidence result; an LLM never supplies 
 
 ## Status at takeover
 
-Implemented now: authenticated Django/DRF scene endpoint, bounded image normalization, explicit mock adapter, server-side Meta HTTP adapter with synthetic-fixture gate and nine passing boundary tests. Meta adapter tests use a stub; no real model call is claimed. SQLite is local only. No Android APK, web product, deployment or complete memory/Care flow exists yet. Roadmap diagrams are not deployed functionality.
+Implemented now: authenticated Django/DRF scene endpoint, bounded image normalization, explicit mock adapter, server-side Meta HTTP adapter with synthetic-fixture gate and ten passing boundary tests. One separate real Spark 1.3 synthetic-image request succeeded in 3,453 ms; this used Django APIClient, not a browser or Android. SQLite is local only. No Android APK, web product, deployment or complete memory/Care flow exists yet. Roadmap diagrams are not deployed functionality.
 
 ## Acceptance gates
 
