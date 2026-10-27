@@ -9,6 +9,7 @@ import cv2
 from cryptography.fernet import InvalidToken
 from django.conf import settings
 from django.db import transaction
+from django.db.models import F
 from django.utils import timezone
 import numpy as np
 from rest_framework.decorators import api_view
@@ -164,7 +165,14 @@ def family_faces(request, profile_id):
     if not member:
         raise PermissionDenied("self_enrollment_requires_membership")
     if request.method == "DELETE":
-        FamilyFace.objects.filter(member=member).delete()
+        with transaction.atomic():
+            locked = Profile.objects.select_for_update().get(pk=profile.pk)
+            member = locked.members.filter(user=request.user).first()
+            if not member:
+                raise PermissionDenied("self_enrollment_requires_membership")
+            member.face_consent_epoch += 1
+            member.save(update_fields=["face_consent_epoch"])
+            FamilyFace.objects.filter(member=member).delete()
         audit(profile, request.user, "face.consent_revoked", member.id)
         return Response(status=204)
     if not profile.face_recognition_enabled:
@@ -185,6 +193,7 @@ def family_faces(request, profile_id):
     if sum(image.size for image in images) > 5 * 1024 * 1024:
         raise ValidationError("face_images_too_large")
     samples = []
+    initial_epoch = member.face_consent_epoch
     seen = set()
     try:
         for image in images:
@@ -206,13 +215,15 @@ def family_faces(request, profile_id):
         raise ValidationError("face_image_invalid") from None
     with transaction.atomic():
         locked = Profile.objects.select_for_update().get(pk=profile.pk)
+        current_member = locked.members.filter(pk=member.pk).first()
         if (
             not locked.face_recognition_enabled
-            or not locked.members.filter(pk=member.pk).exists()
+            or not current_member
+            or current_member.face_consent_epoch != initial_epoch
         ):
-            raise ValidationError("face_feature_disabled")
+            raise ValidationError("face_consent_changed")
         face, _ = FamilyFace.objects.update_or_create(
-            member=member,
+            member=current_member,
             defaults={
                 "display_name": label.strip(),
                 "embedding_encrypted": encrypt(
@@ -222,6 +233,8 @@ def family_faces(request, profile_id):
                 "consented_at": timezone.now(),
             },
         )
+        current_member.face_consent_epoch += 1
+        current_member.save(update_fields=["face_consent_epoch"])
     audit(profile, request.user, "face.consented_enrolled", member.id)
     return Response(enrollment_data(face), status=201)
 
@@ -243,6 +256,7 @@ def face_consent(request, profile_id):
     with transaction.atomic():
         profile = Profile.objects.select_for_update().get(pk=profile.pk)
         if not enabled:
+            profile.members.update(face_consent_epoch=F("face_consent_epoch") + 1)
             FamilyFace.objects.filter(member__profile=profile).delete()
         profile.face_recognition_enabled = enabled
         profile.save(update_fields=["face_recognition_enabled"])
@@ -277,29 +291,45 @@ def recognize_family(request, profile_id):
                     "display_name": face.display_name,
                     "relationship": face.member.relationship,
                     "samples": decode_samples(face.embedding_encrypted),
+                    "consent_epoch": face.member.face_consent_epoch,
                 }
             )
         detected = embeddings(normalize_image(image))
     except (ValueError, cv2.error, InvalidToken):
         raise ValidationError("face_processing_failed") from None
-    results = []
-    for detection in detected:
-        match = (
-            candidate_match(detection["embedding"], candidates)
-            if detection.get("sharpness", 100) >= 30
-            else None
-        )
-        results.append(
-            {
-                "box": detection["box"],
-                "candidate": (
-                    {k: match[k] for k in ["id", "display_name", "relationship"]}
-                    if match
-                    else None
-                ),
-            }
-        )
-    audit(profile, request.user, "face.local_match_requested")
+    with transaction.atomic():
+        profile = Profile.objects.select_for_update().get(pk=profile.pk)
+        if not profile.face_recognition_enabled:
+            raise ValidationError("face_consent_changed")
+        current = {
+            str(face.id): face.member.face_consent_epoch
+            for face in FamilyFace.objects.filter(
+                member__profile=profile, expires_at__gt=timezone.now()
+            ).select_related("member")
+        }
+        candidates = [
+            candidate
+            for candidate in candidates
+            if current.get(candidate["id"]) == candidate["consent_epoch"]
+        ]
+        results = []
+        for detection in detected:
+            match = (
+                candidate_match(detection["embedding"], candidates)
+                if detection.get("sharpness", 100) >= 30
+                else None
+            )
+            results.append(
+                {
+                    "box": detection["box"],
+                    "candidate": (
+                        {k: match[k] for k in ["id", "display_name", "relationship"]}
+                        if match
+                        else None
+                    ),
+                }
+            )
+        audit(profile, request.user, "face.local_match_requested")
     return Response(
         {
             "mode": "local_experimental",

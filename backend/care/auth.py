@@ -76,6 +76,10 @@ def authenticate_user(request, register=False):
         login(request, user)
         if device:
             request.session["mfa_epoch"] = device.epoch
+    # A previously initiated challenge belongs only to its original password
+    # attempt, never to a different account subsequently signed in here.
+    request.session.pop("mfa_pending_user", None)
+    request.session.pop("mfa_pending_until", None)
     return JsonResponse(session_data(request))
 
 

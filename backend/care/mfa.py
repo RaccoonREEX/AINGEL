@@ -159,23 +159,33 @@ def mfa_enable(request):
         ):
             raise ValidationError("mfa_setup_expired")
         code = request.data.get("code", "")
-        if not isinstance(code, str) or not pyotp.TOTP(
-            decrypt(device.pending_encrypted)
-        ).verify(code, valid_window=1):
+        if (
+            not isinstance(code, str)
+            or len(code) != 6
+            or not code.isascii()
+            or not code.isdigit()
+        ):
+            raise ValidationError("mfa_code_invalid")
+        # Take one clock snapshot for both verification and the replay counter.
+        # A 30-second boundary between two reads must not turn a valid code into a 500.
+        counter = int(time.time() // 30)
+        totp = pyotp.TOTP(decrypt(device.pending_encrypted))
+        matched = next(
+            (
+                c
+                for c in [counter - 1, counter, counter + 1]
+                if constant_time_compare(totp.at(c * 30), code)
+            ),
+            None,
+        )
+        if matched is None:
             raise ValidationError("mfa_code_invalid")
         device.secret_encrypted = device.pending_encrypted
         device.pending_encrypted = ""
         device.pending_at = None
         device.enabled = True
         device.epoch += 1
-        counter = int(time.time() // 30)
-        device.last_counter = next(
-            c
-            for c in [counter - 1, counter, counter + 1]
-            if constant_time_compare(
-                pyotp.TOTP(decrypt(device.secret_encrypted)).at(c * 30), code
-            )
-        )
+        device.last_counter = matched
         codes = [secrets.token_hex(8) for _ in range(8)]
         device.recovery_hashes = [
             salted_hmac("aingel-recovery", x).hexdigest() for x in codes

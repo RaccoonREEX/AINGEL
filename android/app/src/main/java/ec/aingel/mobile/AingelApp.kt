@@ -26,6 +26,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -36,11 +37,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
-@Composable private fun Input(label: Int, value: String, change: (String) -> Unit, secret: Boolean = false) {
+@Composable private fun Input(label: Int, value: String, change: (String) -> Unit, secret: Boolean = false, enabled: Boolean = true) {
     OutlinedTextField(value, change, label = { Text(stringResource(label)) }, modifier = Modifier.fillMaxWidth(),
         visualTransformation = if (secret) PasswordVisualTransformation() else VisualTransformation.None,
-        singleLine = true)
+        singleLine = true, enabled = enabled)
 }
 @Composable private fun Action(label: Int, enabled: Boolean = true, action: () -> Unit) {
     Button(onClick = action, enabled = enabled, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) { Text(stringResource(label)) }
@@ -72,7 +74,7 @@ import org.json.JSONObject
             Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("AINGEL", style = MaterialTheme.typography.headlineLarge)
                 if (s.busy) { LinearProgressIndicator(Modifier.fillMaxWidth()); Text(stringResource(R.string.loading)) }
-                if (s.error != null) Text(stringResource(if (s.error == "permission_denied") R.string.permissions else R.string.failed), color = MaterialTheme.colorScheme.error)
+                if (s.error != null) Text(stringResource(errorMessage(s.error!!)), color = MaterialTheme.colorScheme.error)
                 if (s.username == null) {
                     key(s.mfaRequired) { Login(model, s) }
                 } else {
@@ -120,6 +122,34 @@ import org.json.JSONObject
             }
         }
     }
+}
+
+private fun errorMessage(error: String): Int = when (error) {
+    "device_permission_denied" -> R.string.permissions
+    "permission_denied", "self_enrollment_requires_membership" -> R.string.access_denied
+    "credentials_invalid" -> R.string.credentials_error
+    "registration_invalid" -> R.string.registration_error
+    "session_expired", "authentication_required", "mfa_challenge_expired" -> R.string.session_error
+    "auth_rate_limited", "mfa_rate_limited", "throttled" -> R.string.rate_error
+    "mfa_code_invalid" -> R.string.mfa_error
+    "server_unavailable", "transcription_unavailable" -> R.string.connection_error
+    "backend_invalid" -> R.string.backend_error
+    "care_circle_full" -> R.string.circle_full_error
+    "image_required", "face_enrollment_invalid" -> R.string.image_required_error
+    "image_too_large", "face_images_too_large" -> R.string.image_size_error
+    "face_duplicate_photo" -> R.string.face_duplicate_error
+    "face_photo_blurry" -> R.string.face_blurry_error
+    "face_single_clear_face_required" -> R.string.face_clear_error
+    "face_photos_inconsistent" -> R.string.face_inconsistent_error
+    "face_models_not_installed", "face_processing_failed" -> R.string.face_processing_error
+    "voice_unavailable" -> R.string.voice_error
+    "knowledge_not_installed", "knowledge_index_invalid" -> R.string.knowledge_unavailable
+    "knowledge_query_invalid" -> R.string.knowledge_query_error
+    "browser_unavailable" -> R.string.browser_error
+    "companion_input_invalid" -> R.string.companion_input_error
+    "companion_response_invalid" -> R.string.companion_response_error
+    "camera_unavailable", "microphone_unavailable" -> R.string.device_error
+    else -> R.string.failed
 }
 
 @Composable private fun Login(model: AingelViewModel, s: MobileState) {
@@ -172,6 +202,20 @@ import org.json.JSONObject
 }
 @Composable private fun AskScreen(model: AingelViewModel, s: MobileState) {
     var entity by remember { mutableStateOf("") }
+    var supportVisible by remember { mutableStateOf(false) }
+    var companionTopic by remember { mutableStateOf<CompanionTopic?>(null) }
+    val preferredName = s.communication?.optString("preferred_name")?.takeIf { it.isNotBlank() } ?: s.profile!!.optString("display_name")
+    val greeting = stringResource(R.string.greeting_name, preferredName) + " " + stringResource(when (s.communication?.optString("addressing")) {
+        "formal" -> R.string.greeting_formal
+        "informal" -> R.string.greeting_informal
+        else -> R.string.greeting_neutral
+    }) + if (s.communication?.optString("sentence_length") == "standard") " " + stringResource(R.string.greeting_extra) else ""
+    Text(greeting); Action(R.string.read) { model.speak(greeting) }
+    Action(R.string.need_support) { supportVisible = true }
+    if (supportVisible) {
+        val support = stringResource(supportMessageResource(s.communication?.optString("distress")))
+        Text(support); Action(R.string.read) { model.speak(support) }
+    }
     Input(R.string.entity, entity, { entity = it }); Action(R.string.remember, !s.busy && entity.isNotBlank()) { model.ask("search_memory", entity) }
     Action(R.string.today, !s.busy) { model.ask("get_routines") }; Action(R.string.messages, !s.busy) { model.ask("get_care_messages") }
     s.result?.let { result ->
@@ -179,7 +223,102 @@ import org.json.JSONObject
             val evidence = result.optJSONObject("evidence")
             val text = if (evidence == null) stringResource(R.string.no_evidence) else stringResource(R.string.last_reported) + ": " + evidence.optString("location") + " · " + evidence.optString("observed_at")
             Text(text); Action(R.string.read) { model.speak(text) }
-        } else result.optJSONArray("items")?.rows()?.forEach { Text(it.optString("title", it.optString("body")) + " " + it.optString("at")) }
+        } else result.optJSONArray("items")?.rows()?.let { items ->
+            var index by remember(result) { mutableIntStateOf(0) }
+            val oneStep = s.communication?.optString("interaction", "one_step") != "standard"
+            if (items.isEmpty()) Text(stringResource(R.string.empty))
+            val shown = if (oneStep) items.drop(index).take(1) else items
+            shown.forEach { item ->
+                val text = item.optString("title", item.optString("body")) + " " + item.optString("at") + " " + item.optString("instructions")
+                Text(text); Action(R.string.read) { model.speak(text) }
+            }
+            if (oneStep && items.size > 1) {
+                Text(stringResource(R.string.item_number, index + 1, items.size))
+                Action(R.string.previous_item, index > 0) { index-- }
+                Action(R.string.next_item, index < items.lastIndex) { index++ }
+            }
+        }
+    }
+    HealthResourcesScreen(model, s) { model.clearCompanion(); companionTopic = it }
+    CompanionScreen(model, s, companionTopic) { model.clearCompanion(); companionTopic = null }
+}
+
+internal fun supportMessageResource(preference: String?): Int =
+    if (preference == "contact_caregiver") R.string.support_contact else R.string.support_quiet
+
+internal fun verifiedMedlinePlusUrl(raw: String): String? {
+    val url = raw.toHttpUrlOrNull() ?: return null
+    return if (url.scheme == "https" && url.host == "medlineplus.gov" && url.port == 443 && url.username.isEmpty() && url.password.isEmpty()) url.toString() else null
+}
+
+@Composable private fun HealthResourcesScreen(model: AingelViewModel, s: MobileState, selectTopic: (CompanionTopic) -> Unit) {
+    var query by remember { mutableStateOf("") }
+    val uriHandler = LocalUriHandler.current
+    HorizontalDivider()
+    Text(stringResource(R.string.knowledge_title), style = MaterialTheme.typography.titleLarge)
+    Text(stringResource(R.string.knowledge_intro))
+    Input(R.string.knowledge_search, query, { query = it.take(100) })
+    Action(R.string.knowledge_search_action, !s.busy && query.isNotBlank()) { model.searchResources(query) }
+    s.knowledge?.let { items ->
+        var index by remember(items) { mutableIntStateOf(0) }
+        val oneStep = s.communication?.optString("interaction", "one_step") != "standard"
+        if (items.isEmpty()) Text(stringResource(R.string.knowledge_none))
+        (if (oneStep) items.drop(index).take(1) else items).forEach { item ->
+            val title = item.optString("title")
+            Text(title, style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.knowledge_source, item.optString("source")))
+            Text(stringResource(R.string.knowledge_date, item.optString("downloaded_at").take(10)))
+            val summary = item.optString("summary")
+            var showSummary by remember(item) { mutableStateOf(false) }
+            if (summary.isNotBlank()) {
+                Action(if (showSummary) R.string.knowledge_hide_summary else R.string.knowledge_read_summary) { showSummary = !showSummary }
+                if (showSummary) { Text(summary); Action(R.string.read) { model.speak(summary) } }
+            }
+            val language = item.optString("lang")
+            if (title.isNotBlank() && language in setOf("es", "en")) Action(R.string.companion_use_topic, !s.busy) { selectTopic(CompanionTopic(title, language)) }
+            val url = verifiedMedlinePlusUrl(item.optString("url"))
+            if (url != null) Action(R.string.knowledge_open) {
+                try { uriHandler.openUri(url) } catch (_: Exception) { model.reportError("browser_unavailable") }
+            }
+        }
+        if (oneStep && items.size > 1) {
+            Text(stringResource(R.string.item_number, index + 1, items.size))
+            Action(R.string.previous_resource, index > 0) { index-- }
+            Action(R.string.next_resource, index < items.lastIndex) { index++ }
+        }
+    }
+}
+
+@Composable private fun CompanionScreen(model: AingelViewModel, s: MobileState, topic: CompanionTopic?, clearTopic: () -> Unit) {
+    var question by remember { mutableStateOf("") }
+    var confirmed by remember { mutableStateOf(false) }
+    val uriHandler = LocalUriHandler.current
+    LaunchedEffect(question, topic) { confirmed = false; model.clearCompanion() }
+    HorizontalDivider()
+    Text(stringResource(R.string.companion_title), style = MaterialTheme.typography.titleLarge)
+    Text(stringResource(R.string.companion_intro))
+    topic?.let {
+        Text(stringResource(R.string.companion_topic, it.title))
+        Action(R.string.companion_remove_topic, !s.busy) { clearTopic() }
+    }
+    Input(R.string.companion_question, question, {
+        val edited = it.take(1000)
+        if (edited != question) { model.clearCompanion(); confirmed = false; question = edited }
+    }, enabled = !s.busy)
+    Check(R.string.companion_confirm, confirmed) { if (!s.busy) confirmed = it }
+    Action(R.string.companion_submit, !s.busy && confirmed && question.isNotBlank()) { model.askCompanion(question, topic); confirmed = false }
+    s.companion?.let { result ->
+        Text(stringResource(if (result.optString("mode") == "meta") R.string.companion_meta else R.string.companion_mock))
+        val answer = result.optString("text")
+        Text(answer); Action(R.string.read) { model.speak(answer) }
+        result.optJSONObject("source")?.let { source ->
+            Text(source.optString("title"))
+            Text(stringResource(R.string.knowledge_source, source.optString("source")))
+            Text(stringResource(R.string.knowledge_date, source.optString("downloaded_at").take(10)))
+            verifiedMedlinePlusUrl(source.optString("url"))?.let { url ->
+                Action(R.string.knowledge_open) { try { uriHandler.openUri(url) } catch (_: Exception) { model.reportError("browser_unavailable") } }
+            }
+        }
     }
 }
 @Composable private fun MemoryScreen(model: AingelViewModel, s: MobileState) {
@@ -242,7 +381,7 @@ import org.json.JSONObject
             catch (_: Exception) { model.reportError("image_invalid") }
         }
     }
-    val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { allowed -> if (allowed) camera = true else model.reportError("permission_denied") }
+    val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { allowed -> if (allowed) camera = true else model.reportError("device_permission_denied") }
     if (camera) CameraCapture(front, { model.setImage(it); camera = false }, { camera = false }, { camera = false; model.reportError("camera_unavailable") })
     else {
         Action(R.string.camera, !s.busy) {
@@ -363,8 +502,34 @@ import org.json.JSONObject
 }
 @Composable private fun HearScreen(model: AingelViewModel, s: MobileState) {
     val context = LocalContext.current; var consent by remember { mutableStateOf(false) }
-    val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { allowed -> if (allowed) model.startCaptions() else model.reportError("permission_denied") }
+    val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { allowed -> if (allowed) model.startCaptions() else model.reportError("device_permission_denied") }
     DisposableEffect(Unit) { onDispose { model.stopCaptions() } }
+    val language = when (s.communication?.optString("sign_language")) {
+        "lsec" -> R.string.sign_lsec
+        "asl" -> R.string.sign_asl
+        "other" -> R.string.sign_other
+        "none" -> R.string.sign_none
+        else -> R.string.sign_unavailable
+    }
+    Text(stringResource(R.string.sign_selected, stringResource(language)))
+    Text(stringResource(R.string.sign_not_ready))
+    if (supportsSignCatalog(s.communication?.optString("sign_language"))) {
+        Text(stringResource(when (s.signStatus) {
+            "listening" -> R.string.sign_listening
+            "searching" -> R.string.sign_searching
+            "available" -> R.string.sign_available
+            "unavailable" -> R.string.sign_no_match
+            "error" -> R.string.sign_lookup_error
+            else -> R.string.sign_waiting
+        }))
+        s.signText?.let { Text(it) }
+        if (s.signStatus == "available" && s.signVideo != null && s.signMetadata != null) {
+            val clip = s.signMetadata!!
+            Text(stringResource(R.string.sign_credit, clip.optString("source").take(200), clip.optString("attribution").take(500)))
+            Text(stringResource(R.string.sign_license, clip.optString("license").take(200)))
+            key(s.signVideo!!) { SignVideo(s.signVideo!!) }
+        }
+    } else Text(stringResource(R.string.sign_unsupported))
     Text(stringResource(R.string.mic_intro)); Check(R.string.synthetic_confirm, consent) { consent = it }
     Text(stringResource(when (s.captionStatus) { "recording" -> R.string.recording; "connecting" -> R.string.connecting; "finishing" -> R.string.finishing; else -> R.string.idle }))
     Action(R.string.start, consent && s.captionStatus == "idle") {

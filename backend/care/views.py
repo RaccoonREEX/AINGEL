@@ -29,6 +29,8 @@ from .models import (
 )
 from .permissions import access, audit, profiles_for
 from .serializers import (
+    COMMUNICATION_DEFAULTS,
+    CommunicationSerializer,
     MemorySerializer,
     MessageSerializer,
     ProfileSerializer,
@@ -75,6 +77,26 @@ def profile_detail(request, profile_id):
         serializer = ProfileSerializer(obj, context={"request": request})
         audit(obj, request.user, "profile.read", obj.id)
     return Response(serializer.data)
+
+
+@api_view(["GET", "PATCH"])
+def communication(request, profile_id):
+    obj = access(
+        request.user, profile_id, "configure" if request.method == "PATCH" else "read"
+    )
+    if request.method == "PATCH":
+        serializer = CommunicationSerializer(data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        with transaction.atomic():
+            # Updates by different caregivers must not overwrite one another.
+            obj = Profile.objects.select_for_update().get(pk=obj.pk)
+            access(request.user, profile_id, "configure")
+            current = {**COMMUNICATION_DEFAULTS, **obj.communication}
+            current.update(serializer.validated_data)
+            obj.communication = current
+            obj.save(update_fields=["communication", "updated_at"])
+            audit(obj, request.user, "communication.updated", obj.id)
+    return Response({**COMMUNICATION_DEFAULTS, **obj.communication})
 
 
 def member_data(member):
@@ -170,6 +192,14 @@ def accept_invite(request):
             expires_at__gt=timezone.now(),
         )
         obj = Profile.objects.select_for_update().get(pk=invitation.profile_id)
+        # Recheck after locking: a cancelled/expired invitation must never regain access.
+        invitation = get_object_or_404(
+            obj.invitations,
+            pk=invitation.pk,
+            token_hash=hashlib.sha256(code.encode()).hexdigest(),
+            target=request.user,
+            expires_at__gt=timezone.now(),
+        )
         if obj.members.count() >= 4:
             raise ValidationError("care_circle_full")
         if obj.members.filter(user=request.user).exists():
@@ -189,32 +219,36 @@ def accept_invite(request):
 @api_view(["DELETE"])
 def cancel_invite(request, profile_id, invitation_id):
     obj = access(request.user, profile_id, "owner")
-    invitation = get_object_or_404(obj.invitations, pk=invitation_id)
-    invitation.delete()
-    audit(obj, request.user, "circle.invitation_cancelled", invitation_id)
+    with transaction.atomic():
+        obj = Profile.objects.select_for_update().get(pk=obj.pk)
+        invitation = get_object_or_404(obj.invitations, pk=invitation_id)
+        invitation.delete()
+        audit(obj, request.user, "circle.invitation_cancelled", invitation_id)
     return Response(status=204)
 
 
 @api_view(["PATCH", "DELETE"])
 def membership(request, profile_id, member_id):
     obj = access(request.user, profile_id)
-    member = get_object_or_404(obj.members, pk=member_id)
-    if obj.owner_id != request.user.id and not (
-        request.method == "DELETE" and member.user_id == request.user.id
-    ):
-        raise PermissionDenied("permission_denied")
-    if request.method == "DELETE":
-        # Revocation must always work, including the last member: readiness returns to draft.
-        member.delete()
-        audit(obj, request.user, "circle.revoked", member_id)
-        return Response(status=204)
-    for field in ["can_configure", "can_view_memories"]:
-        if field in request.data:
-            if type(request.data[field]) is not bool:
-                raise ValidationError("permissions_invalid")
-            setattr(member, field, request.data[field])
-    member.save()
-    audit(obj, request.user, "circle.permissions_updated", member.id)
+    with transaction.atomic():
+        obj = Profile.objects.select_for_update().get(pk=obj.pk)
+        member = get_object_or_404(obj.members, pk=member_id)
+        if obj.owner_id != request.user.id and not (
+            request.method == "DELETE" and member.user_id == request.user.id
+        ):
+            raise PermissionDenied("permission_denied")
+        if request.method == "DELETE":
+            # Revocation must always work, including the last member: readiness returns to draft.
+            member.delete()
+            audit(obj, request.user, "circle.revoked", member_id)
+            return Response(status=204)
+        for field in ["can_configure", "can_view_memories"]:
+            if field in request.data:
+                if type(request.data[field]) is not bool:
+                    raise ValidationError("permissions_invalid")
+                setattr(member, field, request.data[field])
+        member.save()
+        audit(obj, request.user, "circle.permissions_updated", member.id)
     return Response(member_data(member))
 
 

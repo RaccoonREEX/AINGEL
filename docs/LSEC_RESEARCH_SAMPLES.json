@@ -1,0 +1,46 @@
+{
+  "dataset": "AI-Ready Ecuadorian Sign Language Corpus",
+  "source": "https://zenodo.org/records/21627229",
+  "doi": "10.5281/zenodo.21627229",
+  "version": "1.0.1",
+  "authors": [
+    "Rubio Proaño, Andrès",
+    "Banet-Ponce, Jorge",
+    "Calderón-Hinojosa, Xavier",
+    "Salamea Palacios, Christian"
+  ],
+  "license": "CC BY 4.0",
+  "license_url": "https://creativecommons.org/licenses/by/4.0/",
+  "attribution": "Cite the dataset authors, title, DOI and CC BY 4.0; indicate any changes.",
+  "storage": ".local/datasets/lsec-research/ (ignored by Git)",
+  "purpose": "Private local research and future community review only; clips are not enabled in the application.",
+  "linguistically_validated": false,
+  "limitations": [
+    "No independent LSEC comprehension assessment has been performed.",
+    "EAF media references use historical paths marked unresolved; the manifest and source original filename establish the file mapping.",
+    "Source metadata describes verified participant consent for publication, redistribution and AI/ML, while copyright licensing does not itself waive personality or privacy rights.",
+    "These two fixed phrases are not a general or real-time sign-language translation system."
+  ],
+  "samples": [
+    {
+      "id": "fa1_000004",
+      "spanish": "Yo caminaré con una pelota en el parque.",
+      "video_path_in_source": "sentence_level/videos/fa1_000004.mp4",
+      "local_file": "fa1_000004.mp4",
+      "bytes": 31026506,
+      "sha256": "74d0e4840ecdb410b1e69115d79aad01718f80e07b1e1b6c703b11eb26dd467c",
+      "annotation_sha256": "bb12bab9cd4d475a7f296d463737186dd518561c62af2d341dc5e45c7354b70e",
+      "historical_media_reference": "unresolved"
+    },
+    {
+      "id": "fa1_000006",
+      "spanish": "Yo leeré un libro en mi casa.",
+      "video_path_in_source": "sentence_level/videos/fa1_000006.mp4",
+      "local_file": "fa1_000006.mp4",
+      "bytes": 27871698,
+      "sha256": "3198b2203e84686a8db01dac7b757a5301e5a9712dfe1bab3053c39d0ae49b9c",
+      "annotation_sha256": "39deb914592c8529108d970cf23e0da1c7e2328ebcb972191a70578c5a573b03",
+      "historical_media_reference": "unresolved"
+    }
+  ]
+}

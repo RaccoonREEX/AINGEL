@@ -14,14 +14,17 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.time.Instant
 import java.util.Locale
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 
 fun JSONArray.rows(): List<JSONObject> = (0 until length()).map { getJSONObject(it) }
 data class MobileState(
     val busy: Boolean = true, val error: String? = null, val username: String? = null, val mfaRequired: Boolean = false,
-    val profiles: List<JSONObject> = emptyList(), val profile: JSONObject? = null, val rows: List<JSONObject> = emptyList(),
-    val result: JSONObject? = null, val image: ByteArray? = null, val enrollmentPhotos: List<ByteArray> = emptyList(), val mfaSetup: JSONObject? = null, val recovery: List<String> = emptyList(),
+    val profiles: List<JSONObject> = emptyList(), val profile: JSONObject? = null, val communication: JSONObject? = null, val rows: List<JSONObject> = emptyList(), val knowledge: List<JSONObject>? = null,
+    val result: JSONObject? = null, val companion: JSONObject? = null, val image: ByteArray? = null, val enrollmentPhotos: List<ByteArray> = emptyList(), val mfaSetup: JSONObject? = null, val recovery: List<String> = emptyList(),
     val mfaEnabled: Boolean = false, val circle: JSONObject? = null, val inviteCode: String? = null, val faces: JSONObject? = null,
-    val captions: List<CaptionTurn> = emptyList(), val recording: Boolean = false, val captionStatus: String = "idle"
+    val captions: List<CaptionTurn> = emptyList(), val recording: Boolean = false, val captionStatus: String = "idle",
+    val signStatus: String = "waiting", val signText: String? = null, val signMetadata: JSONObject? = null, val signVideo: ByteArray? = null
 )
 
 class AingelViewModel(app: Application) : AndroidViewModel(app) {
@@ -30,11 +33,38 @@ class AingelViewModel(app: Application) : AndroidViewModel(app) {
     val state = mutable.asStateFlow()
     private var tts: TextToSpeech? = null
     private var voiceReady = false
+    private val captionEpoch = AtomicLong(0)
+    private val captionsActive = AtomicBoolean(false)
+    private val signGuard = SignLookupGuard()
+    private var signJob: Job? = null
+    private var lastSignPhrase: SignPhrase? = null
+    private var activeSpeechTurn: String? = null
+    private val retiredSpeechTurns = mutableSetOf<String>()
     private val captionClient = CaptionClient(api, viewModelScope,
-        onTurns = { turns -> mutable.update { it.copy(captions = turns) } },
+        onTurns = { turns ->
+            val epoch = captionEpoch.get()
+            viewModelScope.launch {
+                if (captionsActive.get() && captionEpoch.get() == epoch) {
+                    mutable.update { it.copy(captions = turns) }
+                    updateSigns(turns.lastOrNull(), epoch)
+                }
+            }
+        },
+        onSpeechStart = { turnId ->
+            val epoch = captionEpoch.get()
+            viewModelScope.launch {
+                if (captionsActive.get() && captionEpoch.get() == epoch) {
+                    activeSpeechTurn?.let { retiredSpeechTurns.add(it) }
+                    activeSpeechTurn = turnId
+                    if (turnId != null) retiredSpeechTurns.remove(turnId)
+                    invalidateSigns(if (supportsSignCatalog(mutable.value.communication?.optString("sign_language"))) "listening" else "unsupported")
+                }
+            }
+        },
         onStatus = { status -> mutable.update { it.copy(recording = status == "recording", captionStatus = status) } },
         onError = { code -> mutable.update { it.copy(error = code, recording = false, captionStatus = "idle") } })
     private var activeOperation: Job? = null
+    private var operationGeneration = 0L
     init {
         tts = TextToSpeech(app) { status -> voiceReady = status == TextToSpeech.SUCCESS }
         operation {
@@ -43,17 +73,22 @@ class AingelViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
     private fun operation(work: suspend () -> Unit): Job {
+        val current = ++operationGeneration
         activeOperation?.cancel()
         val job = viewModelScope.launch {
-
-        mutable.update { it.copy(busy = true, error = null) }
-        try { work() }
-        catch (cancelled: CancellationException) { throw cancelled }
-        catch (failure: ApiFailure) {
-            if (failure.status == 403 && failure.code.contains("Authentication")) mutable.update { MobileState(busy = false, error = "session_expired") }
-            else mutable.update { it.copy(error = failure.code) }
-        } catch (_: Exception) { mutable.update { it.copy(error = "request_invalid") } }
-        finally { mutable.update { it.copy(busy = false) } }
+            mutable.update { it.copy(busy = true, error = null) }
+            try { work() }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (failure: ApiFailure) {
+                if (current == operationGeneration) {
+                    if (failure.status == 403 && failure.code == "authentication_required") mutable.update { MobileState(busy = false, error = "session_expired") }
+                    else mutable.update { it.copy(error = failure.code) }
+                }
+            } catch (_: Exception) {
+                if (current == operationGeneration) mutable.update { it.copy(error = "request_invalid") }
+            } finally {
+                if (current == operationGeneration) mutable.update { it.copy(busy = false) }
+            }
         }
         activeOperation = job
         return job
@@ -66,7 +101,13 @@ class AingelViewModel(app: Application) : AndroidViewModel(app) {
     private suspend fun refreshProfiles() {
         val profiles = (api.request("profiles/") as JSONArray).rows()
         val selected = mutable.value.profile?.optString("id")
-        mutable.update { it.copy(profiles = profiles, profile = profiles.find { p -> p.optString("id") == selected } ?: profiles.firstOrNull()) }
+        val profile = profiles.find { p -> p.optString("id") == selected } ?: profiles.firstOrNull()
+        mutable.update { it.copy(profiles = profiles, profile = profile, communication = null) }
+        profile?.optString("id")?.takeIf { it.isNotBlank() }?.let { refreshCommunication(it) }
+    }
+    private suspend fun refreshCommunication(profileId: String) {
+        val value = api.request("profiles/$profileId/communication/") as JSONObject
+        mutable.update { if (it.profile?.optString("id") == profileId) it.copy(communication = value) else it }
     }
     fun configureBackend(value: String) = operation { api.configure(value); api.request("auth/session/"); mutable.update { MobileState(busy = false) } }
     fun login(username: String, password: String, register: Boolean = false) = operation {
@@ -80,8 +121,13 @@ class AingelViewModel(app: Application) : AndroidViewModel(app) {
         finally { api.clear(); mutable.value = MobileState(busy = false) }
         api.request("auth/session/")
     }
-    fun select(profile: JSONObject) { activeOperation?.cancel(); stopCaptions(); mutable.update { it.copy(profile = profile, rows = emptyList(), result = null, image = null, enrollmentPhotos = emptyList(), faces = null, circle = null) } }
-    fun resetScreen() { activeOperation?.cancel(); stopCaptions(); tts?.stop(); mutable.update { it.copy(rows = emptyList(), result = null, image = null, enrollmentPhotos = emptyList(), error = null, mfaSetup = null, recovery = emptyList(), inviteCode = null) } }
+    private fun cancelOperation() { operationGeneration++; activeOperation?.cancel(); activeOperation = null }
+    fun select(profile: JSONObject) {
+        cancelOperation(); stopCaptions()
+        mutable.update { it.copy(busy = false, profile = profile, communication = null, rows = emptyList(), knowledge = null, result = null, companion = null, image = null, enrollmentPhotos = emptyList(), faces = null, circle = null) }
+        operation { refreshCommunication(profile.getString("id")) }
+    }
+    fun resetScreen() { cancelOperation(); stopCaptions(); tts?.stop(); mutable.update { it.copy(busy = false, rows = emptyList(), knowledge = null, result = null, companion = null, image = null, enrollmentPhotos = emptyList(), error = null, mfaSetup = null, recovery = emptyList(), inviteCode = null) } }
     fun clearError() { mutable.update { it.copy(error = null) } }
     fun reportError(code: String) { mutable.update { it.copy(error = code) } }
     fun createProfile(name: String) = operation { api.request("profiles/", "POST", JSONObject().put("display_name", name).put("locale", "es-EC")); refreshProfiles() }
@@ -91,6 +137,22 @@ class AingelViewModel(app: Application) : AndroidViewModel(app) {
     }
     fun ask(tool: String, entity: String = "") = operation {
         val result = api.request(path("ask/"), "POST", JSONObject().put("tool", tool).put("entity", entity)) as JSONObject; mutable.update { it.copy(result = result) }
+    }
+    fun searchResources(query: String) = operation {
+        val profile = mutable.value.profile ?: throw ApiFailure("profile_required")
+        val profileId = profile.getString("id")
+        val language = if (profile.optString("locale") == "en-US") "en" else "es"
+        mutable.update { it.copy(knowledge = null) }
+        val resources = (api.request("profiles/$profileId/resources/search/", "POST", JSONObject().put("q", query.trim()).put("lang", language)) as JSONArray).rows()
+        mutable.update { if (it.profile?.optString("id") == profileId) it.copy(knowledge = resources) else it }
+    }
+    fun clearCompanion() { mutable.update { it.copy(companion = null) } }
+    internal fun askCompanion(text: String, topic: CompanionTopic?) = operation {
+        val profileId = mutable.value.profile?.optString("id")?.takeIf { it.isNotBlank() } ?: throw ApiFailure("profile_required")
+        mutable.update { it.copy(companion = null) }
+        val result = api.request("profiles/$profileId/companion/chat/", "POST", companionPayload(text, topic)) as JSONObject
+        if (result.optString("mode") !in setOf("meta", "mock") || result.optString("text").isBlank()) throw ApiFailure("companion_response_invalid")
+        mutable.update { if (it.profile?.optString("id") == profileId) it.copy(companion = result) else it }
     }
     fun addMemory(entity: String, location: String) = operation {
         api.request(path("memories/"), "POST", JSONObject().put("entity", entity).put("location", location).put("observed_at", Instant.now().toString()).put("confirmed", true))
@@ -169,11 +231,61 @@ class AingelViewModel(app: Application) : AndroidViewModel(app) {
     fun speak(text: String) {
         val locale = Locale.forLanguageTag(mutable.value.profile?.optString("locale", "es-EC") ?: "es-EC")
         if (!voiceReady || (tts?.isLanguageAvailable(locale) ?: -1) < 0) { reportError("voice_unavailable"); return }
-        tts?.language = locale; tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "aingel-response")
+        tts?.language = locale
+        tts?.setSpeechRate(if (mutable.value.communication?.optString("pace") == "slow") 0.8f else 1.0f)
+        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "aingel-response")
     }
     fun stopSpeech() { tts?.stop() }
-    fun startCaptions() { mutable.update { it.copy(captions = emptyList(), error = null) }; captionClient.start(mutable.value.profile?.optString("locale") ?: "es-EC") }
-    fun stopCaptions() { captionClient.close() }
+    private fun invalidateSigns(status: String) {
+        signGuard.advance(); signJob?.cancel(); signJob = null
+        mutable.update { it.copy(signStatus = status, signText = null, signMetadata = null, signVideo = null) }
+    }
+    private fun updateSigns(turn: CaptionTurn?, epoch: Long) {
+        if (turn == null) return
+        if (turn.id in retiredSpeechTurns) return
+        if (activeSpeechTurn != null && turn.id != activeSpeechTurn) {
+            activeSpeechTurn?.let { retiredSpeechTurns.add(it) }
+        }
+        activeSpeechTurn = turn.id
+        val language = mutable.value.communication?.optString("sign_language")
+        if (!supportsSignCatalog(language)) { invalidateSigns("unsupported"); return }
+        if (!turn.final) { invalidateSigns("listening"); return }
+        val phrase = eligibleSignPhrase(mutable.value.profile?.optString("id"), language, turn)
+        if (phrase == null) { invalidateSigns("unavailable"); mutable.update { it.copy(signText = turn.text) }; return }
+        if (phrase == lastSignPhrase) return
+        lastSignPhrase = phrase
+        invalidateSigns("searching")
+        mutable.update { it.copy(signText = phrase.text) }
+        val token = signGuard.advance()
+        signJob = viewModelScope.launch {
+            try {
+                val response = api.request("profiles/${phrase.profileId}/signs/lookup/", "POST", JSONObject().put("text", phrase.text).put("language", phrase.language)) as JSONObject
+                if (!signGuard.isCurrent(token) || captionEpoch.get() != epoch || mutable.value.profile?.optString("id") != phrase.profileId || mutable.value.communication?.optString("sign_language") != phrase.language) return@launch
+                if (response.opt("available") !is Boolean) throw ApiFailure("sign_catalog_invalid")
+                if (!response.getBoolean("available")) { mutable.update { it.copy(signStatus = "unavailable") }; return@launch }
+                val clip = response.optJSONObject("clip") ?: throw ApiFailure("sign_clip_invalid")
+                if (clip.optString("language") != phrase.language || listOf("source", "attribution", "license").any { clip.optString(it).isBlank() }) throw ApiFailure("sign_clip_invalid")
+                val video = api.signClip(phrase.profileId, clip.optString("id"))
+                if (signGuard.isCurrent(token) && captionEpoch.get() == epoch && mutable.value.profile?.optString("id") == phrase.profileId && mutable.value.communication?.optString("sign_language") == phrase.language) {
+                    mutable.update { it.copy(signStatus = "available", signMetadata = clip, signVideo = video) }
+                }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) {
+                if (signGuard.isCurrent(token) && captionEpoch.get() == epoch) mutable.update { it.copy(signStatus = "error", signMetadata = null, signVideo = null) }
+            }
+        }
+    }
+    fun startCaptions() {
+        captionEpoch.incrementAndGet(); captionsActive.set(true); retiredSpeechTurns.clear(); activeSpeechTurn = null; lastSignPhrase = null
+        invalidateSigns(if (supportsSignCatalog(mutable.value.communication?.optString("sign_language"))) "waiting" else "unsupported")
+        mutable.update { it.copy(captions = emptyList(), error = null) }
+        captionClient.start(mutable.value.profile?.optString("locale") ?: "es-EC")
+    }
+    fun stopCaptions() {
+        captionsActive.set(false); captionEpoch.incrementAndGet(); captionClient.close()
+        retiredSpeechTurns.clear(); activeSpeechTurn = null; lastSignPhrase = null
+        invalidateSigns("waiting"); mutable.update { it.copy(captions = emptyList()) }
+    }
     fun finishCaptions() { captionClient.stop() }
-    override fun onCleared() { captionClient.close(); tts?.shutdown(); super.onCleared() }
+    override fun onCleared() { stopCaptions(); tts?.shutdown(); super.onCleared() }
 }

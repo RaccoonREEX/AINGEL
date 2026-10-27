@@ -1,0 +1,29 @@
+{
+  "dataset": "MedlinePlus Health Topics summaries",
+  "publisher": "U.S. National Library of Medicine",
+  "source": "https://medlineplus.gov/xml.html",
+  "archive": "https://medlineplus.gov/xml/mplus_topics_compressed_2026-10-27.zip",
+  "archive_sha256": "355bc956644fbccc9f6b008e9a33abf23d25107b22e36a2a82bd88d025ae9272",
+  "source_generated_at": "10/27/2026 02:30:37",
+  "downloaded_at": "2026-10-27T11:04:08.512357+00:00",
+  "records_by_language": {
+    "en": 1017,
+    "es": 1011
+  },
+  "local_index_bytes": 4839238,
+  "imported_fields": [
+    "title",
+    "url",
+    "language",
+    "full-summary converted to plain text"
+  ],
+  "excluded": [
+    "third-party site content",
+    "A.D.A.M. encyclopedia",
+    "drug monographs",
+    "images",
+    "videos"
+  ],
+  "rights": "Health topic summaries are public domain under U.S. law per MedlinePlus content page; attribution required by MedlinePlus service guidance. Other content may be copyrighted.",
+  "content_policy": "Educational local title search only; not fine-tuned or used for autonomous medical advice."
+}

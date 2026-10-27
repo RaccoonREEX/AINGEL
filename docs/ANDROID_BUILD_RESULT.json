@@ -2,10 +2,10 @@
   "date": "2026-10-27",
   "version": "0.2.0-local",
   "artifact": "android/app/build/outputs/apk/debug/app-debug.apk",
-  "apk_sha256": "d74bcf8d6817f1e52861c16d7636dec0ed4ccafb69cd1ae9a5231712b2dbccf9",
+  "apk_sha256": "41021438b15d29edf587a594594d270b0ca0fb2045ce4ab6f4eb47e03e51625c",
   "apk_bytes": 19364369,
-  "backend_tests_passed": 62,
-  "android_jvm_tests_passed": 6,
+  "backend_tests_passed": 89,
+  "android_jvm_tests_passed": 13,
   "android_lint_errors": 0,
   "device": {
     "model": "Samsung SM-F721B",
@@ -13,9 +13,18 @@
     "installed": true,
     "cold_start_ok": true,
     "test_methods_passed": [
+      "CompanionContractTest.requestIncludesOnlyExplicitSyntheticTextAndPublicTopic",
       "DeviceBackendTest.nativeSessionCareMemoryAndMfaRoundTrip",
       "NativeScreenTest.registrationProfileSettingsAndSecurityScreens",
-      "PhotoOrientationTest.rotateAndMirrorGalleryPhotosBeforeStrippingMetadata"
+      "PhotoOrientationTest.rotateAndMirrorGalleryPhotosBeforeStrippingMetadata",
+      "SignClipTest.clipUsesAuthenticatedLocalSessionAndRejectsWrongContentType"
+    ],
+    "verified_features": [
+      "Native account, encrypted session, MFA and recovery",
+      "Configured greeting, support button, one-at-a-time routines and local MedlinePlus lookup",
+      "Synthetic conversation consent and HTTP contract",
+      "Authenticated sign-clip transport using synthetic bytes",
+      "Eight photo EXIF orientations"
     ]
   },
   "secret_scan": {
@@ -26,8 +35,10 @@
     "Actual Google Authenticator QR scan",
     "Camera and microphone permission/hardware checks",
     "Consented family recognition accuracy and unknown-person evaluation",
+    "Reviewed sign clips and open-ended LSEC interpretation or avatar",
     "TalkBack and accessibility device audit",
     "Background notifications",
     "Production deployment"
-  ]
+  ],
+  "offline_dataset_tests_passed": 14
 }

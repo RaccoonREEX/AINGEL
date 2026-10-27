@@ -13,7 +13,7 @@ class MainActivity : ComponentActivity() {
         setContent { AingelApp(model) }
     }
     override fun onStop() {
-        if (::model.isInitialized) model.stopCaptions()
+        if (::model.isInitialized) { model.stopCaptions(); model.stopSpeech() }
         super.onStop()
     }
 }

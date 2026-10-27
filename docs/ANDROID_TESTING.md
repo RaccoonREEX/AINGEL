@@ -29,8 +29,9 @@ El segundo comando valida, configura `adb reverse tcp:8010 tcp:8010`, instala y 
 |---|---|---|
 | Cuenta | Registro/logout en UI y cliente nativo, sesión CSRF, desafío TOTP/recuperación verificados en el Samsung | Reinicio, expiración, cambio de cuenta y escaneo Authenticator |
 | Seguridad | Cookies AES-GCM con Android Keystore, backups deshabilitados, capturas bloqueadas, clave Meta solo en servidor | Reiniciar dispositivo, invalidación de clave y recent apps |
-| Cuidado | Selección de perfiles, aceptar/invitar/revocar cuidadores, necesidades, alergias, preferencias, rutinas diarias y confirmación manual | Dos cuentas y cambios sincronizados con Care web |
+| Cuidado | Selección de perfiles, cuidadores, rutinas, ajustes de comunicación y botón de apoyo local; recorrido con datos sintéticos aprobado | Dos cuentas y cambios sincronizados con Care web |
 | Memoria | Observación humana actual confirmada, consulta exacta, lectura y eliminación | No evidencia, permiso denegado y fechas |
+| Conocimiento | Búsqueda educativa MedlinePlus con fuente y fecha en Preguntar | Actualización del índice y evaluación de comprensión con usuarios |
 | Rostros | Activación por principal, registro propio de 1–3 fotos por familiar, revocación, consulta local, posible coincidencia y TTS | Fotos consentidas, desconocidos, luz, ángulos, gafas, parentescos y falsos positivos |
 | Cámara | CameraX con captura JPEG en memoria y selección de archivo; permisos solicitados por acción | Permiso denegado, cámara delantera/trasera, rotación y distintas marcas |
 | Ver | Imagen sintética incluida, Spark/SAM por backend y lectura del resultado | Petición real desde APK, orientación y visualización |
@@ -38,9 +39,9 @@ El segundo comando valida, configura `adb reverse tcp:8010 tcp:8010`, instala y 
 | Comunicar | Frases AAC y TTS del sistema | Voces instaladas, idioma, volumen y audibilidad |
 | Accesibilidad | Recursos español/inglés, controles de 52dp, escala del sistema, texto grande, contraste | TalkBack, orden de foco, tamaño máximo y pantallas pequeñas |
 
-Las seis pruebas JVM cubren restricción HTTPS/loopback, rechazo de URLs con credenciales, reemplazo de parciales, final sin texto, protección del texto final y límite de historial. Las tres pruebas instrumentadas aprobadas son `DeviceBackendTest`, `NativeScreenTest` y `PhotoOrientationTest` (tres métodos aprobados juntos en el pase final). La prueba `NativeScreenTest` verifica además que la alergia sintética guardada reaparece al abrir de nuevo Preferencias. La prueba `PhotoOrientationTest` verifica dimensiones y píxel de referencia en las ocho orientaciones EXIF, antes de retirar metadatos.
+Las trece pruebas JVM cubren restricción HTTPS/loopback, rechazo de URLs con credenciales, reemplazo de parciales, final sin texto, protección del texto final y límite de historial. Las cinco pruebas instrumentadas aprobadas son `DeviceBackendTest`, `NativeScreenTest`, `PhotoOrientationTest`, `SignClipTest` y `CompanionContractTest`. La prueba `NativeScreenTest` verifica además el saludo configurable, presentación uno por uno, botón de apoyo, preferencia LSEC, control de consentimiento sintético para Spark, consulta de MedlinePlus y que la alergia sintética guardada reaparece al abrir de nuevo Preferencias. La prueba `PhotoOrientationTest` verifica dimensiones y píxel de referencia en las ocho orientaciones EXIF, antes de retirar metadatos.
 
-La prueba instrumentada `DeviceBackendTest` ejecutó registro, creación de perfil/rutina, confirmación, búsqueda sin evidencia y con memoria, recuperación de cookies desde Android Keystore, activación TOTP, desafío de acceso, rechazo de contraseña sola, recuperación de un solo uso, rechazo de reutilización y desactivación con contraseña+recuperación. Usa una cuenta sintética y preferencias separadas de las de la app normal. Los 62 tests backend cubren permisos/aislamiento, círculo, memoria, MFA y lógica de plantillas; los tests de rostros usan vectores sintéticos y no miden precisión real.
+La prueba instrumentada `DeviceBackendTest` ejecutó registro, creación de perfil/rutina, confirmación, búsqueda sin evidencia y con memoria, recuperación de cookies desde Android Keystore, activación TOTP, desafío de acceso, rechazo de contraseña sola, recuperación de un solo uso, rechazo de reutilización y desactivación con contraseña+recuperación. Usa una cuenta sintética y preferencias separadas de las de la app normal. Los 89 tests backend cubren permisos/aislamiento, círculo, memoria, MFA y lógica de plantillas; los tests de rostros usan vectores sintéticos y no miden precisión real.
 
 Rutinas móviles: creación diaria, eliminación y confirmación manual; edición de días específicos y detalles completos se realiza en Care web. No hay notificaciones/alarmas de fondo. Configuración de permisos individuales y cancelación de invitaciones pendientes también están completas en Care web. Los fallos de red o validación se muestran con un mensaje general, pendiente mejorar su detalle y reintentos.
 
@@ -53,3 +54,5 @@ Para repetir las pruebas del teléfono, después de `adb reverse` y con la app e
 ```
 
 El lanzador aplica el JDK/opción local de sockets y la redirección USB automáticamente. `NativeScreenTest` requiere sesión cerrada y no expulsa a una cuenta existente. Los informes completos del teléfono contienen identificadores/logs y se conservan solo en carpetas ignoradas; no publicarlos.
+
+La reproducción de clips reales de señas aún no se ha probado: el catálogo está vacío. El test de transporte usa datos sintéticos y no demuestra que exista una traducción. La prueba de contrato de conversación usa un servidor simulado; se verificó una llamada real sintética a Spark por separado.

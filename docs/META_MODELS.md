@@ -50,4 +50,8 @@ Official SDK examples support OpenAI-compatible clients configured to Meta's bas
 
 ## Implemented local adapters
 
-Spark scene HTTP calls and SAM localization now run from the React interface through authenticated Django. SAM's official meta-sam-parser decodes boxes/masks (SAM License). A synthetic SAM call completed with one red-circle match and a decoded mask; see SAM_SMOKE_RESULT.json. Voice now has an authenticated allowed-origin WebSocket relay with PCM24kHz AudioWorklet capture and final-turn handling. A synthetic WAV relay test returned ten partials and one correct final transcript; see CAPTIONS_SMOKE_RESULT.json. No accuracy benchmark, personal-data clearance, native APK or autonomous agent tool selection is claimed by these tests.
+Spark scene HTTP calls and SAM localization now run from the React interface through authenticated Django. SAM's official meta-sam-parser decodes boxes/masks (SAM License). A synthetic SAM call completed with one red-circle match and a decoded mask; see SAM_SMOKE_RESULT.json. Voice now has an authenticated allowed-origin WebSocket relay with PCM24kHz AudioWorklet capture and final-turn handling. The latest synthetic WAV relay test returned eight partials and one correct final transcript; see CAPTIONS_SMOKE_RESULT.json. No accuracy benchmark, personal-data clearance or autonomous model-selected tools are established by these tests. A separate native APK has been installed and exercised on a Samsung device.
+
+## Single-turn companion smoke — 2026-10-27
+
+A real authenticated Spark request for a synthetic question and an explicitly selected MedlinePlus excerpt completed successfully. See `COMPANION_SMOKE_RESULT.json`. The application passes categorical communication settings only; no free-form profile fields, memories, messages or history are added. The user assertion of synthetic content is not a privacy detector. This is not evidence of clinical accuracy or open-ended safe behavior.

@@ -60,6 +60,28 @@ class MFATests(TestCase):
         self.assertEqual(self.client.get("/api/v1/profiles/").status_code, 200)
         self.assertNotEqual(device.secret_encrypted, secret)
 
+    def test_signing_in_as_another_user_discards_pending_mfa_challenge(self):
+        _, secret = self.device()
+        get_user_model().objects.create_user(
+            username="other-synthetic-user", password="Synthetic!Password-2479"
+        )
+        self.assertTrue(self.login().json()["mfa_required"])
+        other = self.post(
+            "login/",
+            {"username": "other-synthetic-user", "password": "Synthetic!Password-2479"},
+        )
+        self.assertEqual(other.status_code, 200)
+        self.assertFalse(other.json()["mfa_required"])
+        self.assertEqual(other.json()["user"]["username"], "other-synthetic-user")
+        self.assertEqual(
+            self.post("mfa/verify/", {"code": pyotp.TOTP(secret).now()}).status_code,
+            400,
+        )
+        self.assertEqual(
+            self.client.get("/api/v1/auth/session/").json()["user"]["username"],
+            "other-synthetic-user",
+        )
+
     def test_totp_cannot_be_replayed_after_new_password_challenge(self):
         device, secret = self.device()
         self.login()
@@ -99,6 +121,20 @@ class MFATests(TestCase):
         device.refresh_from_db()
         self.assertFalse(device.enabled)
         self.assertEqual(device.secret_encrypted, "")
+
+    def test_mfa_enable_uses_one_clock_snapshot_across_a_totp_boundary(self):
+        self.login()
+        result = self.post("mfa/setup/", {"password": "Test-Only!Mfa-82714"})
+        secret = result.data["secret"]
+        counter = int(time.time() // 30)
+        code = pyotp.TOTP(secret).at((counter - 1) * 30)
+        with patch("care.mfa.time") as clock:
+            clock.time.side_effect = [counter * 30 + 29.99, (counter + 1) * 30]
+            response = self.post("mfa/enable/", {"code": code})
+        self.assertEqual(response.status_code, 200)
+        clock.time.assert_called_once()
+        device = MFADevice.objects.get(user=self.user)
+        self.assertEqual(device.last_counter, counter - 1)
 
     def test_expired_challenge_and_attempt_limit(self):
         self.device()
@@ -397,3 +433,86 @@ class MultiPhotoTests(TestCase):
         ]:
             with self.assertRaises(ValueError):
                 decode_samples(encrypt(json.dumps(value)))
+
+    def test_revoking_own_consent_during_inference_blocks_stale_enrollment(self):
+        self.enable()
+        self.client.force_authenticate(self.family)
+
+        def revoke_during_processing(_image):
+            revoker = APIClient()
+            revoker.force_authenticate(self.family)
+            self.assertEqual(revoker.delete(self.base).status_code, 204)
+            return [{"embedding": [1.0] + [0.0] * 127, "sharpness": 80}]
+
+        with patch("care.faces.embeddings", side_effect=revoke_during_processing):
+            result = self.client.post(
+                self.base,
+                {
+                    "image": photo(),
+                    "display_name": "Synthetic",
+                    "consent": "true",
+                    "own_photo": "true",
+                },
+            )
+        self.assertEqual(result.status_code, 400)
+        self.assertFalse(FamilyFace.objects.exists())
+
+    def test_disable_and_reenable_during_inference_does_not_restore_old_consent(self):
+        self.enable()
+        self.client.force_authenticate(self.family)
+
+        def disable_during_processing(_image):
+            principal = APIClient()
+            principal.force_authenticate(self.owner)
+            self.assertEqual(
+                principal.post(
+                    self.base + "consent/", {"enabled": False}, format="json"
+                ).status_code,
+                200,
+            )
+            self.assertEqual(
+                principal.post(
+                    self.base + "consent/",
+                    {
+                        "enabled": True,
+                        "consent": True,
+                        "password": "Test-only!Owner-63152",
+                    },
+                    format="json",
+                ).status_code,
+                200,
+            )
+            return [{"embedding": [1.0] + [0.0] * 127, "sharpness": 80}]
+
+        with patch("care.faces.embeddings", side_effect=disable_during_processing):
+            result = self.client.post(
+                self.base,
+                {
+                    "image": photo(),
+                    "display_name": "Synthetic",
+                    "consent": "true",
+                    "own_photo": "true",
+                },
+            )
+        self.assertEqual(result.status_code, 400)
+        self.assertFalse(FamilyFace.objects.exists())
+
+    def test_recognition_does_not_return_a_face_revoked_during_inference(self):
+        vector = [1.0] + [0.0] * 127
+        feature = {"embedding": vector, "sharpness": 80, "box": [0, 0, 1, 1]}
+        with patch("care.faces.embeddings", return_value=[feature]):
+            self.assertEqual(self.enroll([photo()]).status_code, 201)
+        self.client.force_authenticate(self.owner)
+
+        def revoke_during_processing(_image):
+            revoker = APIClient()
+            revoker.force_authenticate(self.family)
+            self.assertEqual(revoker.delete(self.base).status_code, 204)
+            return [feature]
+
+        with patch("care.faces.embeddings", side_effect=revoke_during_processing):
+            result = self.client.post(
+                self.base + "recognize/", {"image": photo(), "consent": "true"}
+            )
+        self.assertEqual(result.status_code, 200)
+        self.assertIsNone(result.data["faces"][0]["candidate"])

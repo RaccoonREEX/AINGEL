@@ -1,10 +1,65 @@
 package ec.aingel.mobile
 
 import org.json.JSONObject
+import org.json.JSONArray
 import org.junit.Assert.*
 import org.junit.Test
 
 class ProtocolTest {
+    @Test fun companionPayloadContainsOnlySyntheticQuestionAndOptionalPublicTopic() {
+        val question = companionPayload(" Synthetic question ", null)
+        assertEquals(setOf("text", "synthetic"), question.keys().asSequence().toSet())
+        assertEquals("Synthetic question", question.getString("text")); assertTrue(question.getBoolean("synthetic"))
+        val topic = companionPayload("Question", CompanionTopic("Sleep", "en"))
+        assertEquals(setOf("text", "synthetic", "topic_title", "topic_lang"), topic.keys().asSequence().toSet())
+        assertEquals("Sleep", topic.getString("topic_title")); assertEquals("en", topic.getString("topic_lang"))
+        listOf("", "a".repeat(1001)).forEach { value ->
+            try { companionPayload(value, null); fail("Invalid question accepted") } catch (_: ApiFailure) { }
+        }
+        try { companionPayload("Question", CompanionTopic("Sleep", "other")); fail("Invalid topic language accepted") }
+        catch (_: ApiFailure) { }
+    }
+    @Test fun signsOnlyLookUpFinalPhrasesInTheSpecificLanguageAndRejectUnsafeClipIds() {
+        assertNull(eligibleSignPhrase("profile", "lsec", CaptionTurn("1", "hello", false)))
+        assertNull(eligibleSignPhrase("profile", "other", CaptionTurn("1", "hello", true)))
+        assertNull(eligibleSignPhrase("profile", "none", CaptionTurn("1", "hello", true)))
+        assertNull(eligibleSignPhrase(null, "lsec", CaptionTurn("1", "hello", true)))
+        assertNull(eligibleSignPhrase("profile", "lsec", CaptionTurn("1", " ", true)))
+        assertNull(eligibleSignPhrase("profile", "lsec", CaptionTurn("1", "a".repeat(301), true)))
+        assertNotNull(eligibleSignPhrase("profile", "lsec", CaptionTurn("1", "\uD83D\uDE00".repeat(300), true)))
+        assertEquals(SignPhrase("profile", "lsec", "1", "hello"), eligibleSignPhrase("profile", "lsec", CaptionTurn("1", "hello", true)))
+        assertEquals(SignPhrase("profile", "asl", "1", "hello"), eligibleSignPhrase("profile", "asl", CaptionTurn("1", "hello", true)))
+        assertTrue(validSignClipId("sample_1-approved"))
+        listOf("", "../private", "bad/path", "BAD", "-bad", "a".repeat(65)).forEach { assertFalse(validSignClipId(it)) }
+    }
+    @Test fun startingANewSpeechInvalidatesAPendingClipLookup() {
+        val guard = SignLookupGuard()
+        val priorPhrase = guard.advance()
+        assertTrue(guard.isCurrent(priorPhrase))
+        guard.advance()
+        assertFalse(guard.isCurrent(priorPhrase))
+        val latestPhrase = guard.advance()
+        assertTrue(guard.isCurrent(latestPhrase))
+    }
+    @Test fun onlyHttpsMedlinePlusLinksAreOpened() {
+        assertNotNull(verifiedMedlinePlusUrl("https://medlineplus.gov/spanish/diabetes.html"))
+        listOf("http://medlineplus.gov/", "https://evil.example/", "https://medlineplus.gov.evil.example/",
+            "https://medlineplus.gov@evil.example/", "https://user@medlineplus.gov/", "https://medlineplus.gov:444/")
+            .forEach { assertNull(verifiedMedlinePlusUrl(it)) }
+    }
+    @Test fun supportChoiceUsesTheConfiguredPreferenceAndHasAQuietDefault() {
+        assertEquals(R.string.support_contact, supportMessageResource("contact_caregiver"))
+        assertEquals(R.string.support_quiet, supportMessageResource("quiet_reassurance"))
+        assertEquals(R.string.support_quiet, supportMessageResource(null))
+        assertEquals(R.string.support_quiet, supportMessageResource("unknown"))
+    }
+    @Test fun validationCodesAreParsedWithoutDisplayingArbitraryServerText() {
+        assertEquals("face_photo_blurry", safeApiError(JSONArray().put("face_photo_blurry")))
+        assertEquals("credentials_invalid", safeApiError(JSONObject().put("error", "credentials_invalid")))
+        assertEquals("authentication_required", safeApiError(JSONObject().put("detail", "Authentication credentials were not provided.")))
+        assertEquals("request_invalid", safeApiError(JSONArray().put("Private information from a server response")))
+        assertEquals("request_invalid", safeApiError(JSONObject().put("detail", "")))
+    }
     @Test fun releaseRequiresHttps() {
         assertNull(validBackend("http://127.0.0.1:8010/", false))
         assertNull(validBackend("http://example.com/", false))

@@ -23,46 +23,61 @@ fun reduceCaption(turns: List<CaptionTurn>, event: JSONObject): List<CaptionTurn
 }
 
 class CaptionClient(private val api: ApiClient, private val scope: CoroutineScope,
-    private val onTurns: (List<CaptionTurn>) -> Unit, private val onStatus: (String) -> Unit,
+    private val onTurns: (List<CaptionTurn>) -> Unit, private val onSpeechStart: (String?) -> Unit, private val onStatus: (String) -> Unit,
     private val onError: (String) -> Unit) {
     private var socket: WebSocket? = null
     private var recorder: AudioRecord? = null
     private var recordingJob: Job? = null
     private val running = AtomicBoolean(false)
     private var turns = emptyList<CaptionTurn>()
-    private var generation = 0
+    @Volatile private var generation = 0
+    private var stopping = false
 
+    @Synchronized
     fun start(locale: String) {
-        close(); val current = ++generation
+        close(); val current = ++generation; stopping = false
         turns = emptyList(); onTurns(turns); onStatus("connecting")
         val request = Request.Builder().url(api.base.replaceFirst("http", "ws") + "ws/captions/")
             .header("Origin", api.base.trimEnd('/')).build()
         socket = api.client.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
-                if (current != generation) { webSocket.cancel(); return }
-                webSocket.send(JSONObject().put("type", "start").put("locale", locale).put("synthetic", true).toString())
+                synchronized(this@CaptionClient) {
+                    if (current != generation) { webSocket.cancel(); return }
+                    webSocket.send(JSONObject().put("type", "start").put("locale", locale).put("synthetic", true).toString())
+                }
             }
             override fun onMessage(webSocket: WebSocket, text: String) {
-                if (current != generation) return
-                try {
-                    val event = JSONObject(text)
-                    when (event.optString("type")) {
-                        "ready" -> record(webSocket, current)
-                        "error" -> { onError(event.optString("code", "transcription_unavailable")); close() }
-                        "closed" -> close()
-                        else -> { turns = reduceCaption(turns, event); onTurns(turns) }
-                    }
-                } catch (_: Exception) { onError("transcription_unavailable"); close() }
+                synchronized(this@CaptionClient) {
+                    if (current != generation) return
+                    try {
+                        val event = JSONObject(text)
+                        when (event.optString("type")) {
+                            "ready" -> record(webSocket, current)
+                            "error" -> { onError(event.optString("code", "transcription_unavailable")); close() }
+                            "closed" -> close()
+                            "speechStart" -> onSpeechStart(event.optString("turnId").ifBlank { null })
+                            "transcript", "speechComplete" -> {
+                                val updated = reduceCaption(turns, event)
+                                if (updated != turns) { turns = updated; onTurns(turns) }
+                            }
+                        }
+                    } catch (_: Exception) { onError("transcription_unavailable"); close() }
+                }
             }
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                if (current == generation) { onError("transcription_unavailable"); close() }
+                synchronized(this@CaptionClient) {
+                    if (current == generation) { onError("transcription_unavailable"); close() }
+                }
             }
-            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) { if (current == generation) close() }
+            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                synchronized(this@CaptionClient) { if (current == generation) close() }
+            }
         })
     }
 
     @Suppress("MissingPermission")
-    private fun record(webSocket: WebSocket, current: Int) {
+    @Synchronized private fun record(webSocket: WebSocket, current: Int) {
+        if (current != generation || stopping) return
         if (!running.compareAndSet(false, true)) return
         recordingJob = scope.launch(Dispatchers.IO) {
             var audio: AudioRecord? = null
@@ -72,7 +87,12 @@ class CaptionClient(private val api: ApiClient, private val scope: CoroutineScop
                 audio = AudioRecord(MediaRecorder.AudioSource.VOICE_RECOGNITION, 24000, AudioFormat.CHANNEL_IN_MONO,
                     AudioFormat.ENCODING_PCM_16BIT, maxOf(minimum * 2, 7680))
                 if (audio.state != AudioRecord.STATE_INITIALIZED) throw IllegalStateException()
-                recorder = audio; audio.startRecording(); onStatus("recording")
+                synchronized(this@CaptionClient) {
+                    // A permission result or socket callback may arrive after the screen
+                    // was left. Never start recording for a cancelled session.
+                    if (!isActive || !running.get() || stopping || current != generation) return@launch
+                    recorder = audio; audio.startRecording(); onStatus("recording")
+                }
                 val buffer = ByteArray(3840)
                 val deadline = System.currentTimeMillis() + 9 * 60 * 1000
                 while (isActive && running.get() && current == generation && System.currentTimeMillis() < deadline) {
@@ -80,28 +100,34 @@ class CaptionClient(private val api: ApiClient, private val scope: CoroutineScop
                     if (count <= 0 || !webSocket.send(buffer.toByteString(0, count))) throw IllegalStateException()
                     if (webSocket.queueSize() > 96000) throw IllegalStateException()
                 }
-                if (current == generation) stop()
+                synchronized(this@CaptionClient) { if (current == generation) stop() }
             } catch (_: Exception) {
-                if (running.get() && current == generation) { onError("microphone_unavailable"); close() }
+                synchronized(this@CaptionClient) {
+                    if (running.get() && current == generation) { onError("microphone_unavailable"); close() }
+                }
             } finally {
                 try { audio?.stop() } catch (_: Exception) { }
                 audio?.release()
-                if (recorder === audio) recorder = null
+                synchronized(this@CaptionClient) { if (recorder === audio) recorder = null }
             }
         }
     }
-    fun stop() {
-        if (socket == null) return
+    @Synchronized fun stop() {
+        if (socket == null || stopping) return
+        stopping = true
         val current = generation
         running.set(false)
         try { recorder?.stop() } catch (_: Exception) { }
         recordingJob?.cancel()
         socket?.send("{\"type\":\"stop\"}")
         onStatus("finishing")
-        scope.launch { delay(31000); if (!running.get() && current == generation) close() }
+        scope.launch {
+            delay(31000)
+            synchronized(this@CaptionClient) { if (!running.get() && current == generation) close() }
+        }
     }
-    fun close() {
-        ++generation; running.set(false)
+    @Synchronized fun close() {
+        ++generation; stopping = true; running.set(false)
         try { recorder?.stop() } catch (_: Exception) { }
         recordingJob?.cancel(); recordingJob = null
         socket?.cancel(); socket = null; onStatus("idle")

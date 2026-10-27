@@ -1,0 +1,32 @@
+{
+  "dataset": "AI-Ready Ecuadorian Sign Language Corpus",
+  "source": "https://zenodo.org/records/21627229",
+  "record_api": "https://zenodo.org/api/records/21627229",
+  "doi": "10.5281/zenodo.21627229",
+  "record_version": "1.0.1",
+  "license": "CC-BY-4.0",
+  "license_url": "https://creativecommons.org/licenses/by/4.0/",
+  "source_archive": "https://zenodo.org/api/records/21627229/files/lsec_metadata_1.0.0.zip/content",
+  "archive_bytes": 83608,
+  "published_md5": "564bef6c17b21371e5a5f77b3657fe1a",
+  "sha256_pin": "568bb5f1ea8322fdc563b3cc37bb748e48f0725b8f2d803abee46acf3d4f17b6",
+  "archive_inventory": {
+    "files": 17,
+    "total_uncompressed_bytes": 191160,
+    "file_type_counts": {
+      ".cff": 1,
+      ".json": 3,
+      ".jsonld": 1,
+      ".md": 9,
+      ".py": 1,
+      ".sha256": 1,
+      "no_extension": 1
+    }
+  },
+  "contains_video_or_image_files": false,
+  "large_corpus_archives_downloaded": false,
+  "videos_activated_in_app": false,
+  "training_performed": false,
+  "translation_model_available": false,
+  "consent_note": "The provider's public metadata states signed consent was verified for two participants and covers AI/ML and redistribution. Review the scope and personality/privacy rights before any specific use."
+}

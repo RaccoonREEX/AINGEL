@@ -22,3 +22,7 @@ Frontend TypeScript/Vite production build and pip dependency consistency checks 
 - Mobile QA frame has 390 CSS-pixel outer width, 373-pixel inner document width with scrollbar, and no horizontal document overflow. Browser viewport override did not apply and was reset; a real iframe at the desired width was used instead.
 
 Not manually verified: Google Authenticator camera scanning on a phone, actual browser microphone/voice playback quality, family-photo positive matching, TalkBack/screen readers, native Android install, production HTTPS and backup restore. Do not describe those as passing.
+
+## Second pass — 2026-10-27
+
+89 backend tests, 13 Android JVM tests, 14 offline dataset tests and five device tests pass. A fresh synthetic Meta Voice run returned eight partials and one final transcript; see the updated `CAPTIONS_SMOKE_RESULT.json`. Communication configuration and local MedlinePlus search were checked in Edge and on the Samsung using test profiles. See `KNOWLEDGE_AND_SIGNS.md` for scope and limits.

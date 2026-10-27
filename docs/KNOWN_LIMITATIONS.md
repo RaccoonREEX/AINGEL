@@ -1,9 +1,9 @@
 # Límites actuales — 2026-10-27
 
 - Esta entrega incluye web local, backend funcional y APK Android debug compilado. El APK ya se instaló y arrancó en Samsung SM-F721B/Android 16; pasó una prueba instrumentada de cliente, sesión cifrada, rutinas, memoria y MFA. No hay despliegue público todavía.
-- 62 pruebas backend y seis pruebas JVM Android pasan; Android Lint termina sin errores y tres llamadas Meta reales se han verificado con material sintético. No equivalen a una evaluación general de precisión ni a un producto clínico certificado.
+- 89 pruebas backend y trece pruebas JVM Android pasan; Android Lint termina sin errores y tres llamadas Meta reales se han verificado con material sintético. No equivalen a una evaluación general de precisión ni a un producto clínico certificado.
 - Los datos reales siguen fuera de los flujos Meta hasta aclarar el uso de contenido asociado a créditos gratuitos. La casilla de material sintético es una declaración del usuario, no un detector de datos sensibles.
-- Preguntar usa herramientas estructuradas locales para buscar recuerdos, rutinas y mensajes; aún no hay conversación libre con selección autónoma de herramientas por un agente.
+- Preguntar usa herramientas estructuradas locales y una consulta educativa MedlinePlus por título; saludo, lectura, paginación y botón de apoyo aplican preferencias explícitas. Existe una pregunta conversacional de prueba a Spark con entrada sintética y fuente pública opcional, sin historial ni datos privados del perfil. No hay conversación continua con selección autónoma de herramientas ni inferencia de conducta basada en datos clínicos.
 - Rutinas: los avisos requieren la pantalla Hoy abierta. No hay alarmas de fondo, push, llamadas automáticas ni verificación de ingesta de medicinas.
 - Memorias: observaciones comunicadas por el usuario, búsqueda exacta por objeto y retención de siete días. No hay extracción automática de sucesos ni vídeo continuo.
 - Reconocimiento facial local experimental: consentimiento individual, un registro de 1–3 fotos propias distintas por cuidador, controles heurísticos de nitidez/consistencia (sin calibración real), máximo cuatro en el círculo, plantillas cifradas por treinta días. Falta medir precisión con familiares reales, falsos positivos, sesgos e iluminación; no hay liveness. No sirve para confirmar identidad ni autenticar.
@@ -14,3 +14,5 @@
 - El borrado físico de registros vencidos se ejecuta al arrancar localmente o mediante el comando de limpieza. Programar y verificar limpieza diaria, respaldo seguro y restauración antes de producción.
 - VizWiz: treinta anotaciones preparadas para evaluación, sin fotos, entrenamiento ni precisión publicada. LSEC, corpus clínicos y recursos restringidos siguen sin incorporarse.
 - Repositorio aún local, sin publicación, licencia propia por decidir y revisión completa de terceros pendiente. Track de inscripción no verificado; no se ha enviado ninguna candidatura ni aceptado términos nuevos.
+
+- La preferencia de lengua de señas se guarda y existe un mecanismo de clips revisados por frase completa, pero el catálogo está vacío. Dos vídeos neutrales se conservaron solo para investigación y revisión; no están validados ni disponibles en la app. No hay interpretación libre en LSEC/ASL ni avatar en tiempo real; no se ha entrenado un modelo.

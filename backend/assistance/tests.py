@@ -106,6 +106,10 @@ class MetaBoundaryTests(SimpleTestCase):
         self.assertEqual(call.args[0], "https://api.meta.ai/v1/responses")
         self.assertEqual(call.kwargs["json"]["model"], "muse-spark-1.3")
         self.assertEqual(call.kwargs["json"]["reasoning"], {"effort": "minimal"})
+        instruction = call.kwargs["json"]["input"][0]["content"][0]["text"]
+        self.assertIn("cannot establish whether a route is safe", instruction)
+        self.assertIn("Never say that the path is safe", instruction)
+        self.assertIn("no obstacles or dangers", instruction)
         self.assertFalse(call.kwargs["json"]["store"])
         self.assertEqual(result["text"], "A blue square.")
 

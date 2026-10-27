@@ -1,6 +1,7 @@
 from django.urls import path
 
-from . import auth, views, mfa, faces
+from . import auth, views, mfa, faces, knowledge, signs
+from assistance.companion import chat
 
 urlpatterns = [
     path("auth/session/", auth.session),
@@ -15,6 +16,11 @@ urlpatterns = [
     path("profiles/", views.profiles),
     path("invites/accept/", views.accept_invite),
     path("profiles/<uuid:profile_id>/", views.profile_detail),
+    path("profiles/<uuid:profile_id>/communication/", views.communication),
+    path("profiles/<uuid:profile_id>/resources/search/", knowledge.resources),
+    path("profiles/<uuid:profile_id>/companion/chat/", chat),
+    path("profiles/<uuid:profile_id>/signs/lookup/", signs.lookup),
+    path("profiles/<uuid:profile_id>/signs/clips/<str:clip_id>/", signs.clip_content),
     path("profiles/<uuid:profile_id>/circle/", views.circle),
     path("profiles/<uuid:profile_id>/circle/<uuid:member_id>/", views.membership),
     path(

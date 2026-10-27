@@ -6,6 +6,39 @@ from rest_framework import serializers
 
 from .models import Memory, Message, Profile, Routine
 
+COMMUNICATION_DEFAULTS = {
+    "addressing": "preferred_name",
+    "preferred_name": "",
+    "sentence_length": "short",
+    "pace": "standard",
+    "interaction": "one_step",
+    "distress": "quiet_reassurance",
+    "sign_language": "none",
+    "communication_notes": "",
+}
+
+
+class CommunicationSerializer(serializers.Serializer):
+    addressing = serializers.ChoiceField(
+        choices=["preferred_name", "formal", "informal"]
+    )
+    preferred_name = serializers.CharField(max_length=100, allow_blank=True)
+    sentence_length = serializers.ChoiceField(choices=["short", "standard"])
+    pace = serializers.ChoiceField(choices=["slow", "standard"])
+    interaction = serializers.ChoiceField(choices=["one_step", "standard"])
+    distress = serializers.ChoiceField(
+        choices=["quiet_reassurance", "contact_caregiver"]
+    )
+    sign_language = serializers.ChoiceField(choices=["none", "lsec", "asl", "other"])
+    communication_notes = serializers.CharField(max_length=1000, allow_blank=True)
+
+    def to_internal_value(self, data):
+        if not isinstance(data, dict) or set(data) - set(self.fields):
+            raise serializers.ValidationError(
+                {"non_field_errors": ["communication_fields_invalid"]}
+            )
+        return super().to_internal_value(data)
+
 
 class ProfileSerializer(serializers.ModelSerializer):
     role = serializers.SerializerMethodField()

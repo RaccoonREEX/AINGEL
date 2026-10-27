@@ -62,3 +62,10 @@ La configuración es local. No expongas estos servidores a Internet. Los próxim
 ## APK nativo
 
 [Guía Android y conexión USB para la última fase](ANDROID_TESTING.md). El celular Samsung ya se conectó y pasó una prueba instrumentada de sesión y MFA contra el backend. Faltan cámara, micrófono, escaneo real de Authenticator y TalkBack.
+
+## Comunicación y fuentes locales
+
+1. En Personalizar, el principal o familiar con permiso configura nombre preferido, trato, ritmo y presentación. La opción LSEC/ASL guarda la preferencia, pero no activa traducción ni avatar.
+2. En Preguntar, comprueba el saludo, el botón de apoyo y el paso por las rutinas o mensajes uno a uno. La respuesta es local y no ejecuta llamadas automáticas.
+3. Busca un tema general en MedlinePlus. Comprueba título, fuente, fecha y enlace. Si el índice no está instalado, ejecuta `python backend/scripts/import_medlineplus.py` usando el entorno virtual. El resumen es información general y no cambia el plan de cuidados.
+4. En Escuchar, comprueba el aviso de que la traducción en señas aún no está disponible. La transcripción Meta de esta fase usa exclusivamente voz sintética.

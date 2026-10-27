@@ -47,3 +47,19 @@ Los límites distribuidos, paginación completa, política de sesión, OpenAPI y
 `POST profiles/{id}/faces/` recibe multipart con uno a tres campos repetidos `image`, `display_name`, `consent=true`, `own_photo=true`. Solo la cuenta del propio familiar adulto aceptado puede registrar sus fotos. Tamaño combinado máximo 5 MiB. Rechaza fotos normalizadas idénticas, falta de un único rostro claro, nitidez Laplaciana <30 y similitud entre tomas <0.4. Son controles heurísticos pendientes de calibración. El lote se valida antes de reemplazar el registro anterior y la escritura vuelve a verificar consentimiento/membresía bajo bloqueo del perfil.
 
 La plantilla cifrada v2 contiene hasta tres vectores normalizados. Las plantillas anteriores de un vector siguen siendo legibles. GET y POST exponen `sample_count`, nunca vectores. La consulta compara un puntaje por persona (media de las dos mejores tomas disponibles), exige 0.55 y margen 0.10 respecto a la siguiente persona; las capturas borrosas se abstienen. Más tomas de una persona no cuentan como identidades adicionales. No hay resultados de precisión verificados ni liveness.
+
+## Comunicación y búsqueda de información
+
+`GET/PATCH profiles/{id}/communication/` maneja opciones explícitas de nombre, trato, longitud de saludo, ritmo, presentación, apoyo, lengua de señas y notas. El círculo puede leer y solo el principal o un miembro con permiso de configuración puede editar. El backend valida valores y audita cambios sin contenido. El ajuste de lengua de señas no implica traducción implementada.
+
+`POST profiles/{id}/resources/search/` recibe JSON `{q,lang}` (es/en), busca por título en el índice local de resúmenes MedlinePlus y devuelve hasta cinco resultados con título, texto, origen, URL y fecha. No registra la consulta ni la envía a Meta; sin resultado devuelve `[]`, y sin índice devuelve 503 `knowledge_not_installed`. La salida es material educativo atribuido, no diagnóstico ni recomendación personalizada. Preparación: `backend/scripts/import_medlineplus.py`.
+
+## Clips revisados de lengua de señas
+
+`POST profiles/{id}/signs/lookup/` recibe `{text,language}` con una frase completa final y lengua `lsec` o `asl`. La preferencia `other` se guarda, pero no activa búsquedas hasta identificar una lengua concreta. La coincidencia es exacta tras normalizar espacios y mayúsculas; conserva acentos, puntuación, negación y orden. Sin catálogo o coincidencia devuelve `{available:false}`. La consulta no se registra ni se envía a Meta. Solo se aceptan perfiles autorizados.
+
+Con una coincidencia, devuelve `available:true` y metadatos de atribución; `GET profiles/{id}/signs/clips/{clip_id}/` entrega el vídeo MP4 local verificado bajo la misma autorización, máximo 20 MiB y no-store. El catálogo `.local/signs/catalog.json` exige versión, frase, idioma, indicación de revisión, revisor/fecha, fuente, atribución, licencia y hash SHA-256; el vídeo debe estar en `.local/signs/clips/<sha256>.mp4`. Un catálogo o archivo inválido devuelve 503, jamás una traducción aproximada. El catálogo de AINGEL está vacío: todavía no hay clips disponibles ni interpretación de conversaciones abiertas.
+
+## Pregunta conversacional sintética
+
+`POST profiles/{id}/companion/chat/` acepta JSON `{text,synthetic:true}` de hasta 1.000 caracteres, y opcionalmente `topic_title` y `topic_lang` de una fuente MedlinePlus seleccionada por título exacto. La solicitud al proveedor contiene la pregunta declarada sintética, el extracto público opcional y las preferencias categóricas; no se añaden nombre, notas, recuerdos, mensajes ni historial del perfil. Devuelve texto, modo/modelo, latencia y fuente seleccionada si existe. No se registra la pregunta. La casilla es una declaración del usuario, no un detector de datos reales; no usarlo con datos personales. La salida del modelo puede equivocarse y no sustituye atención clínica.

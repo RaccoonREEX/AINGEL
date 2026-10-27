@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { translator } from "./i18n";
 import type { Profile } from "./types";
+import { useCommunication } from "./Communication";
+import SignClips from "./SignClips";
 
 export default function Hear({
   profile,
@@ -9,6 +11,7 @@ export default function Hear({
   profile: Profile;
   t: ReturnType<typeof translator>;
 }) {
+  const { value: communication } = useCommunication(profile.id);
   const [status, setStatus] = useState<
       "idle" | "connecting" | "recording" | "finishing"
     >("idle"),
@@ -22,7 +25,8 @@ export default function Hear({
     stream = useRef<MediaStream | null>(null),
     node = useRef<AudioWorkletNode | null>(null),
     turn = useRef(0),
-    flush = useRef<(() => void) | null>(null);
+    flush = useRef<(() => void) | null>(null),
+    generation = useRef(0);
   const cleanup = () => {
     stream.current?.getTracks().forEach((track) => track.stop());
     stream.current = null;
@@ -33,18 +37,20 @@ export default function Hear({
   };
   useEffect(
     () => () => {
+      generation.current++;
       cleanup();
       socket.current?.close();
     },
     [],
   );
   const start = async () => {
+    const current = ++generation.current;
     setError("");
     setTurns([]);
     turn.current = 0;
     setStatus("connecting");
     try {
-      stream.current = await navigator.mediaDevices.getUserMedia({
+      const newStream = await navigator.mediaDevices.getUserMedia({
         audio: {
           channelCount: 1,
           echoCancellation: true,
@@ -52,14 +58,27 @@ export default function Hear({
         },
         video: false,
       });
+      if (current !== generation.current) {
+        newStream.getTracks().forEach((track) => track.stop());
+        return;
+      }
+      stream.current = newStream;
       context.current = new AudioContext({ sampleRate: 24000 });
       if (context.current.sampleRate !== 24000) throw new Error("audio_rate");
       await context.current.audioWorklet.addModule("/pcm-worklet.js");
+      if (current !== generation.current) {
+        cleanup();
+        return;
+      }
       const ws = new WebSocket(
         `${location.protocol === "https:" ? "wss:" : "ws:"}//${location.host}/ws/captions/`,
       );
       socket.current = ws;
-      ws.onopen = () =>
+      ws.onopen = () => {
+        if (current !== generation.current) {
+          ws.close();
+          return;
+        }
         ws.send(
           JSON.stringify({
             type: "start",
@@ -67,8 +86,18 @@ export default function Hear({
             synthetic: consent,
           }),
         );
+      };
       ws.onmessage = (event) => {
-        const message = JSON.parse(event.data);
+        if (current !== generation.current) return;
+        let message;
+        try {
+          message = JSON.parse(event.data);
+        } catch {
+          setError(t("hearError"));
+          cleanup();
+          ws.close();
+          return;
+        }
         if (message.type === "ready") {
           const ctx = context.current;
           if (!ctx || !stream.current) return;
@@ -96,6 +125,11 @@ export default function Hear({
         }
         if (message.type === "speechStart") {
           turn.current = message.turnId;
+          setTurns((old) =>
+            old.some((x) => x.id === message.turnId)
+              ? old
+              : [...old, { id: message.turnId, text: "", final: false }],
+          );
         }
         if (
           message.type === "transcript" ||
@@ -103,10 +137,12 @@ export default function Hear({
         ) {
           const id = message.turnId ?? turn.current;
           setTurns((old) => {
+            const previous = old.find((x) => x.id === id);
+            if (previous?.final) return old;
             const next = old.filter((x) => x.id !== id);
             next.push({
               id,
-              text: message.transcript || "",
+              text: message.transcript || previous?.text || "",
               final: message.type === "speechComplete" || !!message.final,
             });
             return next.sort((a, b) => a.id - b.id);
@@ -122,16 +158,19 @@ export default function Hear({
         }
       };
       ws.onerror = () => {
+        if (current !== generation.current) return;
         setError(t("hearError"));
         cleanup();
         setStatus("idle");
       };
       ws.onclose = (e) => {
+        if (current !== generation.current) return;
         cleanup();
         setStatus("idle");
         if (e.code !== 1000) setError(t("hearError"));
       };
     } catch {
+      if (current !== generation.current) return;
       cleanup();
       setStatus("idle");
       setError(t("hearError"));
@@ -157,6 +196,29 @@ export default function Hear({
     <>
       <p>{t("hearIntro")}</p>
       <p className="callout">{t("hearPrivacy")}</p>
+      <section className="panel">
+        <h2>{t("signPreference")}</h2>
+        {communication && (
+          <p>
+            {t(
+              communication.sign_language === "lsec"
+                ? "signLsec"
+                : communication.sign_language === "asl"
+                  ? "signAsl"
+                  : communication.sign_language === "other"
+                    ? "signOther"
+                    : "signNone",
+            )}
+          </p>
+        )}
+        <p>{t("signNotAvailable")}</p>
+        <SignClips
+          profile={profile}
+          communication={communication}
+          turns={turns}
+          t={t}
+        />
+      </section>
       <section className="panel">
         <label className="check">
           <input

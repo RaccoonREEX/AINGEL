@@ -18,6 +18,7 @@ class Profile(models.Model):
     support_notes = models.TextField(max_length=3000, blank=True)
     emergency_contact = models.CharField(max_length=200, blank=True)
     preferences = models.JSONField(default=dict, blank=True)
+    communication = models.JSONField(default=dict, blank=True)
     face_recognition_enabled = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -32,6 +33,7 @@ class Membership(models.Model):
     relationship = models.CharField(max_length=80)
     can_configure = models.BooleanField(default=True)
     can_view_memories = models.BooleanField(default=False)
+    face_consent_epoch = models.PositiveIntegerField(default=0)
     joined_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

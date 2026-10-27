@@ -1,0 +1,11 @@
+{
+  "fixture": "original 640x480 white canvas, blue square left, red circle right",
+  "transport": "Django APIClient -> scene endpoint -> actual Meta HTTPS API",
+  "http_status": 200,
+  "result": {
+    "text": "Veo un cuadrado azul a la izquierda y un círculo rojo a la derecha sobre un fondo blanco. No estoy seguro si hay algo más en la imagen.",
+    "mode": "meta",
+    "model": "muse-spark-1.3",
+    "latency_ms": 2344
+  }
+}

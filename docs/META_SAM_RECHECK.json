@@ -1,0 +1,25 @@
+{
+  "fixture": "original 640x480 white canvas, blue square left, red circle right",
+  "transport": "Django APIClient -> scene endpoint -> actual Meta HTTPS API",
+  "http_status": 200,
+  "result": {
+    "mode": "meta",
+    "model": "sam-3.1",
+    "matches": [
+      {
+        "id": "0",
+        "box": [
+          0.59375,
+          0.3125,
+          0.8453125,
+          0.6479166666666667
+        ],
+        "confidence": 0.9452055096626282,
+        "horizontal": "right",
+        "mask_decoded": true
+      }
+    ],
+    "latency_ms": 2281,
+    "analyzed": true
+  }
+}

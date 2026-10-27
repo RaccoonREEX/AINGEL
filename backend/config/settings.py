@@ -50,6 +50,8 @@ REST_FRAMEWORK = {
         "scene": "10/min",
         "face": "6/min",
         "mfa": "6/min",
+        "sign": "30/min",
+        "chat": "6/min",
     },
 }
 SESSION_COOKIE_HTTPONLY = True
@@ -70,3 +72,28 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 PRIVATE_MEDIA_ROOT = BASE_DIR / "private-media"
 ASGI_APPLICATION = "config.asgi.application"
+
+# The development access logger otherwise records search terms in URLs.
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "filters": {"redact_api_query": {"()": "care.log_filters.RedactAPIQuery"}},
+    "handlers": {
+        "redacted_console": {
+            "class": "logging.StreamHandler",
+            "filters": ["redact_api_query"],
+        }
+    },
+    "loggers": {
+        "django.channels.server": {
+            "handlers": ["redacted_console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "django.server": {
+            "handlers": ["redacted_console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+    },
+}

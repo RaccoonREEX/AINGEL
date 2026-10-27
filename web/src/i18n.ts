@@ -1,11 +1,88 @@
 export const es = {
+  supportButton: "Necesito apoyo",
+  supportQuietResponse:
+    "Estoy aquí contigo. Podemos ir paso a paso. Si quieres, busca a alguien de confianza.",
+  supportCaregiverResponse:
+    "Si deseas ayuda, pide apoyo a tu cuidador o a alguien de confianza.",
+  supportNoCall: "Este botón no realiza llamadas ni envía alertas.",
+  chatTitle: "Conversación de prueba con AINGEL",
+  chatIntro:
+    "Haz una pregunta de prueba. Puedes elegir una fuente educativa en la sección de abajo. Cada respuesta se procesa de manera independiente.",
+  chatPrivacy:
+    "Usa únicamente ejemplos inventados, sin nombres ni datos personales o clínicos. Se enviarán la pregunta, opciones generales de comunicación y, si la eliges, una fuente pública a Meta. No se envían recuerdos ni notas del perfil.",
+  chatConsent:
+    "Confirmo que mi pregunta es sintética y autorizo enviarla a Meta para esta prueba.",
+  chatQuestion: "Pregunta sintética",
+  chatSend: "Preguntar a AINGEL",
+  chatUseSource: "Usar esta fuente en la pregunta",
+  chatSelectedSource: "Fuente seleccionada",
+  chatNoSource: "No has seleccionado una fuente de salud.",
+  chatRemoveSource: "Quitar fuente",
+  communicationTitle: "Cómo quiere comunicarse",
+  communicationIntro:
+    "Configura estas preferencias junto con la persona. Son individuales y no se deducen de una enfermedad.",
+  preferredName: "Nombre preferido",
+  addressing: "Forma de trato",
+  addressNeutral: "Neutral",
+  addressFormal: "Formal (usted)",
+  addressInformal: "Cercano (tú)",
+  sentenceLength: "Longitud del saludo",
+  sentenceShort: "Breve",
+  sentenceStandard: "Estándar",
+  speechPace: "Velocidad de lectura del asistente",
+  paceSlow: "Pausada",
+  paceStandard: "Normal",
+  interactionStyle: "Presentación de listas en Preguntar",
+  oneStep: "Un elemento a la vez",
+  allItems: "Todos los elementos",
+  supportPreference: "Si la persona pide apoyo",
+  supportQuiet: "Ofrecer acompañamiento tranquilo",
+  supportCaregiver: "Sugerir pedir apoyo al cuidador",
+  signLanguage: "Lengua de señas preferida",
+  signNone: "No indicada",
+  signLsec: "Lengua de señas ecuatoriana (LSEC)",
+  signAsl: "American Sign Language (ASL)",
+  signOther: "Otra lengua de señas",
+  communicationNotes: "Otras preferencias de comunicación",
+  communicationScope:
+    "El saludo, la velocidad, las listas y el botón de apoyo en Preguntar aplican estas opciones. Las notas se guardan; aún no dirigen una conversación automática.",
+  signNotAvailable:
+    "No hay traducción libre ni avatar en tiempo real. Puede haber videos revisados para frases completas; los subtítulos son texto.",
+  knowledgeReadSummary: "Leer resumen completo",
+  knowledgeTitle: "Información de salud con fuente",
+  knowledgeIntro:
+    "Información general del índice local de MedlinePlus. No modifica el plan de cuidados ni personaliza tratamientos.",
+  knowledgeSearch: "Buscar por nombre de tema",
+  knowledgeNone: "No hay temas con ese nombre en el índice.",
+  knowledgeSource: "Fuente: MedlinePlus, National Library of Medicine",
+  knowledgeDate: "Datos descargados",
+  knowledgeOpen: "Abrir fuente",
+  greetingShort: "Hola",
+  greetingFormal: "¿En qué puedo ayudarle?",
+  greetingInformal: "¿En qué puedo ayudarte?",
+  greetingNeutral: "Estoy aquí para ayudar.",
+  greetingExtra: "Podemos ir paso a paso.",
+  readAnswer: "Escuchar respuesta",
+  pagePrevious: "Anterior",
+  pageNext: "Siguiente",
+  itemOf: "Elemento",
+  companionLocal: "Respuesta estructurada local",
+  signOtherUnavailable:
+    "Todavía necesitamos identificar la lengua de señas específica antes de buscar videos.",
+  signAwait: "Esperando una frase completa para buscar un video revisado.",
+  signSearching: "Buscando una frase revisada…",
+  signClipUnavailable: "No hay un video revisado para esta frase.",
+  signClipError: "No se pudo cargar el catálogo o el video de señas.",
+  signClipAvailable: "Video de señas revisado para esta frase completa",
+  signPreference: "Lengua de señas preferida",
+
   hear: "Escuchar",
   hearIntro:
-    "Subtítulos en vivo con Meta Voice Transcribe. El audio se procesa a través del backend y no se guarda.",
+    "Subtítulos con Meta Voice Transcribe. El servidor envía el audio a Meta y no lo guarda localmente.",
   hearPrivacy:
-    "Fase de pruebas: lee únicamente una frase de prueba sin nombres ni información personal. Los créditos activos pueden permitir uso del contenido para mejorar productos.",
+    "Fase de pruebas: reproduce únicamente voz sintética sin nombres ni información personal. Los créditos activos pueden permitir uso del contenido para mejorar productos.",
   hearConsent:
-    "Voy a leer un texto de prueba sin datos personales y autorizo enviarlo a Meta.",
+    "Voy a reproducir voz sintética sin datos personales y autorizo enviarla a Meta.",
   hearStart: "Iniciar subtítulos",
   hearStop: "Detener micrófono",
   micActive: "Micrófono activo · enviando audio a Meta",
@@ -155,7 +232,7 @@ export const es = {
     "Solo información de referencia; AINGEL no llama ni envía alertas automáticamente.",
   preferences: "Cómo prefieres recibir ayuda",
   privacyLocal:
-    "Estos datos se guardan en el backend local. Este flujo no los envía a Meta.",
+    "Los datos del perfil se guardan en el servidor local. Las pruebas sintéticas indican qué contenido envían a Meta.",
   visual_assistance: "Ayuda visual",
   hearing_assistance: "Apoyo con subtítulos",
   memory_assistance: "Apoyo para recordar",
@@ -267,13 +344,90 @@ export const es = {
 } as const;
 
 const en: Record<keyof typeof es, string> = {
+  supportButton: "I need support",
+  supportQuietResponse:
+    "I am here with you. We can take this one step at a time. You can ask someone you trust for help.",
+  supportCaregiverResponse:
+    "If you want help, ask your caregiver or someone you trust.",
+  supportNoCall: "This button does not make calls or send alerts.",
+  chatTitle: "Test conversation with AINGEL",
+  chatIntro:
+    "Ask a test question. You can choose an educational source below. Each answer is handled independently.",
+  chatPrivacy:
+    "Use fictional examples only, without names or personal or clinical details. Your question, general communication settings and any selected public source will be sent to Meta. Profile memories and notes are not sent.",
+  chatConsent:
+    "I confirm my question is synthetic and consent to sending it to Meta for this test.",
+  chatQuestion: "Synthetic question",
+  chatSend: "Ask AINGEL",
+  chatUseSource: "Use this source in the question",
+  chatSelectedSource: "Selected source",
+  chatNoSource: "No health source selected.",
+  chatRemoveSource: "Remove source",
+  communicationTitle: "How you prefer to communicate",
+  communicationIntro:
+    "Set these preferences together with the person. They are individual and are not inferred from a diagnosis.",
+  preferredName: "Preferred name",
+  addressing: "Form of address",
+  addressNeutral: "Neutral",
+  addressFormal: "Formal",
+  addressInformal: "Informal",
+  sentenceLength: "Greeting length",
+  sentenceShort: "Short",
+  sentenceStandard: "Standard",
+  speechPace: "Assistant reading speed",
+  paceSlow: "Slow",
+  paceStandard: "Normal",
+  interactionStyle: "Lists in Ask",
+  oneStep: "One item at a time",
+  allItems: "All items",
+  supportPreference: "When the person asks for support",
+  supportQuiet: "Offer calm reassurance",
+  supportCaregiver: "Suggest asking a caregiver for support",
+  signLanguage: "Preferred sign language",
+  signNone: "Not specified",
+  signLsec: "Ecuadorian Sign Language (LSEC)",
+  signAsl: "American Sign Language (ASL)",
+  signOther: "Another sign language",
+  communicationNotes: "Other communication preferences",
+  communicationScope:
+    "The greeting, reading speed, lists and support button in Ask use these settings. Notes are saved but do not yet direct an automated conversation.",
+  signNotAvailable:
+    "Open-ended sign translation and an avatar are not available yet. Reviewed videos may be available for complete phrases; captions are text.",
+  knowledgeReadSummary: "Read full summary",
+  knowledgeTitle: "Source-backed health information",
+  knowledgeIntro:
+    "General information from the local MedlinePlus index. It does not change care plans or personalize treatments.",
+  knowledgeSearch: "Search by topic title",
+  knowledgeNone: "There are no topics with that name in the index.",
+  knowledgeSource: "Source: MedlinePlus, National Library of Medicine",
+  knowledgeDate: "Data downloaded",
+  knowledgeOpen: "Open source",
+  greetingShort: "Hello",
+  greetingFormal: "How can I help you?",
+  greetingInformal: "How can I help you?",
+  greetingNeutral: "I am here to help.",
+  greetingExtra: "We can take it one step at a time.",
+  readAnswer: "Read answer aloud",
+  pagePrevious: "Previous",
+  pageNext: "Next",
+  itemOf: "Item",
+  companionLocal: "Local structured response",
+  signOtherUnavailable:
+    "The specific sign language must be identified before videos can be searched.",
+  signAwait: "Waiting for a complete utterance to find a reviewed video.",
+  signSearching: "Looking for a reviewed phrase…",
+  signClipUnavailable: "No reviewed video is available for this phrase.",
+  signClipError: "The sign catalog or video could not be loaded.",
+  signClipAvailable: "Reviewed sign video for this complete phrase",
+  signPreference: "Preferred sign language",
+
   hear: "Hear",
   hearIntro:
-    "Live captions with Meta Voice Transcribe. Audio is relayed through the backend and is not saved.",
+    "Captions with Meta Voice Transcribe. The server sends audio to Meta and does not store it locally.",
   hearPrivacy:
-    "Test phase: read only a test sentence without names or personal information. Active credits may allow content use for product improvement.",
+    "Test phase: play only synthetic speech without names or personal information. Active credits may allow content use for product improvement.",
   hearConsent:
-    "I will read a test script without personal information and consent to sending it to Meta.",
+    "I will play synthetic speech without personal information and consent to sending it to Meta.",
   hearStart: "Start captions",
   hearStop: "Stop microphone",
   micActive: "Microphone active · sending audio to Meta",
@@ -423,7 +577,7 @@ const en: Record<keyof typeof es, string> = {
     "Reference only; AINGEL does not call or send alerts automatically.",
   preferences: "How you prefer to receive assistance",
   privacyLocal:
-    "These records stay in the local backend. This flow does not send them to Meta.",
+    "Profile data is stored on the local server. Synthetic tests indicate which content they send to Meta.",
   visual_assistance: "Visual assistance",
   hearing_assistance: "Caption support",
   memory_assistance: "Memory support",
@@ -538,6 +692,14 @@ export function translator(locale: Locale) {
 }
 
 const activityNames: Record<string, [string, string]> = {
+  "communication.updated": [
+    "Comunicación personalizada",
+    "Communication preferences updated",
+  ],
+  "knowledge.searched": [
+    "Fuente educativa consultada",
+    "Educational source consulted",
+  ],
   "profile.created": ["Perfil creado", "Profile created"],
   "profile.read": ["Perfil consultado", "Profile viewed"],
   "profile.updated": ["Preferencias actualizadas", "Preferences updated"],
