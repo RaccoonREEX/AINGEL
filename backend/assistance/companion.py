@@ -10,7 +10,7 @@ from rest_framework.response import Response
 from rest_framework.throttling import UserRateThrottle
 
 from care.knowledge import KnowledgeUnavailable, exact_topic
-from care.consent import meta_allowed, synthetic_allowed
+from care.consent import meta_allowed, meta_user_allowed, synthetic_allowed
 from care.permissions import access, audit
 from care.serializers import COMMUNICATION_DEFAULTS
 
@@ -205,6 +205,8 @@ def call_spark(instructions, input_text, max_output_tokens=600, web_search=False
 @api_view(["POST"])
 @throttle_classes([ChatRate])
 def chat(request, profile_id):
+    if not meta_user_allowed(request.user):
+        return Response({"error": "meta_access_denied"}, status=403)
     profile = access(request.user, profile_id)
     data = request.data
     if not isinstance(data, dict) or set(data) - {

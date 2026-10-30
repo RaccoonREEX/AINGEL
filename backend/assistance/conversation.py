@@ -17,7 +17,7 @@ from rest_framework.response import Response
 from rest_framework.throttling import UserRateThrottle
 
 from care.knowledge import KnowledgeUnavailable, best_topic
-from care.consent import meta_allowed, synthetic_allowed
+from care.consent import meta_allowed, meta_user_allowed, synthetic_allowed
 from care.permissions import access, audit
 
 from .companion import (
@@ -215,6 +215,8 @@ def converse(turns, locale, preferences, profile=None, actions=()):
 @api_view(["POST"])
 @throttle_classes([ConversationRate])
 def conversation(request, profile_id):
+    if not meta_user_allowed(request.user):
+        return Response({"error": "meta_access_denied"}, status=403)
     profile = access(request.user, profile_id)
     data = request.data
     if not isinstance(data, dict) or "turns" not in data or set(data) - {"turns", "synthetic", "actions"}:

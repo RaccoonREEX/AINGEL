@@ -15,7 +15,7 @@ from rest_framework.decorators import api_view, throttle_classes
 from rest_framework.response import Response
 from rest_framework.throttling import UserRateThrottle
 
-from care.consent import meta_allowed
+from care.consent import meta_allowed, meta_user_allowed
 from care.permissions import access, audit
 
 from .companion import CompanionUnavailable, call_spark
@@ -110,6 +110,8 @@ def valid_gloss(signs, vocabulary):
 @api_view(["POST"])
 @throttle_classes([GlossRate])
 def gloss(request, profile_id):
+    if not meta_user_allowed(request.user):
+        return Response({"error": "meta_access_denied"}, status=403)
     profile = access(request.user, profile_id)
     data = request.data
     if not isinstance(data, dict) or set(data) != {"text", "vocabulary"}:

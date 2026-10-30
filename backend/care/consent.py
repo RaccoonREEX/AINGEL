@@ -21,6 +21,21 @@ NEEDS = {
 }
 
 
+def meta_user_allowed(user):
+    """Production Meta access is restricted to explicitly listed account IDs.
+
+    No account is implicitly privileged; an empty list denies every real Meta
+    request. Use numeric IDs obtained only after creating a trusted account,
+    avoiding username squatting and case-normalization problems.
+    """
+    if os.environ.get("AINGEL_ENV", "local") != "production" or os.environ.get("AINGEL_AI_MODE", "mock") != "meta":
+        return True
+    if not user or not user.is_authenticated or not user.is_active or user.pk is None:
+        return False
+    allowed = {item.strip() for item in os.environ.get("AINGEL_META_ALLOWED_USER_IDS", "").split(",") if item.strip().isascii() and item.strip().isdigit()}
+    return str(user.pk) in allowed
+
+
 def clean_consents(value, user):
     """Validated, stamped consents from a sign-up or settings request; None if the shape is wrong."""
     if not isinstance(value, dict) or set(value) - set(KEYS) or not all(isinstance(value.get(k, False), bool) for k in KEYS):

@@ -10,7 +10,7 @@ from django.core.cache import cache
 from websockets.asyncio.client import connect
 from websockets.exceptions import ConnectionClosed, WebSocketException
 
-from care.consent import meta_allowed, private_media_allowed, synthetic_allowed
+from care.consent import meta_allowed, meta_user_allowed, private_media_allowed, synthetic_allowed
 from care.permissions import access
 
 
@@ -115,6 +115,9 @@ class CaptionConsumer(AsyncWebsocketConsumer):
             return
         if value.get("locale") not in ["es-EC", "en-US"]:
             await self.fail("caption_language_unsupported")
+            return
+        if not meta_user_allowed(self.scope.get("user")):
+            await self.fail("meta_access_denied")
             return
         # Synthetic test, or real audio of a profile that authorized microphone + Meta at sign-up.
         if not synthetic_allowed(value.get("synthetic")) and not await self.profile_allows(value.get("profile"), value.get("private_test")):

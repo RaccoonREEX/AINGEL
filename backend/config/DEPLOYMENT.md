@@ -20,4 +20,13 @@ Only a trusted TLS-terminating reverse proxy may reach ASGI. It must replace, ne
 
 `AINGEL_AI_MODE=mock` is the default. The controlled synthetic Meta demo additionally requires `AINGEL_AI_MODE=meta`, `AINGEL_META_SYNTHETIC_TEST_ACK=1`, `AINGEL_SYNTHETIC_TESTS_ONLY=1`, `AINGEL_REAL_DATA=0`, and a server-only `MODEL_API_KEY`. A client's `synthetic=true` is a declaration: it cannot detect or prevent personal or health data from being sent. Restrict this demo to controlled participants and synthetic material. The separate private own-media test uses `AINGEL_AI_MODE=meta`, `AINGEL_PRIVATE_OWN_MEDIA_TEST=1`, `AINGEL_REAL_DATA=1`, `AINGEL_SYNTHETIC_TESTS_ONLY=0`, and a server-only `MODEL_API_KEY`. That mode requires the profile owner, separate Meta plus camera or microphone authorizations, and `private_test=true` on each scene/locate request or WebSocket start; it disables personalized conversation and gloss. Web supports this declaration; Android implementation and device validation must be confirmed against the release being deployed. It cannot detect health or other sensitive content within image or audio, so use only the authorized participant’s own carefully chosen material. Restrict access to this private environment; these flags are not a substitute for access controls or a security review.
 
+In production, all Meta requests also require the requesting account's numeric
+database ID in the comma-separated `AINGEL_META_ALLOWED_USER_IDS` server
+environment variable. An unset or empty list blocks all Meta requests; mock
+mode is unaffected. Create the trusted account first, verify its identity and
+obtain its ID from the authenticated session response or Django administration,
+then configure the ID privately and restart the backend. This allowlist restricts
+who can use the provider; it does not classify submitted content, impose a
+global spend limit, or replace the explicit per-feature consent checks.
+
 Apply migrations as a separate deployment step; configure `purge_expired_memories` daily. Back up the database, private media, and the stable encryption and Django keys as one recoverable set, then verify restoration. No local SQLite data is transferred by these settings. Do not seed demo accounts in a public environment.

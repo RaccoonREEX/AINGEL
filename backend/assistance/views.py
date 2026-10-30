@@ -8,7 +8,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.throttling import ScopedRateThrottle
 
-from care.consent import meta_allowed, private_media_allowed, synthetic_allowed
+from care.consent import meta_allowed, meta_user_allowed, private_media_allowed, synthetic_allowed
 from care.faces import family_matches
 from care.permissions import access, audit
 
@@ -76,6 +76,8 @@ class SceneView(APIView):
     throttle_scope = "scene"
 
     def post(self, request):
+        if not meta_user_allowed(request.user):
+            return Response({"error": "meta_access_denied"}, status=403)
         serializer = SceneRequest(data=request.data)
         serializer.is_valid(raise_exception=True)
         values = serializer.validated_data
@@ -117,6 +119,8 @@ class LocateRequest(SceneRequest):
 
 class LocateView(SceneView):
     def post(self, request):
+        if not meta_user_allowed(request.user):
+            return Response({"error": "meta_access_denied"}, status=403)
         serializer = LocateRequest(data=request.data)
         serializer.is_valid(raise_exception=True)
         values = serializer.validated_data
