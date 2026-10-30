@@ -32,8 +32,16 @@ def meta_user_allowed(user):
         return True
     if not user or not user.is_authenticated or not user.is_active or user.pk is None:
         return False
-    allowed = {item.strip() for item in os.environ.get("AINGEL_META_ALLOWED_USER_IDS", "").split(",") if item.strip().isascii() and item.strip().isdigit()}
-    return str(user.pk) in allowed
+    allowed = {item.strip() for item in os.environ.get("AINGEL_META_ALLOWED_USER_IDS", "").split(",")}
+    # A public demo must be an explicit operator choice, and only enables the
+    # synthetic-declaration path. The declaration cannot classify content.
+    public_synthetic_demo = (
+        "*" in allowed
+        and os.environ.get("AINGEL_SYNTHETIC_TESTS_ONLY") == "1"
+        and os.environ.get("AINGEL_REAL_DATA") == "0"
+        and os.environ.get("AINGEL_PRIVATE_OWN_MEDIA_TEST", "0") == "0"
+    )
+    return public_synthetic_demo or str(user.pk) in allowed
 
 
 def clean_consents(value, user):

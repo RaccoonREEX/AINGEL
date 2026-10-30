@@ -29,4 +29,11 @@ then configure the ID privately and restart the backend. This allowlist restrict
 who can use the provider; it does not classify submitted content, impose a
 global spend limit, or replace the explicit per-feature consent checks.
 
+For an intentionally open, authenticated synthetic demo, the operator may set
+`AINGEL_META_ALLOWED_USER_IDS=*` only while `AINGEL_SYNTHETIC_TESTS_ONLY=1`,
+`AINGEL_REAL_DATA=0` and `AINGEL_PRIVATE_OWN_MEDIA_TEST=0`. The wildcard does
+not grant access to private own-media mode, and it must not be mistaken for a
+content classifier or a spending cap. Existing authentication and rate limits
+remain active. An unset or empty allowlist remains closed in production.
+
 Apply migrations as a separate deployment step; configure `purge_expired_memories` daily. Back up the database, private media, and the stable encryption and Django keys as one recoverable set, then verify restoration. No local SQLite data is transferred by these settings. Do not seed demo accounts in a public environment.
