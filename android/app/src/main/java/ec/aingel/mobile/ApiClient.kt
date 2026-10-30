@@ -153,7 +153,12 @@ class ApiClient(context: Context) {
     suspend fun request(path: String, method: String = "GET", data: JSONObject? = null): Any {
         val session = snapshot()
         val body = if (method == "GET" || method == "HEAD") null else (data ?: JSONObject()).toString().toRequestBody("application/json".toMediaType())
-        return execute(session, Request.Builder().url(session.base + "api/v1/" + path).method(method, body).apply { if (method != "GET") header("X-CSRFToken", session.csrf) }.build())
+        return execute(session, Request.Builder().url(session.base + "api/v1/" + path).method(method, body).apply {
+            if (method != "GET" && method != "HEAD") {
+                header("X-CSRFToken", session.csrf)
+                header("Origin", session.base.removeSuffix("/"))
+            }
+        }.build())
     }
     suspend fun upload(path: String, image: ByteArray, values: Map<String, String>): JSONObject = uploadImages(path, listOf(image), values)
     suspend fun uploadImages(path: String, images: List<ByteArray>, values: Map<String, String>): JSONObject {
@@ -163,7 +168,10 @@ class ApiClient(context: Context) {
             images.forEachIndexed { index, image -> addFormDataPart("image", "capture-$index.jpg", image.toRequestBody("image/jpeg".toMediaType())) }
             values.forEach { (key, value) -> addFormDataPart(key, value) }
         }.build()
-        return execute(session, Request.Builder().url(session.base + "api/v1/" + path).header("X-CSRFToken", session.csrf).post(body).build()) as JSONObject
+        return execute(session, Request.Builder().url(session.base + "api/v1/" + path)
+            .header("X-CSRFToken", session.csrf)
+            .header("Origin", session.base.removeSuffix("/"))
+            .post(body).build()) as JSONObject
     }
 
     suspend fun signClip(profileId: String, clipId: String): ByteArray {
