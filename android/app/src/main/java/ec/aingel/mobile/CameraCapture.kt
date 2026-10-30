@@ -89,16 +89,17 @@ fun syntheticPhoto(): ByteArray {
     var taking by remember { mutableStateOf(false) }
     DisposableEffect(owner, front) {
         var disposed = false
+        var stream: Preview? = null
         val future = ProcessCameraProvider.getInstance(context)
         future.addListener({
             if (!disposed) try {
                 provider = future.get()
-                val stream = Preview.Builder().build().apply { setSurfaceProvider(preview.surfaceProvider) }
-                provider?.bindToLifecycle(owner, if (front) CameraSelector.DEFAULT_FRONT_CAMERA else CameraSelector.DEFAULT_BACK_CAMERA, stream, capture)
+                stream = Preview.Builder().build().apply { setSurfaceProvider(preview.surfaceProvider) }
+                provider?.bindToLifecycle(owner, if (front) CameraSelector.DEFAULT_FRONT_CAMERA else CameraSelector.DEFAULT_BACK_CAMERA, stream!!, capture)
                 ready = true
             } catch (_: Exception) { onError() }
         }, ContextCompat.getMainExecutor(context))
-        onDispose { disposed = true; provider?.unbind(capture); provider?.unbindAll() }
+        onDispose { disposed = true; provider?.unbind(capture); stream?.let { provider?.unbind(it) } }  // only its own: not the watch's camera
     }
     Column {
         Text(stringResource(R.string.camera_active))

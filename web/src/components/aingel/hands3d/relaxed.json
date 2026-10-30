@@ -1,0 +1,35 @@
+{
+  "id": "relaxed",
+  "label": "Relajada",
+  "fingers": {
+    "thumb": {
+      "metacarpal": [
+        10,
+        0,
+        8
+      ],
+      "proximal": 10,
+      "distal": 10
+    },
+    "index": {
+      "proximal": 18,
+      "intermediate": 22,
+      "distal": 12
+    },
+    "middle": {
+      "proximal": 22,
+      "intermediate": 26,
+      "distal": 14
+    },
+    "ring": {
+      "proximal": 26,
+      "intermediate": 30,
+      "distal": 16
+    },
+    "pinky": {
+      "proximal": 30,
+      "intermediate": 32,
+      "distal": 18
+    }
+  }
+}

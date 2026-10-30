@@ -1,0 +1,19 @@
+# Integrate only this site block into the existing Caddy configuration after
+# verifying the dedicated network, proxy peer address and logging policy.
+aingel.mapatechstudio.com {
+    encode zstd gzip
+
+    @backend path /api/* /ws/*
+    handle @backend {
+        reverse_proxy aingel-backend:8000 {
+            # This assumes Caddy is directly reached by clients. If another
+            # proxy is in front, establish its trusted-proxy policy first.
+            header_up X-Real-IP {http.request.remote.host}
+            header_up X-Forwarded-Proto https
+        }
+    }
+
+    handle {
+        reverse_proxy aingel-web:8080
+    }
+}

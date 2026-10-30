@@ -1,0 +1,86 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: aingel
+      POSTGRES_USER: aingel
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres-password
+    command: ["postgres", "-c", "ssl=on", "-c", "ssl_cert_file=/run/tls/server.crt", "-c", "ssl_key_file=/run/tls/server.key", "-c", "hba_file=/etc/postgresql/aingel-pg_hba.conf"]
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ${AINGEL_SECRETS_DIR:?set AINGEL_SECRETS_DIR}/postgres-password:/run/secrets/postgres-password:ro
+      - ${AINGEL_SECRETS_DIR:?set AINGEL_SECRETS_DIR}/postgres-tls:/run/tls:ro
+      - ./postgres-pg_hba.conf:/etc/postgresql/aingel-pg_hba.conf:ro
+    networks: [data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aingel -d aingel"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--port", "0", "--tls-port", "6379", "--tls-cert-file", "/run/tls/server.crt", "--tls-key-file", "/run/tls/server.key", "--tls-ca-cert-file", "/run/tls/ca.crt", "--tls-auth-clients", "no", "--aclfile", "/run/secrets/redis.acl"]
+    volumes:
+      - ${AINGEL_SECRETS_DIR:?set AINGEL_SECRETS_DIR}/redis-tls:/run/tls:ro
+      - ${AINGEL_SECRETS_DIR:?set AINGEL_SECRETS_DIR}/redis.acl:/run/secrets/redis.acl:ro
+    networks: [data]
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.backend
+    env_file:
+      - ${AINGEL_BACKEND_ENV_FILE:?set AINGEL_BACKEND_ENV_FILE}
+    environment:
+      AINGEL_ENV: production
+      DJANGO_DEBUG: "0"
+      AINGEL_DB_HOST: db
+      AINGEL_DB_PORT: "5432"
+      AINGEL_DB_NAME: aingel
+      AINGEL_DB_USER: aingel
+      AINGEL_DB_SSLROOTCERT: /run/ca/ca.crt
+      AINGEL_REDIS_CA_CERT: /run/ca/ca.crt
+      AINGEL_PRIVATE_MEDIA_ROOT: /data/private
+    volumes:
+      - private_media:/data/private
+      - ${AINGEL_SECRETS_DIR:?set AINGEL_SECRETS_DIR}/ca.crt:/run/ca/ca.crt:ro
+      - ${AINGEL_ASSETS_DIR:?set AINGEL_ASSETS_DIR}/knowledge:/.local/knowledge:ro
+      - ${AINGEL_ASSETS_DIR:?set AINGEL_ASSETS_DIR}/face-models:/.local/face-models:ro
+      - ${AINGEL_ASSETS_DIR:?set AINGEL_ASSETS_DIR}/signs:/.local/signs:ro
+    read_only: true
+    tmpfs: [/tmp]
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      data: {}
+      proxy:
+        aliases: [aingel-backend]
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.web
+    read_only: true
+    tmpfs: [/tmp]
+    networks:
+      proxy:
+        aliases: [aingel-web]
+    restart: unless-stopped
+
+networks:
+  data:
+    internal: true
+  proxy:
+    external: true
+    name: ${AINGEL_PROXY_NETWORK:?set AINGEL_PROXY_NETWORK}
+
+volumes:
+  postgres_data: {}
+  private_media: {}

@@ -1,0 +1,110 @@
+# Third-party notices
+
+AINGEL is the work of its own authors. This file preserves the notices of third-party components it
+uses or adapts. Declared licences of every npm, Android and Python dependency are listed in
+[`docs/THIRD_PARTY_INVENTORY.md`](docs/THIRD_PARTY_INVENTORY.md); models, datasets and services in
+[`docs/THIRD_PARTY_NOTICES.md`](docs/THIRD_PARTY_NOTICES.md). This is not a completed legal audit.
+
+-----------------------------------------------------------
+Thinking Orbs
+-----------------------------------------------------------
+
+Project:
+Thinking Orbs
+
+Official website:
+https://www.thinkingorbs.com/
+
+Source repository:
+https://github.com/yogesharc/thinking-orbs
+
+Copyright (c) 2026 Yogesh
+
+Licensed under the MIT License.
+
+This project uses and/or adapts portions of Thinking Orbs.
+The original copyright and license notice are preserved below.
+
+MIT License
+
+Copyright (c) 2026 Yogesh
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+-----------------------------------------------------------
+
+Where it is used:
+
+- Web (`web/src/components/aingel/`) and Android (`android/app/src/main/java/ec/aingel/mobile/AingelOrb.kt`)
+  contain the AingelOrb renderer from the AINGEL UI package v1.1.1 (Fibonacci dot sphere, face, eyes,
+  orbits, audio-reactive layer). It follows the Thinking Orbs integration brief and state model; the
+  notice above is kept with the web distribution in `web/public/THIRD_PARTY_NOTICES.txt`.
+
+-----------------------------------------------------------
+three.js 0.184.0
+-----------------------------------------------------------
+
+Project: three.js — https://threejs.org/ · https://github.com/mrdoob/three.js
+Installed from npm (`three@0.184.0`) and bundled into the web chunk `hands3d-*.js`, where the `@license`
+header is kept. The Android app does not include three.js: it draws the same hands with its own OpenGL
+port (`Hands3D.kt`).
+
+Where it is used: the articulated 3D hands of the sign translator (engine of the *AINGEL Manos y Señas*
+package, `web/src/components/aingel/hands3d/`). No external 3D models are used: the hand geometry is
+generated in code.
+
+The MIT License
+
+Copyright © 2010-2026 three.js authors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+-----------------------------------------------------------
+Montserrat
+-----------------------------------------------------------
+
+Montserrat typeface, loaded from Google Fonts on the web and bundled in `android/app/src/main/res/font/`.
+Copyright 2011 The Montserrat Project Authors (https://github.com/JulietaUla/Montserrat).
+Licensed under the SIL Open Font License, Version 1.1. Full text: `docs/licenses/Montserrat_OFL.txt`
+(also shipped in the APK as `assets/licenses/Montserrat_OFL.txt`).
+
+-----------------------------------------------------------
+MedlinePlus
+-----------------------------------------------------------
+
+Health topic summaries from MedlinePlus, U.S. National Library of Medicine (https://medlineplus.gov).
+The summaries are in the public domain in the United States; images, A.D.A.M. encyclopedia and other
+third-party material on MedlinePlus are not used. Attribution shown in the app: "MedlinePlus,
+National Library of Medicine". AINGEL retrieves these texts for a question; no model was trained on them.

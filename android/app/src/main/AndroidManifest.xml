@@ -2,12 +2,28 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- 5a · continuous watching for the blind profile: camera foreground service, notification, optional bubble. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
     <queries><intent><action android:name="android.intent.action.TTS_SERVICE" /></intent></queries>
-    <application android:theme="@android:style/Theme.Material.Light.NoActionBar" android:label="@string/app_name" android:icon="@drawable/ic_aingel" android:allowBackup="false" android:dataExtractionRules="@xml/data_extraction_rules" android:supportsRtl="true" android:usesCleartextTraffic="false">
-        <activity android:name=".MainActivity" android:exported="true">
+    <application android:theme="@android:style/Theme.Material.Light.NoActionBar" android:label="@string/app_name" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round" android:allowBackup="false" android:dataExtractionRules="@xml/data_extraction_rules" android:supportsRtl="true" android:usesCleartextTraffic="false">
+        <!-- Folding, unfolding, the outer screen and rotation keep the conversation: Compose redraws instead of recreating. -->
+        <activity android:name=".MainActivity" android:exported="true" android:resizeableActivity="true"
+            android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation">
             <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
         </activity>
+        <!-- 6b · outer screen of the Galaxy Z Flip while continuous watching runs: only the orb, over the lock screen. -->
+        <activity android:name=".WatchCoverActivity" android:exported="false" android:showWhenLocked="true" android:turnScreenOn="true"
+            android:excludeFromRecents="true" android:taskAffinity="ec.aingel.mobile.cover" android:launchMode="singleTask" android:noHistory="true"
+            android:resizeableActivity="true" android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen"
+            android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation">
+            <meta-data android:name="com.samsung.android.activity.showWhenLocked" android:value="true" />
+        </activity>
+        <service android:name=".WatchService" android:exported="false" android:foregroundServiceType="camera" />
     </application>
 </manifest>

@@ -33,6 +33,8 @@ def main():
         os.environ["MODEL_API_KEY"] = candidates.pop()
         os.environ["AINGEL_AI_MODE"] = "meta"
         os.environ["AINGEL_SYNTHETIC_TESTS_ONLY"] = "1"
+        # Real data authorized at sign-up may reach Meta (decision of 29-10-2026, care.consent).
+        os.environ["AINGEL_REAL_DATA"] = "1"
         del content, candidates
     try:
         return subprocess.call(

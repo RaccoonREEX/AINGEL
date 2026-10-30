@@ -1,13 +1,13 @@
 package ec.aingel.mobile
 
 import android.app.Application
-import android.speech.tts.TextToSpeech
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CancellationException
 import org.json.JSONArray
@@ -24,15 +24,16 @@ data class MobileState(
     val result: JSONObject? = null, val companion: JSONObject? = null, val image: ByteArray? = null, val enrollmentPhotos: List<ByteArray> = emptyList(), val mfaSetup: JSONObject? = null, val recovery: List<String> = emptyList(),
     val mfaEnabled: Boolean = false, val circle: JSONObject? = null, val inviteCode: String? = null, val faces: JSONObject? = null,
     val captions: List<CaptionTurn> = emptyList(), val recording: Boolean = false, val captionStatus: String = "idle",
-    val signStatus: String = "waiting", val signText: String? = null, val signMetadata: JSONObject? = null, val signVideo: ByteArray? = null
+    val signStatus: String = "waiting", val signText: String? = null, val signMetadata: JSONObject? = null, val signVideo: ByteArray? = null,
+    val privateTestProfileId: String? = null
 )
 
 class AingelViewModel(app: Application) : AndroidViewModel(app) {
-    val api = ApiClient(app)
+    val api = Backend.api(app)
     private val mutable = MutableStateFlow(MobileState())
     val state = mutable.asStateFlow()
-    private var tts: TextToSpeech? = null
-    private var voiceReady = false
+    /** AINGEL's voice, routed to the output chosen in Ajustes (5b). */
+    private val voice = AingelVoice(app)
     private val captionEpoch = AtomicLong(0)
     private val captionsActive = AtomicBoolean(false)
     private val signGuard = SignLookupGuard()
@@ -65,8 +66,12 @@ class AingelViewModel(app: Application) : AndroidViewModel(app) {
         onError = { code -> mutable.update { it.copy(error = code, recording = false, captionStatus = "idle") } })
     private var activeOperation: Job? = null
     private var operationGeneration = 0L
+    /** Who the new account is for and the name typed at sign-up; used to prefill the setup wizard. */
+    var signup: Pair<String, String> = "other" to ""
+        private set
+    /** The orb follows AINGEL's voice (word ranges, or a pulse while a routed phrase plays). */
+    fun speechLevel(): Float = voice.level()
     init {
-        tts = TextToSpeech(app) { status -> voiceReady = status == TextToSpeech.SUCCESS }
         operation {
             val session = api.request("auth/session/") as JSONObject
             applySession(session)
@@ -109,28 +114,75 @@ class AingelViewModel(app: Application) : AndroidViewModel(app) {
         val value = api.request("profiles/$profileId/communication/") as JSONObject
         mutable.update { if (it.profile?.optString("id") == profileId) it.copy(communication = value) else it }
     }
-    fun configureBackend(value: String) = operation { api.configure(value); api.request("auth/session/"); mutable.update { MobileState(busy = false) } }
+    fun configureBackend(value: String) = operation { stopCaptions(); WatchService.stop(getApplication()); api.configure(value); api.request("auth/session/"); mutable.update { MobileState(busy = false) } }
+    fun register(username: String, password: String, who: String, name: String) { signup = who to name.trim(); login(username, password, true) }
     fun login(username: String, password: String, register: Boolean = false) = operation {
         val response = api.request("auth/${if (register) "register" else "login"}/", "POST", JSONObject().put("username", username).put("password", password)) as JSONObject
         applySession(response)
     }
     fun verifyMfa(code: String) = operation { applySession(api.request("auth/mfa/verify/", "POST", JSONObject().put("code", code)) as JSONObject) }
     fun logout() = operation {
-        stopCaptions(); tts?.stop()
+        stopCaptions(); WatchService.stop(getApplication()); voice.stop()
         try { api.request("auth/logout/", "POST") }
         finally { api.clear(); mutable.value = MobileState(busy = false) }
         api.request("auth/session/")
     }
     private fun cancelOperation() { operationGeneration++; activeOperation?.cancel(); activeOperation = null }
     fun select(profile: JSONObject) {
-        cancelOperation(); stopCaptions()
-        mutable.update { it.copy(busy = false, profile = profile, communication = null, rows = emptyList(), knowledge = null, result = null, companion = null, image = null, enrollmentPhotos = emptyList(), faces = null, circle = null) }
+        cancelOperation(); stopCaptions(); WatchService.stop(getApplication())
+        mutable.update { it.copy(busy = false, profile = profile, privateTestProfileId = null, communication = null, rows = emptyList(), knowledge = null, result = null, companion = null, image = null, enrollmentPhotos = emptyList(), faces = null, circle = null) }
         operation { refreshCommunication(profile.getString("id")) }
     }
-    fun resetScreen() { cancelOperation(); stopCaptions(); tts?.stop(); mutable.update { it.copy(busy = false, rows = emptyList(), knowledge = null, result = null, companion = null, image = null, enrollmentPhotos = emptyList(), error = null, mfaSetup = null, recovery = emptyList(), inviteCode = null) } }
+    fun resetScreen() { cancelOperation(); stopCaptions(); voice.stop(); mutable.update { it.copy(busy = false, rows = emptyList(), knowledge = null, result = null, companion = null, image = null, enrollmentPhotos = emptyList(), error = null, mfaSetup = null, recovery = emptyList(), inviteCode = null) } }
     fun clearError() { mutable.update { it.copy(error = null) } }
     fun reportError(code: String) { mutable.update { it.copy(error = code) } }
-    fun createProfile(name: String) = operation { api.request("profiles/", "POST", JSONObject().put("display_name", name).put("locale", "es-EC")); refreshProfiles() }
+    /**
+     * Creates the configured profile and its communication preferences without leaving the wizard,
+     * so the activation animation can play; [finishSetup] then opens the home screen. A retry after a
+     * failed communication save reuses the profile already created.
+     */
+    internal suspend fun createConfiguredProfile(profile: JSONObject, answers: SetupAnswers, preferredName: String, existingId: String?): String {
+        val id = existingId ?: (api.request("profiles/", "POST", profile) as JSONObject).getString("id")
+        val current = api.request("profiles/$id/communication/") as JSONObject
+        api.request("profiles/$id/communication/", "PATCH", presetCommunication(current, answers, preferredName))
+        return id
+    }
+    fun finishSetup() = operation { refreshProfiles() }
+    /** Direct, non-blocking queries for the assistant screen (no global busy overlay). */
+    suspend fun profileRequest(suffix: String, method: String = "GET", body: JSONObject? = null): Any = api.request(path(suffix), method, body)
+    /** General conversation under the authorization given at sign-up (the server checks it, care.consent). */
+    /** [actions]: app features the model may ask this phone to run (camera, watching, signs). */
+    suspend fun converse(turns: JSONArray, actions: List<String> = emptyList()): JSONObject {
+        if (mutable.value.privateTestProfileId != null) throw ApiFailure("privacy_review_required")
+        return api.request(path("conversation/"), "POST", JSONObject().put("turns", turns).put("actions", JSONArray(actions))) as JSONObject
+    }
+    /** One captured frame to scene description or object search; the image is not stored. */
+    suspend fun analyzeFrame(image: ByteArray, objectName: String?): JSONObject {
+        // The profile lets the server apply its sign-up authorization (camera + Meta).
+        val fields = imageRequestFields(mutable.value.profile, mutable.value.privateTestProfileId, false)
+        // Describing also says which enrolled family members are in front (matched on our server, not by Meta).
+        if (objectName != null) fields["object_name"] = objectName else if (mutable.value.privateTestProfileId == null) fields["family"] = "true"
+        return api.upload(if (objectName == null) "scene/" else "locate/", image, fields)
+    }
+    private val glossCache = object : LinkedHashMap<String, List<String>>(32, .75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, List<String>>?) = size > 64
+    }
+    /** Signs for [text] by meaning (Meta, backend assistance.gloss), or null to use the local rule (buildSentence):
+     * test mode, no authorization from sign-up, no connection, slow answer or an unusable gloss. */
+    suspend fun signsFor(text: String): List<String>? {
+        if (mutable.value.privateTestProfileId != null) return null
+        val key = text.trim().lowercase().take(300)
+        if (key.isEmpty()) return null
+        synchronized(glossCache) { glossCache[key] }?.let { return it }
+        val seq = withTimeoutOrNull(6_000) {
+            try {
+                val reply = api.request(path("signs/gloss/"), "POST", JSONObject().put("text", text.trim().take(300)).put("vocabulary", JSONObject(GLOSS_VOCABULARY))) as JSONObject
+                glossSeq(reply.optJSONArray("gloss"))
+            } catch (e: CancellationException) { throw e } catch (_: Exception) { null }
+        }
+        if (seq != null) synchronized(glossCache) { glossCache[key] = seq }
+        return seq
+    }
     private fun path(suffix: String) = "profiles/${mutable.value.profile?.getString("id") ?: throw ApiFailure("profile_required")}/$suffix"
     fun loadRows(kind: String) = operation {
         val rows = (api.request(path("$kind/")) as JSONArray).rows(); mutable.update { it.copy(rows = rows) }
@@ -148,6 +200,7 @@ class AingelViewModel(app: Application) : AndroidViewModel(app) {
     }
     fun clearCompanion() { mutable.update { it.copy(companion = null) } }
     internal fun askCompanion(text: String, topic: CompanionTopic?) = operation {
+        if (mutable.value.privateTestProfileId != null) throw ApiFailure("privacy_review_required")
         val profileId = mutable.value.profile?.optString("id")?.takeIf { it.isNotBlank() } ?: throw ApiFailure("profile_required")
         mutable.update { it.copy(companion = null) }
         val result = api.request("profiles/$profileId/companion/chat/", "POST", companionPayload(text, topic)) as JSONObject
@@ -178,6 +231,26 @@ class AingelViewModel(app: Application) : AndroidViewModel(app) {
     fun savePreferences(name: String, allergies: String, notes: String, preferences: JSONObject) = operation {
         api.request(path(""), "PATCH", JSONObject().put("display_name", name).put("allergies", allergies).put("support_notes", notes).put("preferences", preferences)); refreshProfiles()
     }
+    fun saveMediaConsents(camera: Boolean, microphone: Boolean, meta: Boolean) = operation {
+        stopCaptions(); WatchService.stop(getApplication())
+        mutable.update { it.copy(privateTestProfileId = null) }
+        api.request(path(""), "PATCH", JSONObject().put("consents", JSONObject().put("camera", camera).put("microphone", microphone).put("meta_data", meta)))
+        refreshProfiles()
+    }
+    fun setPrivateTest(enabled: Boolean) {
+        stopCaptions(); WatchService.stop(getApplication())
+        val profile = mutable.value.profile
+        val id = profile?.optString("id").orEmpty()
+        if (enabled && !(privateMediaAllowed(profile, id, "camera") || privateMediaAllowed(profile, id, "microphone"))) {
+            mutable.update { it.copy(privateTestProfileId = null, error = "private_test_consent_required") }
+        } else mutable.update { it.copy(privateTestProfileId = if (enabled) id else null, error = null) }
+    }
+    fun privateWatchEnabled(): Boolean {
+        val current = mutable.value
+        if (current.privateTestProfileId == null) return false
+        if (!privateMediaAllowed(current.profile, current.privateTestProfileId, "camera")) throw ApiFailure("private_test_consent_required")
+        return true
+    }
     fun loadCircle() = operation { val circle = api.request(path("circle/")) as JSONObject; mutable.update { it.copy(circle = circle) } }
     fun invite(username: String, relationship: String, memories: Boolean) = operation {
         val result = api.request(path("circle/"), "POST", JSONObject().put("username", username).put("relationship", relationship).put("can_configure", true).put("can_view_memories", memories)) as JSONObject
@@ -191,9 +264,10 @@ class AingelViewModel(app: Application) : AndroidViewModel(app) {
         mutable.update { it.copy(circle = circle) }
     }
     fun setImage(image: ByteArray) { mutable.update { it.copy(image = image, result = null) } }
+    /** [synthetic]: the included shapes image (test); real photos use the sign-up authorization of the profile. */
     fun analyze(synthetic: Boolean, objectName: String? = null) = operation {
         val image = mutable.value.image ?: throw ApiFailure("image_required")
-        val fields = mutableMapOf("locale" to (mutable.value.profile?.optString("locale") ?: "es-EC"), "synthetic" to synthetic.toString())
+        val fields = imageRequestFields(mutable.value.profile, mutable.value.privateTestProfileId, synthetic)
         if (objectName != null) fields["object_name"] = objectName
         val result = api.upload(if (objectName == null) "scene/" else "locate/", image, fields)
         mutable.update { it.copy(result = result) }
@@ -228,14 +302,15 @@ class AingelViewModel(app: Application) : AndroidViewModel(app) {
         api.request("auth/mfa/disable/", "POST", JSONObject().put("password", password).put("code", code)); mutable.update { it.copy(mfaEnabled = false, recovery = emptyList()) }
     }
     fun hideRecovery() { mutable.update { it.copy(recovery = emptyList(), mfaSetup = null) } }
-    fun speak(text: String) {
+    fun speak(text: String) { speak(text, null) }
+    /** Speaks [text]; returns false (and reports it) when no voice is available. [onDone] runs on the main thread. */
+    fun speak(text: String, onDone: (() -> Unit)?): Boolean {
         val locale = Locale.forLanguageTag(mutable.value.profile?.optString("locale", "es-EC") ?: "es-EC")
-        if (!voiceReady || (tts?.isLanguageAvailable(locale) ?: -1) < 0) { reportError("voice_unavailable"); return }
-        tts?.language = locale
-        tts?.setSpeechRate(if (mutable.value.communication?.optString("pace") == "slow") 0.8f else 1.0f)
-        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "aingel-response")
+        if (!voice.available(locale)) { reportError("voice_unavailable"); return false }
+        voice.speak(text, locale, if (mutable.value.communication?.optString("pace") == "slow") 0.8f else 1.0f, onDone)
+        return true
     }
-    fun stopSpeech() { tts?.stop() }
+    fun stopSpeech() = voice.stop()
     private fun invalidateSigns(status: String) {
         signGuard.advance(); signJob?.cancel(); signJob = null
         mutable.update { it.copy(signStatus = status, signText = null, signMetadata = null, signVideo = null) }
@@ -276,10 +351,13 @@ class AingelViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
     fun startCaptions() {
+        val state = mutable.value
+        val privateTest = state.privateTestProfileId != null
+        if (privateTest && !privateMediaAllowed(state.profile, state.privateTestProfileId, "microphone")) { reportError("private_test_consent_required"); return }
         captionEpoch.incrementAndGet(); captionsActive.set(true); retiredSpeechTurns.clear(); activeSpeechTurn = null; lastSignPhrase = null
         invalidateSigns(if (supportsSignCatalog(mutable.value.communication?.optString("sign_language"))) "waiting" else "unsupported")
         mutable.update { it.copy(captions = emptyList(), error = null) }
-        captionClient.start(mutable.value.profile?.optString("locale") ?: "es-EC")
+        captionClient.start(state.profile?.optString("locale") ?: "es-EC", state.profile?.optString("id").orEmpty(), privateTest)
     }
     fun stopCaptions() {
         captionsActive.set(false); captionEpoch.incrementAndGet(); captionClient.close()
@@ -287,5 +365,5 @@ class AingelViewModel(app: Application) : AndroidViewModel(app) {
         invalidateSigns("waiting"); mutable.update { it.copy(captions = emptyList()) }
     }
     fun finishCaptions() { captionClient.stop() }
-    override fun onCleared() { stopCaptions(); tts?.shutdown(); super.onCleared() }
+    override fun onCleared() { stopCaptions(); voice.shutdown(); super.onCleared() }
 }

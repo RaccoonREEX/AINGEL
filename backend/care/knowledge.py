@@ -92,6 +92,59 @@ def exact_topic(title, language):
     return None
 
 
+STOPWORDS = {
+    "de", "del", "la", "las", "el", "los", "y", "en", "por", "con", "para", "una", "uno", "que",
+    "the", "and", "of", "for", "with", "your", "how", "what", "about",
+}
+
+
+# Words that name a kind of topic rather than the topic itself ("Enfermedad de Alzheimer").
+GENERIC_TITLE_WORDS = {"enfermedad", "trastorno", "sindrome", "problema", "disease", "disorder", "syndrome", "problem"}
+
+
+def _tokens(text):
+    words = "".join(c if c.isalnum() else " " for c in search_key(text)).split()
+    return {w for w in words if (len(w) >= 4 or w.isdigit()) and w not in STOPWORDS}
+
+
+def _forms(word):
+    """A word and its simple singular/plural forms (Spanish and English)."""
+    forms = {word, word + "s", word + "es"}
+    if word.endswith("es") and len(word) > 4:
+        forms.add(word[:-2])
+    if word.endswith("s") and len(word) > 3:
+        forms.add(word[:-1])
+    return forms
+
+
+def best_topic(question, language):
+    """Pick the public summary whose title words appear in the question.
+
+    Plain title matching, not semantic search: it returns nothing rather than a weak guess.
+    """
+    asked = _tokens(question)
+    if not asked:
+        return None
+    index = load_index()
+    best, best_key = None, None
+    for item in index["records"]:
+        record = safe_record(item, language)
+        if not record:
+            continue
+        all_words = _tokens(record["title"].split("(")[0])
+        title_words = {w for w in all_words if w not in GENERIC_TITLE_WORDS} or all_words
+        if not title_words:
+            continue
+        matched = sum(1 for word in title_words if _forms(word) & asked)
+        if matched == len(title_words) or (matched >= 2 and matched / len(title_words) >= 0.66):
+            key = (matched, -len(record["title"]))
+            if best_key is None or key > best_key:
+                best, best_key = record, key
+    if best is None:
+        return None
+    return {**best, "source": index["source"], "downloaded_at": index["downloaded_at"]}
+
+
 @api_view(["POST"])
 def resources(request, profile_id):
     profile = access(request.user, profile_id)

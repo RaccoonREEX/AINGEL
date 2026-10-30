@@ -10,6 +10,7 @@ from channels.auth import AuthMiddlewareStack
 from channels.routing import ProtocolTypeRouter, URLRouter
 from channels.security.websocket import OriginValidator
 from django.urls import path
+from django.conf import settings
 from assistance.captions import CaptionConsumer
 
 application = ProtocolTypeRouter(
@@ -19,7 +20,12 @@ application = ProtocolTypeRouter(
             AuthMiddlewareStack(
                 URLRouter([path("ws/captions/", CaptionConsumer.as_asgi())])
             ),
-            ["http://127.0.0.1:5173", "http://localhost:5173", "http://127.0.0.1:8010"],
+            settings.WEBSOCKET_ALLOWED_ORIGINS,
         ),
     }
 )
+
+if settings.PRODUCTION:
+    from config.proxy import TrustedProxyASGI
+
+    application = TrustedProxyASGI(application, settings.TRUSTED_PROXY_NETWORKS)

@@ -146,6 +146,58 @@ def enrollment_data(face):
     }
 
 
+def family_matches(profile, image):
+    """Enrolled family members found in [image] (normalized JPEG bytes), matched here with OpenCV: no cloud call.
+    Each detected face gets its box and a candidate (id, display_name, relationship) or None."""
+    faces = FamilyFace.objects.filter(
+        member__profile=profile, expires_at__gt=timezone.now()
+    ).select_related("member__user")
+    candidates = [
+        {
+            "id": str(face.id),
+            "display_name": face.display_name,
+            "relationship": face.member.relationship,
+            "samples": decode_samples(face.embedding_encrypted),
+            "consent_epoch": face.member.face_consent_epoch,
+        }
+        for face in faces
+    ]
+    detected = embeddings(image)
+    with transaction.atomic():
+        profile = Profile.objects.select_for_update().get(pk=profile.pk)
+        if not profile.face_recognition_enabled:
+            raise ValidationError("face_consent_changed")
+        current = {
+            str(face.id): face.member.face_consent_epoch
+            for face in FamilyFace.objects.filter(
+                member__profile=profile, expires_at__gt=timezone.now()
+            ).select_related("member")
+        }
+        candidates = [
+            candidate
+            for candidate in candidates
+            if current.get(candidate["id"]) == candidate["consent_epoch"]
+        ]
+        results = []
+        for detection in detected:
+            match = (
+                candidate_match(detection["embedding"], candidates)
+                if detection.get("sharpness", 100) >= 30
+                else None
+            )
+            results.append(
+                {
+                    "box": detection["box"],
+                    "candidate": (
+                        {k: match[k] for k in ["id", "display_name", "relationship"]}
+                        if match
+                        else None
+                    ),
+                }
+            )
+    return results
+
+
 @api_view(["GET", "POST", "DELETE"])
 @throttle_classes([FaceRate])
 def family_faces(request, profile_id):
@@ -279,57 +331,11 @@ def recognize_family(request, profile_id):
     image = request.FILES.get("image")
     if not image:
         raise ValidationError("image_required")
-    faces = FamilyFace.objects.filter(
-        member__profile=profile, expires_at__gt=timezone.now()
-    ).select_related("member__user")
-    candidates = []
     try:
-        for face in faces:
-            candidates.append(
-                {
-                    "id": str(face.id),
-                    "display_name": face.display_name,
-                    "relationship": face.member.relationship,
-                    "samples": decode_samples(face.embedding_encrypted),
-                    "consent_epoch": face.member.face_consent_epoch,
-                }
-            )
-        detected = embeddings(normalize_image(image))
+        results = family_matches(profile, normalize_image(image))
     except (ValueError, cv2.error, InvalidToken):
         raise ValidationError("face_processing_failed") from None
-    with transaction.atomic():
-        profile = Profile.objects.select_for_update().get(pk=profile.pk)
-        if not profile.face_recognition_enabled:
-            raise ValidationError("face_consent_changed")
-        current = {
-            str(face.id): face.member.face_consent_epoch
-            for face in FamilyFace.objects.filter(
-                member__profile=profile, expires_at__gt=timezone.now()
-            ).select_related("member")
-        }
-        candidates = [
-            candidate
-            for candidate in candidates
-            if current.get(candidate["id"]) == candidate["consent_epoch"]
-        ]
-        results = []
-        for detection in detected:
-            match = (
-                candidate_match(detection["embedding"], candidates)
-                if detection.get("sharpness", 100) >= 30
-                else None
-            )
-            results.append(
-                {
-                    "box": detection["box"],
-                    "candidate": (
-                        {k: match[k] for k in ["id", "display_name", "relationship"]}
-                        if match
-                        else None
-                    ),
-                }
-            )
-        audit(profile, request.user, "face.local_match_requested")
+    audit(profile, request.user, "face.local_match_requested")
     return Response(
         {
             "mode": "local_experimental",

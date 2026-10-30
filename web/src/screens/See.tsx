@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import Field from "../components/Field";
+import PrivateMediaConsent, { imageTestFields } from "../components/PrivateMediaConsent";
 import type { Context, WithProfile } from "../ui";
 import type { Key } from "../i18n";
 import { activityLabel } from "../i18n";
@@ -15,11 +16,11 @@ import type {
   Located,
 } from "../types";
 export default function See({ profile, t, locale, busy, run }: WithProfile) {
+  const [privateTest, setPrivateTest] = useState(false);
   const [located, setLocated] = useState<Located | null>(null),
     [objectName, setObjectName] = useState("");
   const [file, setFile] = useState<File | null>(null),
     [preview, setPreview] = useState(""),
-    [confirmed, setConfirmed] = useState(false),
     [result, setResult] = useState<Scene | null>(null),
     [voiceMessage, setVoiceMessage] = useState("");
   useEffect(() => {
@@ -31,7 +32,9 @@ export default function See({ profile, t, locale, busy, run }: WithProfile) {
     setPreview(url);
     return () => URL.revokeObjectURL(url);
   }, [file]);
-  useEffect(() => setLocated(null), [file]);
+  // The fixture this page drew itself: the only image sent as synthetic (a chosen file never is, whatever its name).
+  const bundled = useRef<File | null>(null);
+  useEffect(() => { setLocated(null); setPrivateTest(false); }, [file, profile.id]);
   useEffect(() => () => window.speechSynthesis?.cancel(), []);
   const fixture = () => {
     const canvas = document.createElement("canvas");
@@ -48,10 +51,8 @@ export default function See({ profile, t, locale, busy, run }: WithProfile) {
     ctx.fill();
     canvas.toBlob((blob) => {
       if (blob) {
-        setFile(
-          new File([blob], "synthetic-shapes.png", { type: "image/png" }),
-        );
-        setConfirmed(true);
+        bundled.current = new File([blob], "synthetic-shapes.png", { type: "image/png" });
+        setFile(bundled.current);
         setResult(null);
       }
     }, "image/png");
@@ -92,7 +93,10 @@ export default function See({ profile, t, locale, busy, run }: WithProfile) {
             const form = new FormData();
             form.set("image", file);
             form.set("locale", profile.locale);
-            form.set("synthetic", String(confirmed));
+            // Real images use the sign-up authorization; only the shapes image drawn by the app itself is a synthetic test.
+            form.set("profile", profile.id);
+            for (const [key, value] of Object.entries(imageTestFields(profile, privateTest, file === bundled.current))) form.set(key, String(value));
+            setPrivateTest(false);
             void run(async () => {
               setResult(null);
               setResult(await api<Scene>("scene/", "POST", form));
@@ -106,7 +110,6 @@ export default function See({ profile, t, locale, busy, run }: WithProfile) {
                 accept="image/jpeg,image/png,image/webp"
                 onChange={(e) => {
                   setFile(e.target.files?.[0] || null);
-                  setConfirmed(false);
                   setResult(null);
                 }}
               />
@@ -135,15 +138,8 @@ export default function See({ profile, t, locale, busy, run }: WithProfile) {
               ))}
             </div>
           )}
-          <label className="check">
-            <input
-              type="checkbox"
-              checked={confirmed}
-              onChange={(e) => setConfirmed(e.target.checked)}
-            />
-            {t("syntheticConsent")}
-          </label>
-          <button disabled={busy || !file || !confirmed} className="primary">
+          {file && file !== bundled.current && <PrivateMediaConsent profile={profile} kind="image" checked={privateTest} onChange={setPrivateTest} disabled={busy} />}
+          <button disabled={busy || !file} className="primary">
             {t("analyze")}
           </button>
         </form>
@@ -155,7 +151,10 @@ export default function See({ profile, t, locale, busy, run }: WithProfile) {
             const form = new FormData();
             form.set("image", file);
             form.set("locale", profile.locale);
-            form.set("synthetic", String(confirmed));
+            // Real images use the sign-up authorization; only the shapes image drawn by the app itself is a synthetic test.
+            form.set("profile", profile.id);
+            for (const [key, value] of Object.entries(imageTestFields(profile, privateTest, file === bundled.current))) form.set(key, String(value));
+            setPrivateTest(false);
             form.set("object_name", objectName);
             void run(async () => {
               setLocated(null);
@@ -175,7 +174,7 @@ export default function See({ profile, t, locale, busy, run }: WithProfile) {
           <p className="hint">{t("objectPromptHint")}</p>
           <button
             className="primary"
-            disabled={busy || !file || !confirmed || !objectName.trim()}
+            disabled={busy || !file || !objectName.trim()}
           >
             {t("locate")}
           </button>

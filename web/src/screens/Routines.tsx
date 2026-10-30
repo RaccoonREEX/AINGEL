@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import Field from "../components/Field";
+import AingelOrb from "../components/aingel/AingelOrb";
+import { longDate, summarizeToday } from "../today";
 import type { Context, WithProfile } from "../ui";
 import type { Key } from "../i18n";
 import { activityLabel } from "../i18n";
@@ -32,7 +34,8 @@ export default function Routines({
   run,
   refresh,
   version,
-}: WithProfile & { version: number }) {
+  onAsk,
+}: WithProfile & { version: number; onAsk?: (question: string) => void }) {
   const [items, setItems] = useState<Routine[]>([]),
     [editing, setEditing] = useState<Routine | null>(null),
     [due, setDue] = useState("");
@@ -83,9 +86,15 @@ export default function Routines({
     const timer = setInterval(tick, 15000);
     return () => clearInterval(timer);
   }, [items, profile.timezone]);
-  const today = items.filter(
-    (x) => x.active && x.weekdays.includes(todayIndex()),
-  );
+  const es = locale === "es-EC";
+  const summary = summarizeToday(items, profile.timezone);
+  const formRef = useRef<HTMLElement>(null);
+  const confirm = (item: Routine) =>
+    void run(async () => {
+      await api(base + item.id + "/confirm/", item.confirmed_today ? "DELETE" : "POST");
+      await refresh();
+    });
+  const progress = summary.list.length ? Math.round((summary.done / summary.list.length) * 100) : 0;
   const row = (item: Routine) => (
     <article className="routine-card" key={item.id}>
       <div className="routine-time">{item.at.slice(0, 5)}</div>
@@ -157,21 +166,63 @@ export default function Routines({
   );
   return (
     <>
-      <p className="hint">{t("remindersNote")}</p>
-      {due && (
-        <p className="callout" role="alert">
-          {t("reminderDue")}: <strong>{due}</strong>{" "}
-          <button onClick={() => setDue("")}>{t("close")}</button>
-        </p>
-      )}
-      <section className="panel">
-        <h2>{t("today")}</h2>
-        {today.length ? (
-          today.map(row)
-        ) : (
-          <p className="empty">{t("noRoutines")}</p>
+      <div className="today-page">
+        <div className="today-main">
+          <div className="today-page-head">
+            <div>
+              <h1>{t("dashboard")}</h1>
+              <span>{longDate(locale, profile.timezone)}{summary.list.length ? ` · ${es ? `${summary.done} de ${summary.list.length} completadas` : `${summary.done} of ${summary.list.length} done`}` : ""}</span>
+            </div>
+            {profile.permissions.configure && (
+              <button className="btn btn-primary btn-pill today-add" onClick={() => { setEditing(null); formRef.current?.scrollIntoView({ behavior: "smooth" }); formRef.current?.querySelector("input")?.focus({ preventScroll: true }); }}>
+                {es ? "Añadir rutina" : "Add routine"}
+              </button>
+            )}
+          </div>
+          <div className="progress progress--gold" role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100} aria-label={t("dashboard")}><span style={{ width: `${progress}%` }} /></div>
+          {due && (
+            <p className="callout" role="alert">
+              {t("reminderDue")}: <strong>{due}</strong>{" "}
+              <button className="btn btn-outline btn-sm btn-pill" onClick={() => setDue("")}>{t("close")}</button>
+            </p>
+          )}
+          <div className="routine-rows">
+            {summary.list.length ? summary.list.map((r) => {
+              const isNext = r.id === summary.next?.id;
+              return (
+                <div key={r.id} className={`routine-row${isNext ? " is-next" : ""}`}>
+                  <span className="routine-row-time">{r.at.slice(0, 5)}</span>
+                  <div className="routine-row-body">
+                    <span className={`routine-row-title${r.confirmed_today ? " is-done" : ""}`}>{r.title}{isNext && <span className="next-tag">{es ? "SIGUIENTE" : "NEXT"}</span>}</span>
+                    <span className="routine-row-meta">{r.instructions || t(r.category as Key)}</span>
+                  </div>
+                  {r.confirmed_today ? (
+                    <span className="routine-row-done">
+                      <span className="routine-row-status">{t("confirmedBy")} {r.confirmation_actor}</span>
+                      <button className="ring ring--done ring--btn" disabled={busy || !profile.permissions.configure} onClick={() => confirm(r)} aria-label={`${t("undoDone")}: ${r.title}`} title={t("undoDone")}>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
+                      </button>
+                    </span>
+                  ) : profile.permissions.configure ? (
+                    <button className="btn btn-outline btn-sm btn-pill routine-confirm" disabled={busy} onClick={() => confirm(r)}>{es ? "Confirmar" : "Confirm"}</button>
+                  ) : <span className={`ring${isNext ? " ring--gold" : ""}`} />}
+                </div>
+              );
+            }) : <p className="empty">{t("noRoutines")}</p>}
+          </div>
+        </div>
+        <div className="today-side">
+          <div className="ask-card">
+            <AingelOrb size={140} reducedMotion={!!profile.preferences.reduced_motion} />
+            <span>{es ? "Pregúntale a AINGEL" : "Ask AINGEL"}</span>
+            <button className="pill" onClick={() => onAsk?.(es ? "¿Qué tengo que hacer hoy?" : "What do I need to do today?")}>{es ? "¿Qué tengo que hacer hoy?" : "What do I need to do today?"}</button>
+          </div>
+          <p className="today-note">{t("remindersNote")}</p>
+        </div>
+        {profile.permissions.configure && (
+          <button className="today-fab btn btn-primary btn-shadow" onClick={() => { setEditing(null); formRef.current?.scrollIntoView({ behavior: "smooth" }); }}>{es ? "Añadir rutina" : "Add routine"}</button>
         )}
-      </section>
+      </div>
       <details className="panel">
         <summary>
           {t("allRoutines")} ({items.length})
@@ -179,7 +230,7 @@ export default function Routines({
         {items.map(row)}
       </details>
       {profile.permissions.configure && (
-        <section className="panel">
+        <section className="panel" ref={formRef}>
           <h2>{t(editing ? "edit" : "newRoutine")}</h2>
           <RoutineForm
             key={editing?.id || "new"}

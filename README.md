@@ -18,6 +18,8 @@ Las cuentas sintéticas y sus contraseñas están **solo** en `.local/demo-accou
 
 [Guía de pruebas paso a paso](docs/TESTING_GUIDE.md) · [Estado y límites](docs/KNOWN_LIMITATIONS.md).
 
+[Rediseño de interfaz y Thinking Orbs](docs/UI_REDESIGN.md). · [Conversación, visión y lengua de señas](docs/CONVERSATION_VISION_SIGNS.md) · [Inventario de licencias](docs/THIRD_PARTY_INVENTORY.md).
+
 ## Funciones disponibles
 
 - Registro, inicio/cierre de sesión, CSRF y verificación TOTP compatible con Google Authenticator. QR local, secreto cifrado, recuperación de un solo uso, rechazo de códigos reutilizados y límite de intentos. Cada cuenta activa su propio 2FA desde Seguridad.
@@ -31,7 +33,9 @@ Las cuentas sintéticas y sus contraseñas están **solo** en `.local/demo-accou
 - Visión y conversación sintética con `muse-spark-1.3`, búsqueda de objetos con `sam-3.1`, recuadros y máscaras decodificadas mediante el parser oficial, lectura opcional del resultado con la voz del navegador.
 - Subtítulos en vivo con `muse-voice-transcribe-1.0`, AudioWorklet PCM24kHz y relay WebSocket autenticado. Sin grabación; una sesión por cuenta, máximo 10 minutos.
 - Reconocimiento **experimental y local** de familiares con YuNet/SFace. Desactivado por defecto; requiere autorización del principal y registro de 1–3 fotos propias distintas por el familiar adulto, con filtros de nitidez y consistencia. Plantillas cifradas por 30 días, revocables. No se conservan las fotos ni se envían a Meta. Resultados posibles, sin garantía de identidad ni liveness.
-- Preferencia LSEC/ASL y base para clips locales revisados por frase completa; el catálogo está vacío y no hay traducción abierta ni avatar.
+- Inicio móvil 5a: menú superior derecho según el perfil (sordera: escuchar, ver y escribir y traducir; ceguera: ver y describir, vigilancia continua en segundo plano) y Ajustes de sonido y voz 5b (salida de audio, micrófono, control por voz). La conversación es continua, puede buscar en la web y AINGEL usa las funciones de la app cuando se le piden por voz (mirar, buscar un objeto, vigilar, traducir a señas). Ver [docs/HOME_AND_SETTINGS.md](docs/HOME_AND_SETTINGS.md).
+- Plegables: en pantallas exteriores solo el orbe de AINGEL sobre negro (tocar para hablar); en el Fold, pantallas dobles o en horizontal, dos paneles (AINGEL y manos | opciones). Icono adaptativo nuevo de la APK. Auditoría de conexiones web–Android–servidor del 29-10-2026 en el mismo documento.
+- Traductor de señas: AINGEL signa con manos articuladas en 3D (three.js, con respaldo 2D) (alfabeto, números y 43 palabras y acciones de diseño AINGEL, pendientes de validar en LSEC); botón «Traducir» con cuatro modos (voz/texto a señas, señas a voz/texto con tablero de pictogramas). Sin reconocimiento automático ni gramática completa de LSEC.
 - Interfaz centralizada en español/inglés, texto grande, contraste y diseño adaptable. No implica soporte completo de los 19 idiomas previstos ni certificación de accesibilidad.
 
 ## Verificación realizada

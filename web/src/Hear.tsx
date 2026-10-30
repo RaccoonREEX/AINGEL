@@ -1,8 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { translator } from "./i18n";
 import type { Profile } from "./types";
 import { useCommunication } from "./Communication";
 import SignClips from "./SignClips";
+import AingelOrb from "./components/aingel/AingelOrb";
+import { analyserLevel } from "./components/aingel/useAudioLevel";
+import PrivateMediaConsent, { audioTestFields } from "./components/PrivateMediaConsent";
 
 export default function Hear({
   profile,
@@ -12,14 +15,19 @@ export default function Hear({
   t: ReturnType<typeof translator>;
 }) {
   const { value: communication } = useCommunication(profile.id);
+  const [privateTest, setPrivateTest] = useState(false);
+  const [syntheticTest, setSyntheticTest] = useState(false);
+  const es = profile.locale.toLowerCase().startsWith("es");
+  useEffect(() => { setPrivateTest(false); setSyntheticTest(false); }, [profile.id]);
   const [status, setStatus] = useState<
       "idle" | "connecting" | "recording" | "finishing"
     >("idle"),
-    [consent, setConsent] = useState(false),
     [error, setError] = useState("");
   const [turns, setTurns] = useState<
     { id: number; text: string; final: boolean }[]
   >([]);
+  const analyser = useRef<AnalyserNode | null>(null);
+  const micLevel = useMemo(() => analyserLevel(() => analyser.current), []);
   const socket = useRef<WebSocket | null>(null),
     context = useRef<AudioContext | null>(null),
     stream = useRef<MediaStream | null>(null),
@@ -30,6 +38,8 @@ export default function Hear({
   const cleanup = () => {
     stream.current?.getTracks().forEach((track) => track.stop());
     stream.current = null;
+    analyser.current?.disconnect();
+    analyser.current = null;
     node.current?.disconnect();
     node.current = null;
     void context.current?.close().catch(() => {});
@@ -44,6 +54,9 @@ export default function Hear({
     [],
   );
   const start = async () => {
+    const testFields = audioTestFields(profile, privateTest, syntheticTest);
+    setPrivateTest(false);
+    setSyntheticTest(false);
     const current = ++generation.current;
     setError("");
     setTurns([]);
@@ -83,7 +96,9 @@ export default function Hear({
           JSON.stringify({
             type: "start",
             locale: profile.locale,
-            synthetic: consent,
+            // Authorization given at sign-up (microphone + Meta); the server checks it.
+            profile: profile.id,
+            ...testFields,
           }),
         );
       };
@@ -118,7 +133,13 @@ export default function Hear({
               ws.close();
             }
           };
-          ctx.createMediaStreamSource(stream.current).connect(processor);
+          const source = ctx.createMediaStreamSource(stream.current);
+          const meter = ctx.createAnalyser();
+          meter.fftSize = 1024;
+          meter.smoothingTimeConstant = 0.65;
+          analyser.current = meter;
+          source.connect(meter);
+          source.connect(processor);
           processor.connect(ctx.destination);
           void ctx.resume();
           setStatus("recording");
@@ -220,19 +241,17 @@ export default function Hear({
         />
       </section>
       <section className="panel">
-        <label className="check">
-          <input
-            type="checkbox"
-            checked={consent}
-            disabled={status !== "idle"}
-            onChange={(e) => setConsent(e.target.checked)}
-          />
-          {t("hearConsent")}
+        <PrivateMediaConsent profile={profile} kind="audio" checked={privateTest} disabled={status !== "idle"} onChange={(checked) => { setPrivateTest(checked); if (checked) setSyntheticTest(false); }} />
+        <label className="consent-row">
+          <input type="checkbox" checked={syntheticTest} disabled={status !== "idle"} onChange={(e) => { setSyntheticTest(e.target.checked); if (e.target.checked) setPrivateTest(false); }} />
+          <span>{es ? "Prueba sintética: confirmo que reproduciré solo voz sintética, sin información personal o de salud, y autorizo su envío a Meta." : "Synthetic test: I confirm I will play only synthetic speech without personal or health information and authorize sending it to Meta."}</span>
         </label>
+        <p className="hint">{es ? "La declaración no verifica el contenido automáticamente y se usa solo para esta sesión." : "This declaration does not automatically verify the content and applies only to this session."}</p>
+        <div className="hear-orb"><AingelOrb state={status === "recording" ? "listening" : status === "connecting" || status === "finishing" ? "thinking" : error ? "retrying" : "idle"} audioLevel={micLevel} reducedMotion={profile.preferences.reduced_motion} size={200} /></div>
         <div className="actions">
           <button
             className="primary"
-            disabled={!consent || status !== "idle"}
+            disabled={status !== "idle"}
             onClick={() => void start()}
           >
             {t("hearStart")}

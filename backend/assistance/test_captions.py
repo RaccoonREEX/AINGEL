@@ -9,6 +9,7 @@ from django.core.cache import cache
 from django.test import TransactionTestCase
 
 from config.asgi import application
+from care.models import Profile
 
 
 class FakeMeta:
@@ -40,6 +41,7 @@ class CaptionTests(TransactionTestCase):
     def setUp(self):
         cache.clear()
         user = get_user_model().objects.create_user(username="caption-test")
+        self.profile = Profile.objects.create(owner=user, display_name="Owner", consents={"microphone": True, "meta_data": True})
         self.client.force_login(user)
         self.cookie = f"sessionid={self.client.cookies['sessionid'].value}".encode()
 
@@ -69,6 +71,23 @@ class CaptionTests(TransactionTestCase):
             (await ws.receive_json_from())["code"], "privacy_review_required"
         )
         await ws.disconnect()
+
+    @patch.dict(os.environ, {"AINGEL_AI_MODE": "meta", "MODEL_API_KEY": "test-key", "AINGEL_REAL_DATA": "1", "AINGEL_PRIVATE_OWN_MEDIA_TEST": "1", "AINGEL_SYNTHETIC_TESTS_ONLY": "0"})
+    async def test_private_audio_requires_explicit_declaration_before_upstream(self):
+        meta = FakeMeta()
+        with patch("assistance.captions.connect", new=AsyncMock(return_value=meta)) as connect:
+            ws = self.socket()
+            await ws.connect()
+            await ws.send_json_to({"type": "start", "locale": "es-EC", "profile": str(self.profile.pk)})
+            self.assertEqual((await ws.receive_json_from())["code"], "privacy_review_required")
+            connect.assert_not_called()
+            await ws.disconnect()
+            ws = self.socket()
+            await ws.connect()
+            await ws.send_json_to({"type": "start", "locale": "es-EC", "profile": str(self.profile.pk), "private_test": True})
+            self.assertEqual((await ws.receive_json_from())["type"], "ready")
+            connect.assert_awaited_once()
+            await ws.disconnect()
 
     @patch.dict(
         os.environ,

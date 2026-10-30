@@ -25,6 +25,13 @@ import kotlin.coroutines.resumeWithException
 
 class ApiFailure(val code: String, val status: Int = 0) : Exception(code)
 
+internal const val DEFAULT_BACKEND = "https://aingel.mapatechstudio.com/"
+
+internal fun isLegacyLoopbackBackend(raw: String?): Boolean {
+    val url = raw?.trim()?.toHttpUrlOrNull() ?: return false
+    return url.scheme == "http" && url.host in setOf("127.0.0.1", "localhost", "10.0.2.2")
+}
+
 fun validBackend(raw: String, debug: Boolean): String? {
     val url = raw.trim().toHttpUrlOrNull() ?: return null
     if (url.username.isNotEmpty() || url.password.isNotEmpty() || url.query != null || url.fragment != null || url.encodedPath != "/") return null
@@ -105,8 +112,20 @@ class ApiClient(context: Context) {
     private val cookies = DeviceCookies(context)
     private val gate = SessionCookieGate(cookies, cookies::clear)
     private val stateLock = Any()
+    private fun initialBackend(): String {
+        val saved = preferences.getString("backend", null)
+        if (!preferences.getBoolean("backend-default-migrated-v1", false)) {
+            val migrate = isLegacyLoopbackBackend(saved)
+            if (migrate) gate.invalidate()
+            preferences.edit().putBoolean("backend-default-migrated-v1", true).apply {
+                if (migrate) putString("backend", DEFAULT_BACKEND)
+            }.apply()
+            if (migrate) return DEFAULT_BACKEND
+        }
+        return saved ?: DEFAULT_BACKEND
+    }
     @Volatile
-    var base: String = preferences.getString("backend", "http://127.0.0.1:8010/")!!
+    var base: String = initialBackend()
         private set
     @Volatile
     var csrf: String = ""

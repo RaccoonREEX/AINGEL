@@ -29,7 +29,6 @@ export default function Ask({
     useCommunication(profile.id);
   const [itemIndex, setItemIndex] = useState(0);
   const [voiceError, setVoiceError] = useState(false);
-  const [showSupport, setShowSupport] = useState(false);
   const [topic, setTopic] = useState<TopicChoice | null>(null);
   const [result, setResult] = useState<{
     tool: string;
@@ -43,13 +42,6 @@ export default function Ask({
       await api(`profiles/${profile.id}/ask/`, "POST", { tool, entity }),
     );
   };
-  const greeting = `${t("greetingShort")}, ${communication?.preferred_name || profile.display_name}. ${t(
-    communication?.addressing === "formal"
-      ? "greetingFormal"
-      : communication?.addressing === "informal"
-        ? "greetingInformal"
-        : "greetingNeutral",
-  )}${communication?.sentence_length === "standard" ? ` ${t("greetingExtra")}` : ""}`;
   const speak = (text: string) => {
     if (
       !("speechSynthesis" in window) ||
@@ -68,44 +60,8 @@ export default function Ask({
   useEffect(() => () => window.speechSynthesis?.cancel(), []);
   return (
     <>
-      <section className="panel">
-        <span className="badge">{t("companionLocal")}</span>
-        <h2>{greeting}</h2>
-        <button onClick={() => speak(greeting)}>{t("readAnswer")}</button>
-        <button onClick={() => window.speechSynthesis?.cancel()}>
-          {t("stopSpeaking")}
-        </button>
-        {voiceError && <p role="alert">{t("noVoice")}</p>}
-        {communicationFailed && <p role="alert">{t("errorGeneric")}</p>}
-        <button onClick={() => setShowSupport(true)}>
-          {t("supportButton")}
-        </button>
-        {showSupport && (
-          <div aria-live="polite">
-            <p>
-              {t(
-                communication?.distress === "contact_caregiver"
-                  ? "supportCaregiverResponse"
-                  : "supportQuietResponse",
-              )}
-            </p>
-            <button
-              onClick={() =>
-                speak(
-                  t(
-                    communication?.distress === "contact_caregiver"
-                      ? "supportCaregiverResponse"
-                      : "supportQuietResponse",
-                  ),
-                )
-              }
-            >
-              {t("readAnswer")}
-            </button>
-            <p className="hint">{t("supportNoCall")}</p>
-          </div>
-        )}
-      </section>
+      {voiceError && <p role="alert">{t("noVoice")}</p>}
+      {communicationFailed && <p role="alert">{t("errorGeneric")}</p>}
       <p>{t("askIntro")}</p>
       <CompanionChat
         profile={profile}

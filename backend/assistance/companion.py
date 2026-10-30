@@ -10,6 +10,7 @@ from rest_framework.response import Response
 from rest_framework.throttling import UserRateThrottle
 
 from care.knowledge import KnowledgeUnavailable, exact_topic
+from care.consent import meta_allowed, synthetic_allowed
 from care.permissions import access, audit
 from care.serializers import COMMUNICATION_DEFAULTS
 
@@ -60,7 +61,8 @@ def source_excerpt(summary):
     return summary[: cut + 1 if cut >= 100 else MAX_SOURCE_CHARS]
 
 
-def companion_response(question, locale, preferences, topic):
+def companion_response(question, locale, preferences, topic, personal=False):
+    """[personal]: a real question under the Meta authorization given at sign-up; otherwise a synthetic test."""
     mode = os.environ.get("AINGEL_AI_MODE", "mock")
     if mode == "mock":
         return {
@@ -78,12 +80,18 @@ def companion_response(question, locale, preferences, topic):
     key = os.environ.get("MODEL_API_KEY", "").strip()
     if not key:
         raise CompanionUnavailable("meta_not_configured")
-    if os.environ.get("AINGEL_SYNTHETIC_TESTS_ONLY", "1") != "1":
+    if not personal and os.environ.get("AINGEL_SYNTHETIC_TESTS_ONLY", "1") != "1":
         raise CompanionUnavailable("privacy_review_required")
     language = "Spanish" if locale == "es-EC" else "English"
     rules = (
         f"You are AINGEL, a respectful, patient accessibility companion. Respond in {language}. "
-        "This is a synthetic test with no real personal data. Use the communication settings provided. "
+        + (
+            "The person authorized sending this question; you have no access to their personal data "
+            "(routines, messages, memories, health records) and must never claim to know them. "
+            if personal
+            else "This is a synthetic test with no real personal data. "
+        )
+        + "Use the communication settings provided. "
         "Be kind, support autonomy, avoid stereotypes, and do not claim to know the person. "
         "Ask at most one short clarifying question. Do not imply continuous monitoring or that you took an action. "
         "Never diagnose, prescribe, advise medicine or dosages, claim a risk is absent, or infer health status. "
@@ -95,30 +103,44 @@ def companion_response(question, locale, preferences, topic):
         "Communication settings (categorical, no personal text): "
         + json.dumps(preferences, ensure_ascii=True)
     )
-    input_data = {"synthetic_question": question}
+    input_data = {("question" if personal else "synthetic_question"): question}
     if topic:
         input_data["public_source_excerpt"] = source_excerpt(topic["summary"])
         input_data["source_excerpt_may_be_incomplete"] = (
             len(topic["summary"]) > MAX_SOURCE_CHARS
         )
+    return call_spark(rules, json.dumps(input_data, ensure_ascii=False))
+
+
+def call_spark(instructions, input_text, max_output_tokens=600, web_search=False, functions=None):
+    """One bounded Muse Spark call. Returns the text, web citations, an app action and latency; never stores or
+    logs content.
+
+    web_search adds Meta's built-in web_search tool: the model decides whether a search is needed.
+    functions: app actions the model may ask the phone to run ({name: (description, json schema)}); the first
+    valid call comes back as "action" and the app runs it (the server never acts on its own).
+    """
+    key = os.environ.get("MODEL_API_KEY", "").strip()
+    if not key:
+        raise CompanionUnavailable("meta_not_configured")
     payload = {
         "model": "muse-spark-1.3",
         "store": False,
         "reasoning": {"effort": "minimal"},
-        "max_output_tokens": 600,
-        "instructions": rules,
+        "max_output_tokens": max_output_tokens,
+        "instructions": instructions,
         "input": [
             {
                 "role": "user",
-                "content": [
-                    {
-                        "type": "input_text",
-                        "text": json.dumps(input_data, ensure_ascii=False),
-                    }
-                ],
+                "content": [{"type": "input_text", "text": input_text}],
             }
         ],
     }
+    tools = [{"type": "web_search"}] if web_search else []
+    for name, (description, parameters) in (functions or {}).items():
+        tools.append({"type": "function", "name": name, "description": description, "parameters": parameters})
+    if tools:
+        payload["tools"] = tools
     started = time.monotonic()
     try:
         with httpx.Client(timeout=45, follow_redirects=False) as client:
@@ -137,17 +159,32 @@ def companion_response(question, locale, preferences, topic):
         data = json.loads(body)
         if data.get("status") != "completed":
             raise CompanionUnavailable("companion_incomplete")
-        parts = [
-            part["text"]
+        texts = [
+            part
             for item in data.get("output", [])
-            if item.get("type") == "message"
+            # With web search, "commentary" messages narrate the search ("Busco…"); only the answer is kept.
+            if item.get("type") == "message" and item.get("phase") != "commentary"
             for part in item.get("content", [])
             if part.get("type") == "output_text"
         ]
+        parts = [part["text"] for part in texts]
+        citations = []
+        for part in texts:
+            for note in part.get("annotations") or []:
+                url = note.get("url") if isinstance(note, dict) and note.get("type") == "url_citation" else None
+                if isinstance(url, str) and url.startswith("https://") and len(url) <= 500 and url not in [c["url"] for c in citations]:
+                    citations.append({"url": url, "title": str(note.get("title") or url)[:200]})
+        searched = sum(1 for item in data.get("output", []) if item.get("type") == "web_search_call")
+        action = None
+        for item in data.get("output", []):
+            if item.get("type") == "function_call" and item.get("name") in (functions or {}):
+                arguments = json.loads(item.get("arguments") or "{}")
+                action = {"name": item["name"], "arguments": arguments if isinstance(arguments, dict) else {}}
+                break
         if any(not isinstance(part, str) for part in parts):
             raise ValueError("invalid_output")
         text = "\n".join(parts).strip()
-        if not text:
+        if not text and action is None:
             raise CompanionUnavailable("companion_empty_response")
         if len(text) > MAX_OUTPUT_CHARS:
             raise CompanionUnavailable("companion_output_too_large")
@@ -158,6 +195,9 @@ def companion_response(question, locale, preferences, topic):
         "mode": "meta",
         "model": "muse-spark-1.3",
         "text": text,
+        "citations": citations[:5],
+        "web_searches": searched,
+        "action": action,
         "latency_ms": round((time.monotonic() - started) * 1000),
     }
 
@@ -181,7 +221,10 @@ def chat(request, profile_id):
         or len(question) > MAX_INPUT_CHARS
     ):
         return Response({"error": "companion_request_invalid"}, status=400)
-    if data.get("synthetic") is not True:
+    # Synthetic declaration (tests) or the Meta authorization given at sign-up.
+    synthetic = synthetic_allowed(data.get("synthetic"))
+    personal = not synthetic and meta_allowed(profile, "conversation")
+    if os.environ.get("AINGEL_AI_MODE", "mock") == "meta" and not (synthetic or personal):
         return Response({"error": "privacy_review_required"}, status=400)
     has_title = "topic_title" in data
     if has_title != ("topic_lang" in data):
@@ -208,6 +251,7 @@ def chat(request, profile_id):
             profile.locale,
             categorical_preferences(profile.communication),
             topic,
+            personal=personal,
         )
     except CompanionUnavailable as error:
         return Response({"error": str(error)}, status=503)
@@ -216,5 +260,5 @@ def chat(request, profile_id):
         if topic
         else None
     )
-    audit(profile, request.user, "companion.synthetic_chat")
+    audit(profile, request.user, "companion.chat" if personal else "companion.synthetic_chat")
     return Response(result)

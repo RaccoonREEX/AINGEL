@@ -8,7 +8,9 @@ __pycache__/
 private-media/
 node_modules/
 dist/
+web/.export-hands3d/
 .gradle/
+.kotlin/
 local.properties
 *.apk
 *.jks
@@ -17,3 +19,26 @@ local.properties
 *.tsbuildinfo
 **/build/
 test-results/
+
+# Local data, model weights, private media and cryptographic material stay out
+# of version control. Approved samples require an explicit, reviewed exception.
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+*.sqlite3-*
+*.pem
+*.key
+*.p12
+*.pfx
+*.onnx
+*.safetensors
+*.pt
+*.pth
+*.ckpt
+datasets/
+*.wav
+*.mp3
+*.m4a
+*.mp4
+*.mov

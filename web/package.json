@@ -6,15 +6,19 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 5173 --strictPort",
     "build": "tsc -b && vite build",
-    "typecheck": "tsc -b"
+    "typecheck": "tsc -b",
+    "test:private-media": "node scripts/test-private-media.mjs",
+    "export:android-hands": "vite build --ssr scripts/export-hands3d.ts --outDir .export-hands3d --emptyOutDir && node .export-hands3d/export-hands3d.js"
   },
   "dependencies": {
     "react": "^19.3.1",
-    "react-dom": "^19.3.1"
+    "react-dom": "^19.3.1",
+    "three": "0.184.0"
   },
   "devDependencies": {
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/three": "0.184.1",
     "@vitejs/plugin-react": "latest",
     "prettier": "^3.6.2",
     "typescript": "latest",

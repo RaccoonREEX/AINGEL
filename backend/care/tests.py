@@ -272,6 +272,19 @@ class CareTests(TestCase):
                 ).data["found"]
             )
 
+    def test_routine_shows_who_organizes_it(self):
+        self.owner.first_name = "Lucía"
+        self.owner.save(update_fields=["first_name"])
+        data = {"category": "water", "title": "Water", "at": "11:00", "weekdays": [0, 1, 2, 3, 4, 5, 6]}
+        created = self.client.post(self.base + "routines/", data, format="json")
+        self.assertEqual(created.status_code, 201, created.data)
+        self.assertEqual(created.data["author_name"], "Lucía")
+        self.owner.first_name = ""
+        self.owner.save(update_fields=["first_name"])
+        listed = self.client.get(self.base + "routines/").data
+        rows = listed["items"] if isinstance(listed, dict) else listed
+        self.assertEqual(rows[0]["author_name"], "primary")
+
     def test_routine_weekdays_and_time_are_validated(self):
         data = {"category": "sleep", "title": "Sleep", "at": "22:00", "weekdays": []}
         self.assertEqual(

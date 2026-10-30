@@ -12,12 +12,25 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.ui.semantics.Role
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import java.time.ZoneId
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -51,80 +64,104 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
     Row(Modifier.fillMaxWidth()) { Checkbox(value, change); Text(stringResource(label), Modifier.padding(top = 12.dp)) }
 }
 
+private val Muted = Color(0xFF5A6780)
+
 @Composable fun AingelApp(model: AingelViewModel) {
     val s by model.state.collectAsStateWithLifecycle()
-    var screen by remember { mutableStateOf("home") }
+    var screen by rememberSaveable { mutableStateOf("home") }
+    var signsFrom by rememberSaveable { mutableStateOf("home") }  // the sign translator returns where it was opened from
+    var focus by remember { mutableStateOf(false) }
     val prefs = s.profile?.optJSONObject("preferences")
-    val dark = prefs?.optBoolean("high_contrast") == true
-    val typography = Typography().let { type -> if (prefs?.optBoolean("large_text") == true) type.copy(
+    val contrast = prefs?.optBoolean("high_contrast") == true
+    val largeText = prefs?.optBoolean("large_text") == true
+    val typography = Typography().let { type -> if (largeText) type.copy(
         bodyLarge = type.bodyLarge.copy(fontSize = type.bodyLarge.fontSize * 1.3f),
         bodyMedium = type.bodyMedium.copy(fontSize = type.bodyMedium.fontSize * 1.3f),
         labelLarge = type.labelLarge.copy(fontSize = type.labelLarge.fontSize * 1.2f)) else type }
     val context = LocalContext.current
-    // The app contains health data; block screenshots and recent-task thumbnails.
+    val shape = rememberWindowShape()  // outer screens show only AINGEL (AINGEL_Plegables 6a–6c)
     DisposableEffect(context) {
-        val window = (context as? Activity)?.window
-        window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        val activity = context as? Activity
+        val window = activity?.window
+        // Screens hold personal data, so capture is blocked. Debug builds started with the explicit
+        // QA extra (adb shell am start ... --ez aingel_qa_screenshots true) allow screenshots for design review.
+        val qa = BuildConfig.DEBUG && activity?.intent?.getBooleanExtra("aingel_qa_screenshots", false) == true
+        if (!qa) window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         onDispose { window?.clearFlags(WindowManager.LayoutParams.FLAG_SECURE) }
     }
-    fun navigate(target: String) { model.resetScreen(); screen = target }
-    BackHandler(screen != "home") { navigate("home") }
-    MaterialTheme(colorScheme = if (dark) darkColorScheme() else lightColorScheme(primary = Color(0xFF135D9D)), typography = typography) {
-        Surface(Modifier.fillMaxSize()) {
-            Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("AINGEL", style = MaterialTheme.typography.headlineLarge)
-                if (s.busy) { LinearProgressIndicator(Modifier.fillMaxWidth()); Text(stringResource(R.string.loading)) }
-                if (s.error != null) Text(stringResource(errorMessage(s.error!!)), color = MaterialTheme.colorScheme.error)
-                if (s.username == null) {
-                    key(s.mfaRequired) { Login(model, s) }
-                } else {
-                    Text(s.username!!)
-                    TextButton(onClick = { model.logout(); screen = "home" }, enabled = !s.busy) { Text(stringResource(R.string.logout)) }
-                    if (screen != "home") Action(R.string.back) { navigate("home") }
-                    if (screen == "security") SecurityScreen(model, s)
-                    else if (s.profile == null) Onboarding(model, s.busy)
-                    else {
-                        if (screen == "home") {
-                            s.profiles.forEach { profile -> OutlinedButton(onClick = { model.select(profile) }, enabled = !s.busy, modifier = Modifier.fillMaxWidth()) { Text(profile.optString("display_name")) } }
-                        }
-                        Text(s.profile!!.optString("display_name"), style = MaterialTheme.typography.headlineSmall)
-                        if (!s.profile!!.optBoolean("ready")) Text(stringResource(R.string.care_status))
-                        key(screen, s.profile!!.optString("id")) {
-                            when (screen) {
-                                "home" -> {
-                                    val entries = listOf("today" to R.string.today, "ask" to R.string.ask, "see" to R.string.see,
-                                        "hear" to R.string.hear, "remember" to R.string.remember, "messages" to R.string.messages,
-                                        "circle" to R.string.circle, "settings" to R.string.settings, "faces" to R.string.faces, "aac" to R.string.aac)
-                                    entries.filter { (route, _) -> when (route) {
-                                        "see" -> prefs?.optBoolean("visual_assistance", true) != false
-                                        "hear" -> prefs?.optBoolean("hearing_assistance", true) != false
-                                        "remember" -> prefs?.optBoolean("memory_assistance", true) != false
-                                        else -> true
-                                    } }.forEach { (route, label) -> Action(label, !s.busy) { navigate(route) } }
-                                    Action(R.string.security) { navigate("security") }
+    SideEffect { Ui.highContrast(contrast) }
+    // A new session (or the end of setup) always starts on the assistant, not on the last tab used.
+    LaunchedEffect(s.username) { if (s.username == null) screen = "home" }
+    fun navigate(target: String) { if (screen != target) { if (target == "signs") signsFrom = screen; model.resetScreen(); focus = false; screen = target } }
+    BackHandler(s.username != null && s.profile != null && screen != "home") { navigate(if (screen in setOf("today", "remember", "circle", "more")) "home" else if (screen == "signs") signsFrom else "more") }
+    MaterialTheme(colorScheme = lightColorScheme(primary = Ui.Navy, onPrimary = Color.White, background = Color.White,
+        surface = Color.White, onSurface = Ui.Text, outline = Ui.Control, secondaryContainer = Ui.Selected, error = Color(0xFF8B2630)),
+        typography = typography, shapes = Shapes(small = RoundedCornerShape(10.dp), medium = RoundedCornerShape(14.dp), large = RoundedCornerShape(16.dp))) {
+        CompositionLocalProvider(LocalTextScale provides if (largeText) 1.15f else 1f) {
+            val signedIn = s.username != null && s.profile != null
+            val cover = signedIn && shape == WindowShape.COVER
+            Scaffold(containerColor = if (cover) Color.Black else Color.White, contentWindowInsets = WindowInsets.safeDrawing, bottomBar = {
+                if (signedIn && !focus && !cover) {
+                    val tabs = listOf("home" to stringResource(R.string.nav_aingel), "today" to stringResource(R.string.nav_today),
+                        "remember" to stringResource(R.string.nav_remember), "circle" to stringResource(R.string.nav_circle), "more" to stringResource(R.string.nav_more))
+                        .filter { it.first != "remember" || prefs?.optBoolean("memory_assistance", true) != false }
+                    TabBar(tabs, if (screen in setOf("home", "today", "remember", "circle")) screen else if (screen == "signs" && signsFrom == "home") "home" else "more", ::navigate)
+                }
+            }) { padding ->
+                Box(Modifier.fillMaxSize().padding(padding)) {
+                    when {
+                        s.username == null -> AccessFlow(model, s)
+                        screen == "security" -> Legacy(R.string.security, s, { navigate(if (s.profile == null) "home" else "more") }) { SecurityScreen(model, s) }
+                        s.profile == null -> SetupFlow(model, s)
+                        else -> key(screen, s.profile!!.optString("id")) {
+                            when (if (cover) "home" else screen) {
+                                "home" -> HomeScreen(model, s, onToday = { navigate("today") }, onSigns = { navigate("signs") }, onFocus = { focus = it })
+                                "signs" -> SignTranslatorScreen(model, s) { navigate(signsFrom) }
+                                "today" -> TodayScreen(model, s)
+                                "more" -> MoreScreen(model, s, ::navigate)
+                                "sound" -> SoundSettingsScreen(model, s) { navigate("more") }
+                                "remember" -> Legacy(R.string.nav_remember, s, null) { MemoryScreen(model, s) }
+                                "circle" -> Legacy(R.string.circle, s, null) {
+                                    CircleScreen(model, s)
+                                    HorizontalDivider(color = Ui.Divider)
+                                    Text(stringResource(R.string.setup_invited), style = MaterialTheme.typography.titleMedium, color = Ui.Navy)
                                     AcceptInvitation(model, s.busy)
                                 }
-                                "today" -> RoutinesScreen(model, s)
-                                "ask" -> AskScreen(model, s)
-                                "remember" -> MemoryScreen(model, s)
-                                "messages" -> MessagesScreen(model, s)
-                                "circle" -> CircleScreen(model, s)
-                                "settings" -> SettingsScreen(model, s)
-                                "see" -> SeeScreen(model, s)
-                                "faces" -> FacesScreen(model, s)
-                                "hear" -> HearScreen(model, s)
-                                "aac" -> AacScreen(model)
+                                "profiles" -> Legacy(R.string.switch_profile, s, { navigate("more") }) {
+                                    s.profiles.forEach { profile -> OutlinedButton(onClick = { model.select(profile); navigate("home") }, enabled = !s.busy,
+                                        modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) { Text(profile.optString("display_name")) } }
+                                }
+                                "ask" -> Legacy(R.string.ui_more_tools, s, { navigate("more") }) { AskScreen(model, s) }
+                                "messages" -> Legacy(R.string.messages, s, { navigate("more") }) { MessagesScreen(model, s) }
+                                "settings" -> Legacy(R.string.settings, s, { navigate("more") }) { SettingsScreen(model, s) }
+                                "see" -> Legacy(R.string.see, s, { navigate("more") }) { SeeScreen(model, s) }
+                                "faces" -> Legacy(R.string.faces, s, { navigate("more") }) { FacesScreen(model, s) }
+                                "hear" -> Legacy(R.string.hear, s, { navigate("more") }) { HearScreen(model, s) }
+                                "aac" -> Legacy(R.string.aac, s, { navigate("more") }) { AacScreen(model) }
                             }
                         }
                     }
-                    if (s.profile == null && screen != "security") Action(R.string.security) { navigate("security") }
                 }
             }
         }
     }
 }
 
-private fun errorMessage(error: String): Int = when (error) {
+/** Screens outside the redesigned set keep their controls, under the new header (back + 26/600 title). */
+@Composable private fun Legacy(title: Int, s: MobileState, onBack: (() -> Unit)?, content: @Composable ColumnScope.() -> Unit) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 22.dp, end = 22.dp, top = 14.dp, bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (onBack != null) TextButton(onClick = onBack, modifier = Modifier.offset(x = (-12).dp)) { T("‹", 26, color = Ui.Navy) }
+            T(stringResource(title), 26, FontWeight.SemiBold, Ui.Navy, lineHeight = 1.2f)
+        }
+        if (s.busy) { LinearProgressIndicator(Modifier.fillMaxWidth(), color = Ui.Navy, trackColor = Ui.Divider); Text(stringResource(R.string.loading), color = Muted, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) }
+        if (s.error != null) Text(stringResource(errorMessage(s.error!!)), color = MaterialTheme.colorScheme.error, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+        content()
+    }
+}
+
+internal fun errorMessage(error: String): Int = when (error) {
     "device_permission_denied" -> R.string.permissions
     "permission_denied", "self_enrollment_requires_membership" -> R.string.access_denied
     "credentials_invalid" -> R.string.credentials_error
@@ -149,56 +186,14 @@ private fun errorMessage(error: String): Int = when (error) {
     "companion_input_invalid" -> R.string.companion_input_error
     "companion_response_invalid" -> R.string.companion_response_error
     "camera_unavailable", "microphone_unavailable" -> R.string.device_error
+    "private_test_consent_required" -> R.string.private_test_missing_consent
+    "privacy_review_required" -> R.string.private_test_server_denied
     else -> R.string.failed
 }
 
-@Composable private fun Login(model: AingelViewModel, s: MobileState) {
-    var username by remember { mutableStateOf("") }; var password by remember { mutableStateOf("") }
-    var code by remember { mutableStateOf("") }; var backend by remember { mutableStateOf(model.api.base) }
-    if (s.mfaRequired) {
-        Input(R.string.code, code, { code = it })
-        Action(R.string.verify, !s.busy && code.isNotBlank()) { model.verifyMfa(code); code = "" }
-        Action(R.string.cancel, !s.busy) { model.logout() }
-    } else {
-        Input(R.string.username, username, { username = it }); Input(R.string.password, password, { password = it }, true)
-        Action(R.string.sign_in, !s.busy && username.isNotBlank() && password.isNotEmpty()) { model.login(username, password); password = "" }
-        Action(R.string.register, !s.busy && username.isNotBlank() && password.isNotEmpty()) { model.login(username, password, true); password = "" }
-        Input(R.string.backend, backend, { backend = it })
-        Action(R.string.save, !s.busy) { model.configureBackend(backend) }
-    }
-}
 @Composable private fun AcceptInvitation(model: AingelViewModel, busy: Boolean) {
     var code by remember { mutableStateOf("") }
     Input(R.string.invite_code, code, { code = it }); Action(R.string.accept, !busy && code.isNotBlank()) { model.acceptInvite(code); code = "" }
-}
-@Composable private fun Onboarding(model: AingelViewModel, busy: Boolean) {
-    var name by remember { mutableStateOf("") }; Input(R.string.name, name, { name = it })
-    Action(R.string.profile, !busy && name.isNotBlank()) { model.createProfile(name) }
-    AcceptInvitation(model, busy)
-}
-@Composable private fun RoutinesScreen(model: AingelViewModel, s: MobileState) {
-    LaunchedEffect(Unit) { model.loadRows("routines") }
-    var title by remember { mutableStateOf("") }; var at by remember { mutableStateOf("08:00") }
-    var instructions by remember { mutableStateOf("") }; var category by remember { mutableStateOf("other") }
-    if (s.profile?.optJSONObject("permissions")?.optBoolean("configure") == true) {
-        Input(R.string.title, title, { title = it }); Input(R.string.at, at, { at = it })
-        val categories = listOf("sleep" to R.string.sleep, "wake" to R.string.wake, "medicine" to R.string.medicine,
-            "bathroom" to R.string.bathroom, "meal" to R.string.meal, "water" to R.string.water, "appointment" to R.string.appointment, "other" to R.string.other)
-        var expanded by remember { mutableStateOf(false) }
-        Box {
-            OutlinedButton(onClick = { expanded = true }) { Text(stringResource(categories.first { it.first == category }.second)) }
-            DropdownMenu(expanded, { expanded = false }) { categories.forEach { (value, label) -> DropdownMenuItem(text = { Text(stringResource(label)) }, onClick = { category = value; expanded = false }) } }
-        }
-        Input(R.string.instructions, instructions, { instructions = it }); Text(stringResource(R.string.daily))
-        Action(R.string.add, !s.busy && title.isNotBlank() && Regex("([01]\\d|2[0-3]):[0-5]\\d").matches(at)) { model.addRoutine(title, at, category, instructions); title = ""; instructions = "" }
-    }
-    if (s.rows.isEmpty()) Text(stringResource(R.string.empty))
-    s.rows.forEach { row ->
-        HorizontalDivider(); Text(row.optString("title") + " · " + row.optString("at"))
-        Text(row.optString("instructions")); Text(if (row.optBoolean("confirmed_today")) "✓" else "○")
-        Action(R.string.done, !s.busy) { model.confirmRoutine(row) }
-        if (s.profile?.optJSONObject("permissions")?.optBoolean("configure") == true) Action(R.string.delete, !s.busy) { model.deleteRoutine(row.getString("id")) }
-    }
 }
 @Composable private fun AskScreen(model: AingelViewModel, s: MobileState) {
     var entity by remember { mutableStateOf("") }
@@ -354,6 +349,20 @@ internal fun verifiedMedlinePlusUrl(raw: String): String? {
         val updated = JSONObject(profile.optJSONObject("preferences")?.toString() ?: "{}").put("large_text", large).put("high_contrast", contrast).put("voice_output", voice)
         model.savePreferences(name, allergies, notes, updated)
     }
+    if (profile.optString("role") == "owner") {
+        val consents = profile.optJSONObject("consents")
+        var camera by remember(profile.optString("id"), consents?.toString()) { mutableStateOf(consents?.optBoolean("camera") == true) }
+        var microphone by remember(profile.optString("id"), consents?.toString()) { mutableStateOf(consents?.optBoolean("microphone") == true) }
+        var meta by remember(profile.optString("id"), consents?.toString()) { mutableStateOf(consents?.optBoolean("meta_data") == true) }
+        Text(stringResource(R.string.private_test_title))
+        Text(stringResource(R.string.private_test_explanation))
+        Check(R.string.ui_auth_camera, camera) { camera = it }
+        Check(R.string.ui_auth_mic, microphone) { microphone = it }
+        Check(R.string.ui_auth_meta, meta) { meta = it }
+        Action(R.string.private_test_save_consent, !s.busy) { model.saveMediaConsents(camera, microphone, meta) }
+        Text(stringResource(R.string.private_test_declaration))
+        Check(R.string.private_test_enable, s.privateTestProfileId == profile.optString("id")) { model.setPrivateTest(it) }
+    }
 }
 @Composable private fun CircleScreen(model: AingelViewModel, s: MobileState) {
     LaunchedEffect(Unit) { model.loadCircle() }
@@ -395,14 +404,15 @@ internal fun verifiedMedlinePlusUrl(raw: String): String? {
     }
 }
 @Composable private fun SeeScreen(model: AingelViewModel, s: MobileState) {
-    var synthetic by remember { mutableStateOf(false) }; var objectName by remember { mutableStateOf("") }
-    LaunchedEffect(s.image) { synthetic = false }
-    Text(stringResource(R.string.synthetic_only)); PhotoInput(model, s)
-    Action(R.string.fixture, !s.busy) { model.setImage(syntheticPhoto()) }
-    Check(R.string.synthetic_confirm, synthetic) { synthetic = it }
-    Action(R.string.describe, !s.busy && s.image != null && synthetic) { model.analyze(true) }
+    var objectName by remember { mutableStateOf("") }
+    // Real photos use the sign-up authorization; only the included shapes image is a synthetic test.
+    val shapes = remember { syntheticPhoto() }
+    val fixture = s.image?.contentEquals(shapes) == true
+    Text(stringResource(if (s.privateTestProfileId != null) R.string.private_test_active else R.string.synthetic_only)); PhotoInput(model, s)
+    Action(R.string.fixture, !s.busy) { model.setImage(shapes) }
+    Action(R.string.describe, !s.busy && s.image != null) { model.analyze(fixture) }
     Input(R.string.object_prompt, objectName, { objectName = it })
-    Action(R.string.locate, !s.busy && s.image != null && synthetic && objectName.isNotBlank()) { model.analyze(true, objectName) }
+    Action(R.string.locate, !s.busy && s.image != null && objectName.isNotBlank()) { model.analyze(fixture, objectName) }
     s.result?.let { result ->
         val description = result.optString("text")
         if (description.isNotBlank()) { Text(description); Action(R.string.read) { model.speak(description) } }
@@ -501,7 +511,7 @@ internal fun verifiedMedlinePlusUrl(raw: String): String? {
     }
 }
 @Composable private fun HearScreen(model: AingelViewModel, s: MobileState) {
-    val context = LocalContext.current; var consent by remember { mutableStateOf(false) }
+    val context = LocalContext.current
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { allowed -> if (allowed) model.startCaptions() else model.reportError("device_permission_denied") }
     DisposableEffect(Unit) { onDispose { model.stopCaptions() } }
     val language = when (s.communication?.optString("sign_language")) {
@@ -530,9 +540,9 @@ internal fun verifiedMedlinePlusUrl(raw: String): String? {
             key(s.signVideo!!) { SignVideo(s.signVideo!!) }
         }
     } else Text(stringResource(R.string.sign_unsupported))
-    Text(stringResource(R.string.mic_intro)); Check(R.string.synthetic_confirm, consent) { consent = it }
+    Text(stringResource(R.string.mic_intro))
     Text(stringResource(when (s.captionStatus) { "recording" -> R.string.recording; "connecting" -> R.string.connecting; "finishing" -> R.string.finishing; else -> R.string.idle }))
-    Action(R.string.start, consent && s.captionStatus == "idle") {
+    Action(R.string.start, s.captionStatus == "idle") {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) model.startCaptions() else permission.launch(Manifest.permission.RECORD_AUDIO)
     }
     Action(R.string.stop, s.captionStatus != "idle") { model.finishCaptions() }

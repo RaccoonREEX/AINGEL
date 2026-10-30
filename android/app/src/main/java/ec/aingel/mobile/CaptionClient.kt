@@ -34,7 +34,8 @@ class CaptionClient(private val api: ApiClient, private val scope: CoroutineScop
     private var stopping = false
 
     @Synchronized
-    fun start(locale: String) {
+    /** [profileId]: the server checks its sign-up authorization (microphone + Meta). */
+    fun start(locale: String, profileId: String, privateTest: Boolean = false) {
         close(); val current = ++generation; stopping = false
         turns = emptyList(); onTurns(turns); onStatus("connecting")
         val request = Request.Builder().url(api.base.replaceFirst("http", "ws") + "ws/captions/")
@@ -43,7 +44,7 @@ class CaptionClient(private val api: ApiClient, private val scope: CoroutineScop
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 synchronized(this@CaptionClient) {
                     if (current != generation) { webSocket.cancel(); return }
-                    webSocket.send(JSONObject().put("type", "start").put("locale", locale).put("synthetic", true).toString())
+                    webSocket.send(captionStartPayload(locale, profileId, privateTest).toString())
                 }
             }
             override fun onMessage(webSocket: WebSocket, text: String) {

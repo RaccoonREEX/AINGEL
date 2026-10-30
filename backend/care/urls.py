@@ -2,6 +2,8 @@ from django.urls import path
 
 from . import auth, views, mfa, faces, knowledge, signs
 from assistance.companion import chat
+from assistance.conversation import conversation
+from assistance.gloss import gloss
 
 urlpatterns = [
     path("auth/session/", auth.session),
@@ -19,7 +21,10 @@ urlpatterns = [
     path("profiles/<uuid:profile_id>/communication/", views.communication),
     path("profiles/<uuid:profile_id>/resources/search/", knowledge.resources),
     path("profiles/<uuid:profile_id>/companion/chat/", chat),
+    path("profiles/<uuid:profile_id>/conversation/", conversation),
+    path("profiles/<uuid:profile_id>/signs/catalog/", signs.catalog),
     path("profiles/<uuid:profile_id>/signs/lookup/", signs.lookup),
+    path("profiles/<uuid:profile_id>/signs/gloss/", gloss),
     path("profiles/<uuid:profile_id>/signs/clips/<str:clip_id>/", signs.clip_content),
     path("profiles/<uuid:profile_id>/circle/", views.circle),
     path("profiles/<uuid:profile_id>/circle/<uuid:member_id>/", views.membership),

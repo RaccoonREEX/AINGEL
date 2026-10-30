@@ -1,4 +1,8 @@
-"""Local, reviewed whole-phrase signs. No machine translation or remote video."""
+"""Local whole-phrase sign clips. No machine translation or remote video.
+
+A clip is either reviewed by a named person, or an annotated corpus phrase that is explicitly marked
+as not independently validated ("corpus_annotation"); the client shows that status with the clip.
+"""
 
 from datetime import date
 import hashlib
@@ -39,7 +43,20 @@ def sign_root():
 
 def normalize_phrase(value):
     # Preserve punctuation, accents, negation, and word order. This is not a translation.
-    return " ".join(unicodedata.normalize("NFKC", value).casefold().split())
+    # Only a final full stop is ignored: speech recognisers add or omit it arbitrarily.
+    return " ".join(unicodedata.normalize("NFKC", value).casefold().split()).removesuffix(".").rstrip()
+
+
+def valid_crop(value):
+    return (
+        isinstance(value, list)
+        and len(value) == 4
+        and all(type(x) in (int, float) and 0 <= x <= 1 for x in value)
+        and value[2] > 0
+        and value[3] > 0
+        and value[0] + value[2] <= 1
+        and value[1] + value[3] <= 1
+    )
 
 
 def valid_text(value, maximum):
@@ -108,13 +125,25 @@ def load_catalog():
                 "filename",
                 "sha256",
                 "reviewed",
-                "reviewer",
-                "reviewed_at",
                 "source",
                 "attribution",
                 "license",
             }
-            if not required.issubset(clip) or set(clip) - (required | {"source_url"}):
+            if clip.get("reviewed") is True:
+                required |= {"reviewer", "reviewed_at"}
+                if not valid_text(clip.get("reviewer"), 200):
+                    raise ValueError
+                date.fromisoformat(clip.get("reviewed_at", ""))
+            elif clip.get("reviewed") is False and clip.get("validation") == "corpus_annotation":
+                # Corpus label only: allowed, but never presented as reviewed.
+                required |= {"validation", "validation_note"}
+                if not valid_text(clip.get("validation_note"), 300):
+                    raise ValueError
+            else:
+                raise ValueError
+            if not required.issubset(clip) or set(clip) - (required | {"source_url", "crop"}):
+                raise ValueError
+            if "crop" in clip and not valid_crop(clip["crop"]):
                 raise ValueError
             identifier, digest = clip.get("id"), clip.get("sha256")
             if (
@@ -131,11 +160,6 @@ def load_catalog():
                 clip.get("text"), 300
             ):
                 raise ValueError
-            if clip.get("reviewed") is not True or not valid_text(
-                clip.get("reviewer"), 200
-            ):
-                raise ValueError
-            date.fromisoformat(clip.get("reviewed_at", ""))
             if not all(
                 valid_text(clip.get(field), limit)
                 for field, limit in (
@@ -155,6 +179,16 @@ def load_catalog():
         return clips
     except (ValueError, TypeError, UnicodeError, KeyError) as exc:
         raise InvalidCatalog from exc
+
+
+PUBLIC_FIELDS = ("id", "language", "source", "attribution", "license", "source_url", "crop")
+
+
+def public_clip(clip):
+    data = {key: clip.get(key) for key in PUBLIC_FIELDS}
+    data["validation"] = "reviewed" if clip["reviewed"] else clip["validation"]
+    data["validation_note"] = clip.get("validation_note")
+    return data
 
 
 def read_clip(clip):
@@ -212,21 +246,23 @@ def lookup(request, profile_id):
         read_clip(clip)
     except InvalidCatalog:
         return Response({"error": "sign_catalog_invalid"}, status=503)
+    return Response({"available": True, "clip": public_clip(clip)})
+
+
+@api_view(["GET"])
+@throttle_classes([SignRate])
+def catalog(request, profile_id):
+    """Phrases that can actually be shown, per language, so the screen never implies more coverage."""
+    access(request.user, profile_id)
+    language = request.query_params.get("language", "")
+    if language not in LANGUAGES:
+        return Response({"error": "sign_request_invalid"}, status=400)
+    try:
+        clips = [clip for clip in load_catalog() if clip["language"] == language]
+    except InvalidCatalog:
+        return Response({"error": "sign_catalog_invalid"}, status=503)
     return Response(
-        {
-            "available": True,
-            "clip": {
-                key: clip.get(key)
-                for key in (
-                    "id",
-                    "language",
-                    "source",
-                    "attribution",
-                    "license",
-                    "source_url",
-                )
-            },
-        }
+        {"language": language, "phrases": [{**public_clip(c), "text": c["text"]} for c in clips]}
     )
 
 

@@ -4,6 +4,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from django.utils import timezone
 from rest_framework import serializers
 
+from .consent import clean_consents
 from .models import Memory, Message, Profile, Routine
 
 COMMUNICATION_DEFAULTS = {
@@ -62,8 +63,15 @@ class ProfileSerializer(serializers.ModelSerializer):
             "caregiver_count",
             "ready",
             "face_recognition_enabled",
+            "consents",
         ]
         read_only_fields = ["face_recognition_enabled"]
+
+    def validate_consents(self, value):
+        cleaned = clean_consents(value, self.context["request"].user)
+        if cleaned is None:
+            raise serializers.ValidationError("consents_invalid")
+        return cleaned
 
     def get_role(self, obj):
         return (
@@ -121,6 +129,8 @@ class ProfileSerializer(serializers.ModelSerializer):
 class RoutineSerializer(serializers.ModelSerializer):
     weekdays = serializers.JSONField(required=True)
     author = serializers.CharField(source="created_by.username", read_only=True)
+    # Display name of who organizes the routine (the cared-for person sees it read-only).
+    author_name = serializers.SerializerMethodField()
     confirmed_today = serializers.SerializerMethodField()
     confirmation_actor = serializers.SerializerMethodField()
 
@@ -135,9 +145,14 @@ class RoutineSerializer(serializers.ModelSerializer):
             "instructions",
             "active",
             "author",
+            "author_name",
             "confirmed_today",
             "confirmation_actor",
         ]
+
+    def get_author_name(self, obj):
+        user = obj.created_by
+        return (user.get_full_name() or user.first_name or user.username).strip()
 
     def validate_weekdays(self, value):
         if (

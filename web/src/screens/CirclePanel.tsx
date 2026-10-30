@@ -95,7 +95,7 @@ export default function CirclePanel(props: WithProfile & { version: number }) {
                 );
                 setCode(result.code);
                 await refresh();
-              });
+              }, "errorTarget");
             }}
           >
             <div className="two-col">

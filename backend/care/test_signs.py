@@ -165,3 +165,45 @@ class ReviewedSignsTests(TestCase):
         self.assertEqual(
             self.client.get(self.base + "clips/unknown-id/").status_code, 404
         )
+
+
+class CorpusPhraseTests(ReviewedSignsTests):
+    """Corpus phrases are usable only with an explicit 'not independently validated' status."""
+
+    def corpus_clip(self):
+        self.install_fixture()
+        clip = {k: v for k, v in self.clip.items() if k not in ("reviewer", "reviewed_at")}
+        clip.update(
+            reviewed=False,
+            validation="corpus_annotation",
+            validation_note="Frase del manifiesto del corpus; sin validación independiente.",
+            text="Yo leeré un libro en mi casa",
+            crop=[0.22, 0.18, 0.56, 0.82],
+        )
+        self.write_catalog([clip])
+        return clip
+
+    def test_corpus_phrase_keeps_its_status_and_ignores_final_full_stop(self):
+        self.corpus_clip()
+        response = self.lookup("yo leeré un libro en mi casa.")
+        self.assertTrue(response.data["available"])
+        self.assertEqual(response.data["clip"]["validation"], "corpus_annotation")
+        self.assertEqual(response.data["clip"]["crop"], [0.22, 0.18, 0.56, 0.82])
+        self.assertEqual(self.lookup("yo leeré un libro").data, {"available": False})
+        self.assertEqual(self.lookup("¿yo leeré un libro en mi casa?").data, {"available": False})
+        listing = self.client.get(self.base + "catalog/?language=lsec")
+        self.assertEqual([p["text"] for p in listing.data["phrases"]], ["Yo leeré un libro en mi casa"])
+        self.assertEqual(self.client.get(self.base + "catalog/?language=asl").data["phrases"], [])
+        self.assertEqual(self.client.get(self.base + "catalog/?language=other").status_code, 400)
+
+    def test_corpus_status_cannot_be_mixed_or_left_out(self):
+        clip = self.corpus_clip()
+        for invalid in [
+            {**clip, "validation": "reviewed"},
+            {**clip, "validation_note": ""},
+            {**clip, "reviewer": "Someone"},
+            {**clip, "crop": [0.5, 0, 0.6, 1]},
+            {k: v for k, v in clip.items() if k != "validation"},
+        ]:
+            self.write_catalog([invalid])
+            self.assertEqual(self.lookup("Yo leeré un libro en mi casa").status_code, 503)

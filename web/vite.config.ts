@@ -9,5 +9,6 @@ export default defineConfig({
       "/ws": { target: "ws://127.0.0.1:8010", ws: true },
     },
   },
-  build: { outDir: "dist" },
+  // Keep @license headers (three.js MIT) in the minified chunks.
+  build: { outDir: "dist", rolldownOptions: { output: { comments: { legal: true } } } },
 });

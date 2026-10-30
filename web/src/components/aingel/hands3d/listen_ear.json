@@ -1,0 +1,107 @@
+{
+  "id": "listen_ear",
+  "label": "Escuchando (manos junto a los oídos)",
+  "status": "aingel-ui-gesture",
+  "source": null,
+  "note": "Gesto de interfaz de AINGEL, no es una seña de LSEC.",
+  "keyframes": [
+    {
+      "t": 0.7,
+      "ease": "easeOutCubic",
+      "right": {
+        "position": [
+          -1.35,
+          -0.25,
+          0.9
+        ],
+        "rotation": [
+          0,
+          55,
+          12
+        ],
+        "fingers": {
+          "thumb": {
+            "metacarpal": [
+              22,
+              0,
+              12
+            ],
+            "proximal": 12,
+            "distal": 10
+          },
+          "index": {
+            "proximal": [
+              28,
+              0,
+              -2
+            ],
+            "intermediate": 34,
+            "distal": 16
+          },
+          "middle": {
+            "proximal": [
+              30,
+              0,
+              0
+            ],
+            "intermediate": 36,
+            "distal": 18
+          },
+          "ring": {
+            "proximal": [
+              32,
+              0,
+              2
+            ],
+            "intermediate": 38,
+            "distal": 18
+          },
+          "pinky": {
+            "proximal": [
+              34,
+              0,
+              4
+            ],
+            "intermediate": 40,
+            "distal": 20
+          }
+        }
+      },
+      "left": "mirror"
+    },
+    {
+      "t": 1.6,
+      "ease": "easeInOutSine",
+      "right": {
+        "position": [
+          -1.3,
+          -0.2,
+          0.9
+        ],
+        "rotation": [
+          0,
+          60,
+          10
+        ]
+      },
+      "left": "mirror"
+    },
+    {
+      "t": 2.5,
+      "ease": "easeInOutSine",
+      "right": {
+        "position": [
+          -1.35,
+          -0.25,
+          0.9
+        ],
+        "rotation": [
+          0,
+          55,
+          12
+        ]
+      },
+      "left": "mirror"
+    }
+  ]
+}

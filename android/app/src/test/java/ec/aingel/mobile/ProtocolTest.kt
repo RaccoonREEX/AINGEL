@@ -61,6 +61,7 @@ class ProtocolTest {
         assertEquals("request_invalid", safeApiError(JSONObject().put("detail", "")))
     }
     @Test fun releaseRequiresHttps() {
+        assertEquals(DEFAULT_BACKEND, validBackend(DEFAULT_BACKEND, false))
         assertNull(validBackend("http://127.0.0.1:8010/", false))
         assertNull(validBackend("http://example.com/", false))
         assertEquals("https://care.example/", validBackend("https://care.example", false))
@@ -70,6 +71,13 @@ class ProtocolTest {
         assertNotNull(validBackend("http://10.0.2.2:8010/", true))
         assertNull(validBackend("http://192.168.1.4/", true))
         assertNull(validBackend("http://localhost.attacker.test/", true))
+    }
+    @Test fun onlyLegacyCleartextLoopbackServersAreMigrated() {
+        listOf("http://127.0.0.1:8010/", "http://localhost:8010/", "http://10.0.2.2:8010/")
+            .forEach { assertTrue(isLegacyLoopbackBackend(it)) }
+        listOf(null, "https://aingel.mapatechstudio.com/", "https://localhost/", "https://other.example/",
+            "http://localhost.attacker.test/", "http://192.168.1.1/")
+            .forEach { assertFalse(isLegacyLoopbackBackend(it)) }
     }
     @Test fun backendRejectsEmbeddedSecretsOrPaths() {
         listOf("https://user:password@care.example/", "https://care.example/?token=secret",

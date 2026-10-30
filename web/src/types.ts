@@ -21,7 +21,10 @@ export type Profile = {
   };
   caregiver_count: number;
   ready: boolean;
+  consents?: Consents;
 };
+/** Authorizations given at sign-up (backend care.consent). */
+export type Consents = { camera?: boolean; microphone?: boolean; meta_data?: boolean; version?: string; granted_at?: string; granted_by?: string };
 export type Routine = {
   id: string;
   category: string;

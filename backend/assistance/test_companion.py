@@ -74,10 +74,14 @@ class CompanionTests(TestCase):
         self.assertEqual(response["Cache-Control"], "no-store")
 
     def test_explicit_synthetic_assertion_and_bounded_single_request(self):
+        meta = {"AINGEL_AI_MODE": "meta", "MODEL_API_KEY": "synthetic-key", "AINGEL_SYNTHETIC_TESTS_ONLY": "1"}
+        with patch.dict(os.environ, meta), patch("assistance.companion.httpx.Client") as provider:
+            # Meta mode without sign-up authorization: a real question needs the synthetic declaration.
+            for value in ({"text": "Synthetic"}, {"text": "Synthetic", "synthetic": False}, {"text": "Synthetic", "synthetic": 1}):
+                cache.clear()
+                self.assertEqual(self.client.post(self.path, value, format="json").status_code, 400)
+            provider.assert_not_called()
         invalid = [
-            {"text": "Synthetic"},
-            {"text": "Synthetic", "synthetic": False},
-            {"text": "Synthetic", "synthetic": 1},
             {"text": " ", "synthetic": True},
             {"text": "x" * 1001, "synthetic": True},
             {"text": ["synthetic"], "synthetic": True},
@@ -102,7 +106,7 @@ class CompanionTests(TestCase):
     @patch("assistance.companion.httpx.Client")
     def test_server_privacy_gate_stops_provider(self, provider):
         response = self.post(text="Synthetic", synthetic=True)
-        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.status_code, 400)
         self.assertEqual(response.data["error"], "privacy_review_required")
         provider.assert_not_called()
 
@@ -319,3 +323,27 @@ class CompanionTests(TestCase):
             response = self.post(text="Synthetic", synthetic=True)
             self.assertEqual(response.status_code, 503)
             self.assertEqual(response.data["error"], error)
+
+
+class WebSearchReplyTests(TestCase):
+    """Shape of a Meta Responses reply with web_search (observed 29-10-2026): commentary, search, final answer."""
+
+    @patch.dict(os.environ, {"MODEL_API_KEY": "synthetic-key"})
+    @patch("assistance.companion.httpx.Client")
+    def test_only_the_answer_is_kept_with_its_https_citations(self, client):
+        from .companion import call_spark
+
+        stream = client.return_value.__enter__.return_value.stream.return_value.__enter__.return_value
+        cite = {"type": "url_citation", "url": "https://alabado.org/home/", "title": "Museo Casa del Alabado", "start_index": 0, "end_index": 5}
+        stream.iter_bytes.return_value = [json.dumps({"status": "completed", "output": [
+            {"type": "reasoning", "encrypted_content": "x", "summary": []},
+            {"type": "message", "phase": "commentary", "content": [{"type": "output_text", "text": "Busco el horario.", "annotations": []}]},
+            {"type": "web_search_call", "status": "completed", "action": {"type": "search", "query": "q"}},
+            {"type": "message", "content": [{"type": "output_text", "text": "Abre de 10:00 a 17:30.",
+                                              "annotations": [cite, cite, {"type": "url_citation", "url": "javascript:alert(1)", "title": "x"}]}]},
+        ]}).encode()]
+        result = call_spark("rules", "{}", web_search=True)
+        self.assertEqual(result["text"], "Abre de 10:00 a 17:30.")
+        self.assertEqual(result["citations"], [{"url": "https://alabado.org/home/", "title": "Museo Casa del Alabado"}])
+        self.assertEqual(result["web_searches"], 1)
+        self.assertEqual(client.return_value.__enter__.return_value.stream.call_args.kwargs["json"]["tools"], [{"type": "web_search"}])

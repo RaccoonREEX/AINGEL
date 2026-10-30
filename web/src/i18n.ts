@@ -5,14 +5,14 @@ export const es = {
   supportCaregiverResponse:
     "Si deseas ayuda, pide apoyo a tu cuidador o a alguien de confianza.",
   supportNoCall: "Este botón no realiza llamadas ni envía alertas.",
-  chatTitle: "Conversación de prueba con AINGEL",
+  chatTitle: "Conversación con AINGEL",
   chatIntro:
-    "Haz una pregunta de prueba. Puedes elegir una fuente educativa en la sección de abajo. Cada respuesta se procesa de manera independiente.",
+    "Haz una pregunta. Puedes elegir una fuente educativa en la sección de abajo. Cada respuesta se procesa de manera independiente.",
   chatPrivacy:
-    "Usa únicamente ejemplos inventados, sin nombres ni datos personales o clínicos. Se enviarán la pregunta, opciones generales de comunicación y, si la eliges, una fuente pública a Meta. No se envían recuerdos ni notas del perfil.",
+    "La pregunta, las opciones generales de comunicación y, si la eliges, una fuente pública se envían a Meta con la autorización dada al crear la cuenta. No se envían recuerdos ni notas del perfil.",
   chatConsent:
     "Confirmo que mi pregunta es sintética y autorizo enviarla a Meta para esta prueba.",
-  chatQuestion: "Pregunta sintética",
+  chatQuestion: "Tu pregunta",
   chatSend: "Preguntar a AINGEL",
   chatUseSource: "Usar esta fuente en la pregunta",
   chatSelectedSource: "Fuente seleccionada",
@@ -80,7 +80,7 @@ export const es = {
   hearIntro:
     "Subtítulos con Meta Voice Transcribe. El servidor envía el audio a Meta y no lo guarda localmente.",
   hearPrivacy:
-    "Fase de pruebas: reproduce únicamente voz sintética sin nombres ni información personal. Los créditos activos pueden permitir uso del contenido para mejorar productos.",
+    "Se envía el audio real del micrófono a Meta con la autorización dada al crear la cuenta. Mientras la cuenta use créditos gratuitos, Meta advierte que puede usar el contenido para mejorar sus productos. Avisa a quienes hablan cerca de que se está subtitulando.",
   hearConsent:
     "Voy a reproducir voz sintética sin datos personales y autorizo enviarla a Meta.",
   hearStart: "Iniciar subtítulos",
@@ -232,7 +232,7 @@ export const es = {
     "Solo información de referencia; AINGEL no llama ni envía alertas automáticamente.",
   preferences: "Cómo prefieres recibir ayuda",
   privacyLocal:
-    "Los datos del perfil se guardan en el servidor local. Las pruebas sintéticas indican qué contenido envían a Meta.",
+    "Los datos del perfil se guardan en el servidor local. Lo que se envía a Meta depende de las autorizaciones de abajo.",
   visual_assistance: "Ayuda visual",
   hearing_assistance: "Apoyo con subtítulos",
   memory_assistance: "Apoyo para recordar",
@@ -308,8 +308,8 @@ export const es = {
   seeIntro:
     "Describe una imagen con Meta Muse Spark 1.3 y recibe una respuesta breve.",
   syntheticOnly:
-    "Usa únicamente imágenes sintéticas o de prueba sin datos personales. Los créditos activos pueden permitir el uso del contenido para mejorar productos.",
-  chooseImage: "Seleccionar imagen de prueba",
+    "La imagen de formas incluida es una prueba sintética. Para probar una imagen propia en el entorno privado, confirma su uso antes de cada envío y habilita la cámara y Meta en Personalizar. El servidor decide si permite la prueba.",
+  chooseImage: "Seleccionar imagen",
   useFixture: "Usar imagen sintética incluida",
   syntheticConsent:
     "Confirmo que esta imagen es sintética y no contiene datos personales.",
@@ -338,6 +338,8 @@ export const es = {
     "No se encontró esa cuenta. El familiar debe crear su propia cuenta antes de ser invitado.",
   errorImage: "Usa una imagen JPEG, PNG o WebP válida de hasta 5 MiB.",
   errorMeta: "Meta no pudo completar el análisis. Inténtalo de nuevo.",
+  errorPrivacy:
+    "El servidor no autorizó esta solicitud. Revisa los permisos en Personalizar y la confirmación de prueba, si corresponde.",
   errorSession: "Tu sesión no permite esta acción. Vuelve a iniciar sesión.",
   errorFuture:
     "La fecha de observación debe estar dentro de los últimos 7 días y no puede estar en el futuro.",
@@ -350,14 +352,14 @@ const en: Record<keyof typeof es, string> = {
   supportCaregiverResponse:
     "If you want help, ask your caregiver or someone you trust.",
   supportNoCall: "This button does not make calls or send alerts.",
-  chatTitle: "Test conversation with AINGEL",
+  chatTitle: "Conversation with AINGEL",
   chatIntro:
-    "Ask a test question. You can choose an educational source below. Each answer is handled independently.",
+    "Ask a question. You can choose an educational source below. Each answer is handled independently.",
   chatPrivacy:
-    "Use fictional examples only, without names or personal or clinical details. Your question, general communication settings and any selected public source will be sent to Meta. Profile memories and notes are not sent.",
+    "Your question, general communication settings and any selected public source are sent to Meta under the authorization given when the account was created. Profile memories and notes are not sent.",
   chatConsent:
     "I confirm my question is synthetic and consent to sending it to Meta for this test.",
-  chatQuestion: "Synthetic question",
+  chatQuestion: "Your question",
   chatSend: "Ask AINGEL",
   chatUseSource: "Use this source in the question",
   chatSelectedSource: "Selected source",
@@ -425,7 +427,7 @@ const en: Record<keyof typeof es, string> = {
   hearIntro:
     "Captions with Meta Voice Transcribe. The server sends audio to Meta and does not store it locally.",
   hearPrivacy:
-    "Test phase: play only synthetic speech without names or personal information. Active credits may allow content use for product improvement.",
+    "Real microphone audio is sent to Meta under the authorization given when the account was created. While the account uses free credits, Meta warns it may use the content to improve its products. Let people speaking nearby know they are being captioned.",
   hearConsent:
     "I will play synthetic speech without personal information and consent to sending it to Meta.",
   hearStart: "Start captions",
@@ -577,7 +579,7 @@ const en: Record<keyof typeof es, string> = {
     "Reference only; AINGEL does not call or send alerts automatically.",
   preferences: "How you prefer to receive assistance",
   privacyLocal:
-    "Profile data is stored on the local server. Synthetic tests indicate which content they send to Meta.",
+    "Profile data is stored on the local server. What is sent to Meta depends on the authorizations below.",
   visual_assistance: "Visual assistance",
   hearing_assistance: "Caption support",
   memory_assistance: "Memory support",
@@ -651,8 +653,8 @@ const en: Record<keyof typeof es, string> = {
   seeIntro:
     "Describe an image with Meta Muse Spark 1.3 and receive a short response.",
   syntheticOnly:
-    "Use only synthetic test images without personal information. Active credits may allow content use for product improvement.",
-  chooseImage: "Choose test image",
+    "The included shapes image is a synthetic test. To test your own image in the private environment, confirm each submission and enable camera and Meta in Personalize. The server decides whether the test is allowed.",
+  chooseImage: "Choose image",
   useFixture: "Use included synthetic image",
   syntheticConsent:
     "I confirm this image is synthetic and contains no personal information.",
@@ -681,6 +683,8 @@ const en: Record<keyof typeof es, string> = {
     "Account not found. Your family member must create their own account before being invited.",
   errorImage: "Use a valid JPEG, PNG or WebP image up to 5 MiB.",
   errorMeta: "Meta could not complete the analysis. Please try again.",
+  errorPrivacy:
+    "The server did not authorize this request. Check permissions in Personalize and the test confirmation, if applicable.",
   errorSession: "Your session does not allow this action. Sign in again.",
   errorFuture:
     "Observation time must be within the last 7 days and cannot be in the future.",

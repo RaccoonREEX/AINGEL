@@ -67,6 +67,9 @@ def profile_detail(request, profile_id):
         request.user, profile_id, "configure" if request.method == "PATCH" else "read"
     )
     if request.method == "PATCH":
+        # Authorizations to send camera, microphone and data to Meta are only the owner's decision.
+        if "consents" in request.data and obj.owner_id != request.user.id:
+            return Response({"error": "consents_owner_only"}, status=403)
         serializer = ProfileSerializer(
             obj, data=request.data, partial=True, context={"request": request}
         )

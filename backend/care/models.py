@@ -20,6 +20,8 @@ class Profile(models.Model):
     preferences = models.JSONField(default=dict, blank=True)
     communication = models.JSONField(default=dict, blank=True)
     face_recognition_enabled = models.BooleanField(default=False)
+    # Authorizations given at sign-up (care.consent): camera, microphone, meta_data + version, time, who.
+    consents = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

@@ -1,6 +1,7 @@
 import base64
 import io
 import json
+import logging
 import os
 import time
 
@@ -14,6 +15,8 @@ from meta_sam_parser import (
 from PIL import Image
 
 from .scene import SceneUnavailable
+
+log = logging.getLogger(__name__)
 
 
 def parse_segmentation(text, image_size):
@@ -69,7 +72,7 @@ def parse_segmentation(text, image_size):
     return results
 
 
-def locate_object(image: bytes, prompt: str, synthetic: bool):
+def locate_object(image: bytes, prompt: str, allowed: bool):
     mode = os.environ.get("AINGEL_AI_MODE", "mock")
     if mode == "mock":
         return {
@@ -84,7 +87,7 @@ def locate_object(image: bytes, prompt: str, synthetic: bool):
     key = os.environ.get("MODEL_API_KEY", "").strip()
     if not key:
         raise SceneUnavailable("meta_not_configured")
-    if not synthetic or os.environ.get("AINGEL_SYNTHETIC_TESTS_ONLY", "1") != "1":
+    if not allowed:
         raise SceneUnavailable("privacy_review_required")
     with Image.open(io.BytesIO(image)) as source:
         size = source.size
@@ -139,8 +142,13 @@ def locate_object(image: bytes, prompt: str, synthetic: bool):
         KeyError,
         AttributeError,
         InvalidSegmentationMaskError,
-    ):
+    ) as error:
+        # Only the failure kind is logged: never the image, the prompt or the model output.
+        log.warning("sam_unavailable: %s", type(error).__name__)
         raise SceneUnavailable("sam_unavailable") from None
+    except SceneUnavailable as error:
+        log.warning("locate failed: %s", error)
+        raise
     return {
         "mode": "meta",
         "model": "sam-3.1",

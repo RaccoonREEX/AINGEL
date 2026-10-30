@@ -10,8 +10,22 @@ from django.core.cache import cache
 from websockets.asyncio.client import connect
 from websockets.exceptions import ConnectionClosed, WebSocketException
 
+from care.consent import meta_allowed, private_media_allowed, synthetic_allowed
+from care.permissions import access
+
 
 class CaptionConsumer(AsyncWebsocketConsumer):
+    @database_sync_to_async
+    def profile_allows(self, profile_id, private_test=False):
+        if not isinstance(profile_id, str):
+            return False
+        try:
+            user = self.scope["user"]
+            profile = access(user, profile_id)
+            return private_media_allowed(profile, user, "audio", private_test) or meta_allowed(profile, "audio")
+        except Exception:
+            return False
+
     async def connect(self):
         self.upstream = None
         self.receiver = None
@@ -102,10 +116,8 @@ class CaptionConsumer(AsyncWebsocketConsumer):
         if value.get("locale") not in ["es-EC", "en-US"]:
             await self.fail("caption_language_unsupported")
             return
-        if (
-            value.get("synthetic") is not True
-            or os.environ.get("AINGEL_SYNTHETIC_TESTS_ONLY", "1") != "1"
-        ):
+        # Synthetic test, or real audio of a profile that authorized microphone + Meta at sign-up.
+        if not synthetic_allowed(value.get("synthetic")) and not await self.profile_allows(value.get("profile"), value.get("private_test")):
             await self.fail("privacy_review_required")
             return
         key = os.environ.get("MODEL_API_KEY", "")

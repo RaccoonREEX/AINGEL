@@ -29,7 +29,6 @@ export default function CompanionChat({
   clearTopic: () => void;
   speak: (text: string) => void;
 }) {
-  const [consent, setConsent] = useState(false);
   const [question, setQuestion] = useState("");
   const [saved, setSaved] = useState<{ key: string; value: Answer } | null>(
     null,
@@ -61,14 +60,12 @@ export default function CompanionChat({
           e.preventDefault();
           const text = question.trim();
           setSaved(null);
-          setConsent(false);
           void run(async () => {
             const value = await api<Answer>(
               `profiles/${profile.id}/companion/chat/`,
               "POST",
               {
                 text,
-                synthetic: true,
                 ...(topic
                   ? { topic_title: topic.title, topic_lang: topic.lang }
                   : {}),
@@ -86,19 +83,10 @@ export default function CompanionChat({
             value={question}
             onChange={(e) => {
               setQuestion(e.target.value);
-              setConsent(false);
             }}
           />
         </Field>
-        <label className="check">
-          <input
-            type="checkbox"
-            checked={consent}
-            onChange={(e) => setConsent(e.target.checked)}
-          />
-          {t("chatConsent")}
-        </label>
-        <button className="primary" disabled={busy || !consent}>
+        <button className="primary" disabled={busy}>
           {t("chatSend")}
         </button>
       </form>

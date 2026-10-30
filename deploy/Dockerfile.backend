@@ -1,0 +1,17 @@
+FROM python:3.12-slim
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+WORKDIR /app
+COPY backend/requirements.lock.txt ./requirements.lock.txt
+RUN apt-get update && apt-get install -y --no-install-recommends libglib2.0-0 ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && pip install --no-cache-dir -r requirements.lock.txt \
+    && useradd --uid 10001 --create-home app \
+    && mkdir -p /data/private /.local/knowledge /.local/face-models /.local/signs \
+    && chown app:app /data/private
+COPY backend/manage.py ./manage.py
+COPY backend/config ./config
+COPY backend/care ./care
+COPY backend/assistance ./assistance
+USER 10001:10001
+EXPOSE 8000
+CMD ["daphne", "-b", "0.0.0.0", "-p", "8000", "config.asgi:application"]

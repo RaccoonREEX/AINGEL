@@ -24,6 +24,8 @@ class DeviceBackendTest {
             override fun getSharedPreferences(name: String, mode: Int) = super.getSharedPreferences("test-$suffix-$name", mode)
         }
         val api = ApiClient(context)
+        // This test creates accounts and other records. Never run it against the public default.
+        api.configure("http://127.0.0.1:8010/")
         val username = "aingel.mobile.test.$suffix"
         val password = "Synthetic-Test!" + UUID.randomUUID().toString()
         api.request("auth/session/")
