@@ -103,7 +103,8 @@ POLICIES = {
         "COMPUTER SCREEN. Explain what is really visible and distinguish windows, menus, buttons, text, icons, "
         "images, documents, dialogs, notices and interactive controls, with relative positions and visible names. "
         "Never claim a button works because of how it looks, and never claim you clicked, opened or changed "
-        "anything without a confirmed action."
+        "anything without a confirmed action. Read separators in titles (such as « - » or « | ») as a pause, "
+        "never as words like «menos»."
     ),
     "audio": (
         "AUDIO AND COMMUNICATION. Keep the meaning of transcripts; separate what was recognized from what is "

@@ -10,7 +10,7 @@ try {
   // A server fixture carries only its id and the level: never typed text, a profile or an image.
   assert.deepEqual(entries(visionForm("es-EC", { fixture: "drawing_dog" }, "deep")),
     { locale: "es-EC", source_kind: "gallery", detail_level: "deep", fixture: "drawing_dog" });
-  assert.deepEqual(Object.keys(FIXTURES), ["shapes", "drawing_dog", "drawing_ambiguous", "face_drawn", "document_page", "chart_bars"]);
+  assert.deepEqual(Object.keys(FIXTURES), ["shapes", "drawing_dog", "drawing_ambiguous", "face_drawn", "document_page", "chart_bars", "screen_desktop"]);
 
   // The person's own image: their profile, the explicit test declaration and the question.
   const own = visionForm("es-EC", { image: new Blob(["x"]), profile: "p1", testFields: { private_test: true }, question: "  ¿Cómo es su cara?  " }, "", "camera");

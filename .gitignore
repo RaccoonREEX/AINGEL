@@ -42,3 +42,8 @@ datasets/
 *.m4a
 *.mp4
 *.mov
+
+# AINGEL Desktop (.NET) build output
+desktop/**/bin/
+desktop/**/obj/
+desktop/dist/

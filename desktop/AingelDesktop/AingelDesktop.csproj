@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- AINGEL Desktop for Windows (AINGEL 3.0, phase 2). Only in-box .NET 8 desktop libraries: no NuGet packages. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <!-- System.Drawing for the one-off screen capture and Screen for monitor bounds. -->
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>Aingel.Desktop</RootNamespace>
+    <AssemblyName>AingelDesktop</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Version>0.1.0</Version>
+    <Product>AINGEL Desktop</Product>
+    <Company>Mapatech Studio</Company>
+    <Description>Asistente de accesibilidad de AINGEL para Windows (experimental)</Description>
+    <InvariantGlobalization>false</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="AingelDesktop.Tests" />
+  </ItemGroup>
+
+</Project>

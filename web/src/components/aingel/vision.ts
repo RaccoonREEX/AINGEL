@@ -20,6 +20,7 @@ export const FIXTURES: Record<string, [string, string]> = {
   face_drawn: ["Retrato ilustrado de una persona ficticia", "Illustrated portrait of a fictitious person"],
   document_page: ["Página de un libro ficticio", "Page of a fictitious book"],
   chart_bars: ["Gráfico de barras", "Bar chart"],
+  screen_desktop: ["Pantalla de Windows ficticia", "Fictitious Windows screen"],
 };
 export const REGIONS = ["top_left", "top", "top_right", "left", "center", "right", "bottom_left", "bottom", "bottom_right", "background"] as const;
 export type Region = (typeof REGIONS)[number];

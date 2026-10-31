@@ -47,6 +47,7 @@ IMAGES = {
     "face_drawn": {"es-EC": "Retrato ilustrado de una persona ficticia", "en-US": "Illustrated portrait of a fictitious person"},
     "document_page": {"es-EC": "Página de un libro ficticio", "en-US": "Page of a fictitious book"},
     "chart_bars": {"es-EC": "Gráfico de barras", "en-US": "Bar chart"},
+    "screen_desktop": {"es-EC": "Pantalla de Windows ficticia", "en-US": "Fictitious Windows screen"},
 }
 # Find-object fixtures: the shapes image and an object name fixed here (the segmentation prompt is English).
 OBJECTS = {
@@ -261,10 +262,46 @@ def bar_chart():
     return _jpeg(image)
 
 
+def desktop_screen():
+    """A fictitious Windows screen (the desktop test): taskbar, a notes window with a title bar, a menu, a text area,
+    a «Guardar» dialog with two buttons and a checkbox. Unaccented text (see document_page)."""
+    from PIL import Image, ImageDraw, ImageFont
+
+    image = Image.new("RGB", (1600, 900), (40, 90, 140))
+    draw = ImageDraw.Draw(image)
+    font, small, big = ImageFont.load_default(size=22), ImageFont.load_default(size=18), ImageFont.load_default(size=26)
+    draw.rectangle((0, 852, 1600, 900), fill=(32, 32, 36))
+    draw.rounded_rectangle((12, 860, 120, 892), radius=6, fill=(60, 60, 66))
+    draw.text((30, 864), "Inicio", font=small, fill=(240, 240, 240))
+    draw.text((1460, 864), "10:42", font=small, fill=(240, 240, 240))
+    draw.rectangle((160, 80, 1240, 780), fill=(255, 255, 255), outline=(120, 120, 120), width=2)
+    draw.rectangle((160, 80, 1240, 124), fill=(230, 230, 235))
+    draw.text((180, 90), "Notas de la reunion - Bloc de notas", font=font, fill=(20, 20, 20))
+    for index, label in enumerate(("_", "[]", "X")):
+        draw.text((1130 + index * 40, 88), label, font=font, fill=(20, 20, 20))
+    for index, label in enumerate(("Archivo", "Editar", "Ver", "Ayuda")):
+        draw.text((180 + index * 110, 134), label, font=small, fill=(30, 30, 30))
+    draw.line((160, 164, 1240, 164), fill=(210, 210, 210), width=1)
+    for row, line in enumerate(("Reunion del lunes", "- Revisar el presupuesto del proyecto", "- Enviar el informe a Carla",
+                                "- Proxima reunion: jueves a las 15:00")):
+        draw.text((190, 190 + row * 40), line, font=font, fill=(25, 25, 25))
+    draw.rectangle((520, 380, 1100, 640), fill=(248, 248, 250), outline=(90, 90, 90), width=2)
+    draw.text((545, 400), "Guardar cambios", font=big, fill=(20, 20, 20))
+    draw.text((545, 450), "Quieres guardar los cambios en Notas de la reunion?", font=small, fill=(30, 30, 30))
+    draw.rectangle((545, 500, 569, 524), outline=(60, 60, 60), width=2)
+    draw.text((582, 500), "No volver a preguntar", font=small, fill=(30, 30, 30))
+    draw.rounded_rectangle((760, 570, 900, 616), radius=6, fill=(0, 95, 184))
+    draw.text((792, 580), "Guardar", font=font, fill=(255, 255, 255))
+    draw.rounded_rectangle((920, 570, 1070, 616), radius=6, fill=(255, 255, 255), outline=(90, 90, 90), width=2)
+    draw.text((945, 580), "No guardar", font=font, fill=(20, 20, 20))
+    return _jpeg(image)
+
+
 def image(fixture):
     return {
         "shapes": shapes_image, "drawing_dog": dog_drawing, "drawing_ambiguous": ambiguous_drawing,
         "face_drawn": drawn_face, "document_page": document_page, "chart_bars": bar_chart,
+        "screen_desktop": desktop_screen,
     }[fixture]()
 
 

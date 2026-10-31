@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="AingelDesktop.Tests/AingelDesktop.Tests.csproj" />
+  <Project Path="AingelDesktop/AingelDesktop.csproj" />
+</Solution>
