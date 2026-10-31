@@ -50,4 +50,17 @@
     <string name="consent_confirm_other">It belongs to another adult</string>
     <string name="err_subject_confirmation_required">First confirm whose profile this is.</string>
     <string name="err_subject_already_confirmed">Whose profile this is was already confirmed.</string>
+    <!-- Person's consent (care.consent), distinct from Android's camera/microphone permission. -->
+    <string name="capture_camera_not_authorized">The person hasn\'t authorized using the camera. Check it in Authorizations.</string>
+    <string name="capture_microphone_not_authorized">The person hasn\'t authorized using the microphone. Check it in Authorizations.</string>
+    <string name="capture_camera_stopped">The camera was turned off: the person withdrew or changed their authorization.</string>
+    <string name="capture_microphone_stopped">The microphone was turned off: the person withdrew or changed their authorization.</string>
+    <string name="watch_consent_stopped">I stopped continuous watching: the person withdrew or changed their authorization.</string>
+    <string name="speech_service_title">The phone\'s speech recognition</string>
+    <string name="speech_service_notice">To turn your voice into text, this phone uses its speech recognition service, which may send your voice to its vendor\'s service (for example, Google). AINGEL doesn\'t control or store that audio. Your decision is recorded for your account only and you can withdraw it at any time in More → Authorizations. You can also type instead.</string>
+    <string name="speech_service_accept">Accept and speak</string>
+    <string name="speech_service_type">Type instead</string>
+    <string name="speech_service_on">Your account accepted that the phone\'s speech recognition receives your voice. It applies to your account only.</string>
+    <string name="speech_service_off">Your account hasn\'t accepted it: AINGEL will ask before listening, unless the phone recognizes speech without sending it.</string>
+    <string name="speech_service_withdraw">Withdraw my acceptance</string>
 </resources>

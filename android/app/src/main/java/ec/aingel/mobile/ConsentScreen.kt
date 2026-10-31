@@ -16,10 +16,12 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.heading
@@ -28,6 +30,10 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import org.json.JSONObject
 
 /**
@@ -63,6 +69,49 @@ import org.json.JSONObject
         // Someone may also have set up a profile for this account's holder.
         androidx.compose.foundation.layout.Spacer(Modifier.padding(top = 8.dp))
         RedeemCode(model, s)
+        SpeechServiceSetting(model, s)
+    }
+}
+
+/** Rereads the person's decisions every ~15 s while [active] (an open camera or microphone), so a revocation made
+ * elsewhere reaches this phone; the ViewModel and the screens stop whatever they no longer allow. */
+@Composable fun RefreshConsentWhile(model: AingelViewModel, active: Boolean) {
+    LaunchedEffect(active) { while (active) { delay(15_000); model.refreshConsent() } }
+}
+
+/** This account's acceptance of the phone's speech service (never another account's); it can be withdrawn here. */
+@Composable private fun SpeechServiceSetting(model: AingelViewModel, s: MobileState) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        T(stringResource(R.string.speech_service_title), 15, FontWeight.SemiBold, Ui.Navy)
+        T(stringResource(if (s.speechService) R.string.speech_service_on else R.string.speech_service_off), 12, color = Ui.Muted, lineHeight = 1.45f,
+            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+        if (s.speechService) OutlineButton(stringResource(R.string.speech_service_withdraw), height = 46.dp, enabled = !s.busy, size = 14) { model.withdrawSpeechService() }
+    }
+}
+
+/** Before the phone's speech service hears this account's voice: its own decision, recorded by the server, or typing. */
+@Composable fun SpeechServiceNotice(model: AingelViewModel, onAccepted: () -> Unit, onType: () -> Unit) {
+    val scope = rememberCoroutineScope()
+    var sending by remember { mutableStateOf(false) }
+    Dialog(onDismissRequest = onType) {
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(Color.White).verticalScroll(rememberScrollState()).padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            T(stringResource(R.string.speech_service_title), 18, FontWeight.SemiBold, Ui.Navy, modifier = Modifier.semantics { heading() })
+            T(stringResource(R.string.speech_service_notice), 14, color = Ui.Text, lineHeight = 1.5f)
+            PrimaryButton(stringResource(R.string.speech_service_accept), height = 48.dp, enabled = !sending) {
+                sending = true
+                scope.launch {
+                    // Listening starts only if the server recorded the acceptance for this account.
+                    val accepted = try { model.decideSpeechService(true) }
+                        catch (cancelled: CancellationException) { throw cancelled }
+                        catch (failure: ApiFailure) { model.reportError(failure.code); false }
+                        catch (_: Exception) { false }
+                    sending = false
+                    if (accepted) onAccepted() else onType()
+                }
+            }
+            OutlineButton(stringResource(R.string.speech_service_type), height = 46.dp, size = 14) { onType() }
+        }
     }
 }
 

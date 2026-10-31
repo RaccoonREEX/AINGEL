@@ -96,7 +96,8 @@ private const val CHEVRON_PATH = "M6 9l6 6 6-6"
     val profile = s.profile!!
     val spanish = profile.optString("locale", "es-EC") != "en-US"
     val reduced = profile.optJSONObject("preferences")?.optBoolean("reduced_motion") == true
-    val voice = remember { VoiceInput(context) }
+    val voice = remember { VoiceInput(context) { model.state.value.speechService } }
+    var speechAsk by remember { mutableStateOf<(() -> Unit)?>(null) }  // listening that waits for this account's decision
     var mode by remember { mutableStateOf(SignMode.VOICE_TO_SIGN) }
     var menu by remember { mutableStateOf(false) }
     var seq by remember { mutableStateOf<List<String>>(emptyList()) }
@@ -149,11 +150,14 @@ private const val CHEVRON_PATH = "M6 9l6 6 6-6"
             result = "signing"; sign(b.seq)
         }
     }
+    fun micBlocked() = !mayStart(model.state.value.consent, Capture.MICROPHONE) || voice.needsAcceptance()
     fun listen() {
         if (listening) { if (voice.recognitionAvailable) voice.finish() else { voice.stop(); listening = false; result = "unavailable" }; return }
+        if (micBlocked()) return
         seq = emptyList(); built = emptyList(); byMeaning = false; result = ""; heard = ""; model.stopSpeech()
         listening = true; orb = AingelOrbState.LISTENING
         fun begin(tries: Int) {
+            if (micBlocked()) { listening = false; orb = AingelOrbState.IDLE; return }
             voice.start(profile.optString("locale", "es-EC"), onPartial = { heard = it }, onResult = { said ->
                 voice.stop(); listening = false
                 if (said.isBlank()) { result = "no-speech"; settle(AingelOrbState.CONFUSED, 3000) } else interpret(said)
@@ -170,8 +174,16 @@ private const val CHEVRON_PATH = "M6 9l6 6 6-6"
         }
         begin(0)
     }
-    val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok -> if (ok) listen() else result = "mic-denied" }
+    fun withSpeech(start: () -> Unit) { if (voice.needsAcceptance()) speechAsk = start else start() }
+    val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok -> if (ok) withSpeech { listen() } else result = "mic-denied" }
     val cameraPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok -> camera = ok; if (!ok) result = "camera-denied" }
+    // The person's own grants (care.consent), separate from Android's permission: checked fresh before opening, reread
+    // while open; a refusal closes the camera or microphone here, and opening them again needs a new grant.
+    RefreshConsentWhile(model, listening || camera)
+    LaunchedEffect(s.consent, s.speechService) {
+        if (camera && !mayStart(s.consent, Capture.CAMERA)) { camera = false; result = "camera-stopped" }
+        if (listening && micBlocked()) { voice.stop(); listening = false; orb = AingelOrbState.IDLE; result = "mic-stopped" }
+    }
     fun say(value: String) { if (value.isNotBlank() && model.speak(value) { orb = AingelOrbState.IDLE }) orb = AingelOrbState.SPEAKING }
     fun add(id: String) { message.add(id); sign(listOf(id)); text = message.joinToString(" ") { label(it) } }
 
@@ -180,6 +192,10 @@ private const val CHEVRON_PATH = "M6 9l6 6 6-6"
         orb == AingelOrbState.SPEAKING -> str(R.string.ui_signs_saying)
         result == "mic-denied" -> str(R.string.ui_mic_denied)
         result == "camera-denied" -> str(R.string.ui_camera_denied)
+        result == "mic-consent" -> str(R.string.capture_microphone_not_authorized)
+        result == "camera-consent" -> str(R.string.capture_camera_not_authorized)
+        result == "mic-stopped" -> str(R.string.capture_microphone_stopped)
+        result == "camera-stopped" -> str(R.string.capture_camera_stopped)
         mode.signsOut -> str(when (result) {
             "signing" -> if (current >= 0) R.string.ui_signs_signing else R.string.ui_signs_done
             "thinking" -> R.string.ui_signs_thinking; "unsupported" -> R.string.ui_signs_none_found; "no-speech" -> R.string.ui_signs_no_speech; "unavailable" -> R.string.ui_signs_voice_unavailable
@@ -265,8 +281,12 @@ private const val CHEVRON_PATH = "M6 9l6 6 6-6"
         when (mode) {
             SignMode.VOICE_TO_SIGN -> Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 MicButton(listening, str(if (listening) R.string.ui_hint_finish else R.string.ui_hint_talk)) {
-                    if (listening || ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) listen()
-                    else micPermission.launch(Manifest.permission.RECORD_AUDIO)
+                    if (listening) listen()
+                    else scope.launch {
+                        if (!model.captureAllowed(Capture.MICROPHONE)) { result = "mic-consent"; return@launch }
+                        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) withSpeech { listen() }
+                        else micPermission.launch(Manifest.permission.RECORD_AUDIO)
+                    }
                 }
                 if (listening) T(stringResource(R.string.ui_mic_private), 11, color = Ui.Muted)
                 if (heard.isNotBlank()) T(stringResource(R.string.ui_signs_heard) + ": " + heard, 14, color = Ui.Muted, align = TextAlign.Center)
@@ -284,8 +304,11 @@ private const val CHEVRON_PATH = "M6 9l6 6 6-6"
             else -> Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (camera) PrimaryButton(stringResource(R.string.ui_signs_close_camera), height = 46.dp) { camera = false }
                 else OutlineButton(stringResource(R.string.ui_signs_open_camera), height = 46.dp, size = 14) {
-                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) camera = true
-                    else cameraPermission.launch(Manifest.permission.CAMERA)
+                    scope.launch {
+                        if (!model.captureAllowed(Capture.CAMERA)) { result = "camera-consent"; return@launch }
+                        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) camera = true
+                        else cameraPermission.launch(Manifest.permission.CAMERA)
+                    }
                 }
                 if (camera) T(stringResource(R.string.ui_signs_camera_private), 11, color = Ui.Muted, align = TextAlign.Center)
                 T(stringResource(R.string.ui_signs_no_recognizer), 12, color = Ui.Muted, align = TextAlign.Center, lineHeight = 1.45f)
@@ -339,6 +362,9 @@ private const val CHEVRON_PATH = "M6 9l6 6 6-6"
             T(stringResource(R.string.ui_signs_legend), 11, color = Ui.Muted, align = TextAlign.Center, lineHeight = 1.5f)
         }
         T(stringResource(R.string.ui_signs_disclaimer), 11, color = Ui.Muted, lineHeight = 1.5f)
+    }
+    speechAsk?.let { pending ->
+        SpeechServiceNotice(model, onAccepted = { speechAsk = null; pending() }, onType = { speechAsk = null; mode = SignMode.TEXT_TO_SIGN })
     }
     if (shown) Dialog(onDismissRequest = { shown = false }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Box(Modifier.fillMaxSize().background(Color.White).clickable(onClickLabel = context.getString(R.string.close)) { shown = false }.padding(24.dp), contentAlignment = Alignment.Center) {

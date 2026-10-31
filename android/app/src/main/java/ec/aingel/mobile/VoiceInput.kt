@@ -6,6 +6,7 @@ import android.content.Intent
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
+import android.os.Build
 import android.os.Bundle
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
@@ -36,14 +37,23 @@ internal fun pcmLevel(buffer: ShortArray, count: Int): Float {
  * Microphone input for the assistant. Uses the platform recogniser for text and its RMS callback for
  * the orb level, so the microphone is opened once. When no recogniser is installed, an AudioRecord
  * meter drives the orb and the screen asks the person to type. Nothing is recorded or stored.
+ * The phone's on-device recogniser is preferred (Android 12+); otherwise the system's recogniser may send the voice
+ * to its vendor, so it is used only when the signed-in account accepted that ([accepted], from its session payload).
  */
-class VoiceInput(private val context: Context) {
+class VoiceInput(private val context: Context, private val accepted: () -> Boolean = { false }) {
     @Volatile private var level = 0f
     private var recognizer: SpeechRecognizer? = null
     private var session = 0
     private var meter: Thread? = null
     @Volatile private var metering = false
-    val recognitionAvailable: Boolean get() = SpeechRecognizer.isRecognitionAvailable(context)
+    /** The on-device recogniser lacked this language: the system's one (and the account's acceptance) is needed. */
+    private var deviceFailed = false
+    private val onDevice: Boolean get() = !deviceFailed && Build.VERSION.SDK_INT >= 31 && SpeechRecognizer.isOnDeviceRecognitionAvailable(context)
+    val recognitionAvailable: Boolean get() = onDevice || SpeechRecognizer.isRecognitionAvailable(context)
+    /** "device", "service" or "ask" ([recognitionMode]) for the account signed in now. */
+    fun mode(): String = recognitionMode(onDevice, accepted())
+    /** Listening would use the system's speech service, which this account has not accepted: ask first, or type. */
+    fun needsAcceptance(): Boolean = mode() == "ask" && SpeechRecognizer.isRecognitionAvailable(context)
     fun level(): Float = level
 
     /** Headset chosen in Ajustes (5b): asked for as the communication device while listening (Android 12+). */
@@ -60,12 +70,17 @@ class VoiceInput(private val context: Context) {
     }
 
     /** Starts a session and returns its number, so a caller can later stop only its own ([stopIf]). */
+    @SuppressLint("InlinedApi")  // the language errors exist from API 31, the only versions with an on-device recogniser
     fun start(locale: String, onPartial: (String) -> Unit, onResult: (String) -> Unit, onFailure: (Int) -> Unit): Int {
         stop()
         val id = ++session
+        val mode = mode()
+        // Callers ask first; never the vendor's service without this account's acceptance.
+        if (mode == "ask" && SpeechRecognizer.isRecognitionAvailable(context)) { onFailure(SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS); return id }
         routeMicrophone()
         if (!recognitionAvailable) { startMeter(); return id }
-        val engine = SpeechRecognizer.createSpeechRecognizer(context)
+        val device = mode == "device"
+        val engine = if (device && Build.VERSION.SDK_INT >= 31) SpeechRecognizer.createOnDeviceSpeechRecognizer(context) else SpeechRecognizer.createSpeechRecognizer(context)
         recognizer = engine
         engine.setRecognitionListener(object : RecognitionListener {
             override fun onReadyForSpeech(params: Bundle?) {}
@@ -73,7 +88,11 @@ class VoiceInput(private val context: Context) {
             override fun onRmsChanged(rmsdB: Float) { level = recognizerLevel(rmsdB) }
             override fun onBufferReceived(buffer: ByteArray?) {}
             override fun onEndOfSpeech() { level = 0f }
-            override fun onError(error: Int) { level = 0f; if (recognizer === engine) onFailure(error) }
+            override fun onError(error: Int) {
+                level = 0f
+                if (device && (error == SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED || error == SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE)) deviceFailed = true
+                if (recognizer === engine) onFailure(error)
+            }
             override fun onResults(results: Bundle?) {
                 level = 0f
                 if (recognizer === engine) onResult(results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty())

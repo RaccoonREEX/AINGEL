@@ -50,4 +50,17 @@
     <string name="consent_confirm_other">Es de otra persona adulta</string>
     <string name="err_subject_confirmation_required">Primero hay que confirmar de quién es este perfil.</string>
     <string name="err_subject_already_confirmed">Ya se confirmó de quién es este perfil.</string>
+    <!-- Person's consent (care.consent), distinct from Android's camera/microphone permission. -->
+    <string name="capture_camera_not_authorized">La persona no ha autorizado el uso de la cámara. Revísalo en Autorizaciones.</string>
+    <string name="capture_microphone_not_authorized">La persona no ha autorizado el uso del micrófono. Revísalo en Autorizaciones.</string>
+    <string name="capture_camera_stopped">Se apagó la cámara: la persona retiró o cambió su autorización.</string>
+    <string name="capture_microphone_stopped">Se apagó el micrófono: la persona retiró o cambió su autorización.</string>
+    <string name="watch_consent_stopped">Detuve la vigilancia continua: la persona retiró o cambió su autorización.</string>
+    <string name="speech_service_title">Reconocimiento de voz del teléfono</string>
+    <string name="speech_service_notice">Para pasar tu voz a texto, este teléfono usa su servicio de reconocimiento de voz, que puede enviar tu voz al servicio de su fabricante (por ejemplo, Google). AINGEL no controla ni guarda ese audio. Tu decisión se guarda solo para tu cuenta y puedes retirarla cuando quieras en Más → Autorizaciones. También puedes escribir.</string>
+    <string name="speech_service_accept">Aceptar y hablar</string>
+    <string name="speech_service_type">Prefiero escribir</string>
+    <string name="speech_service_on">Tu cuenta aceptó que el reconocimiento de voz del teléfono reciba tu voz. Vale solo para tu cuenta.</string>
+    <string name="speech_service_off">Tu cuenta no lo ha aceptado: AINGEL te lo preguntará antes de escuchar, salvo si el teléfono reconoce la voz sin enviarla.</string>
+    <string name="speech_service_withdraw">Retirar mi aceptación</string>
 </resources>

@@ -204,6 +204,11 @@ internal fun errorMessage(error: String): Int = when (error) {
     "consent_code_invalid" -> R.string.err_consent_code_invalid
     "consent_not_pending" -> R.string.err_consent_not_pending
     "consent_changed" -> R.string.err_consent_changed
+    // The person's consent, not Android's permission (R.string.permissions).
+    "camera_consent_missing" -> R.string.capture_camera_not_authorized
+    "microphone_consent_missing" -> R.string.capture_microphone_not_authorized
+    "camera_consent_stopped", "camera_consent_revoked" -> R.string.capture_camera_stopped
+    "microphone_consent_stopped" -> R.string.capture_microphone_stopped
     "subject_minor_not_supported" -> R.string.err_subject_minor_not_supported
     "subject_confirmation_required" -> R.string.err_subject_confirmation_required
     "subject_already_confirmed" -> R.string.err_subject_already_confirmed
@@ -498,10 +503,16 @@ private val YES_NO = listOf("yes" to R.string.cp_yes, "no" to R.string.cp_no)
         }
     }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { allowed -> if (allowed) camera = true else model.reportError("device_permission_denied") }
+    // The person's camera grant first (fresh), then Android's permission; a refusal seen later closes the camera.
+    RefreshConsentWhile(model, camera)
+    LaunchedEffect(s.consent) { if (camera && !mayStart(s.consent, Capture.CAMERA)) { camera = false; model.reportError("camera_consent_stopped") } }
     if (camera) CameraCapture(front, { model.setImage(it); camera = false }, { camera = false }, { camera = false; model.reportError("camera_unavailable") })
     else {
         Action(R.string.camera, !s.busy) {
-            if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) camera = true else permission.launch(Manifest.permission.CAMERA)
+            scope.launch {
+                if (!model.captureAllowed(Capture.CAMERA)) { model.reportError("camera_consent_missing"); return@launch }
+                if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) camera = true else permission.launch(Manifest.permission.CAMERA)
+            }
         }
         Action(R.string.gallery, !s.busy) { gallery.launch("image/*") }
     }
@@ -627,6 +638,7 @@ private val YES_NO = listOf("yes" to R.string.cp_yes, "no" to R.string.cp_no)
     val context = LocalContext.current
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { allowed -> if (allowed) model.startCaptions() else model.reportError("device_permission_denied") }
     DisposableEffect(Unit) { onDispose { model.stopCaptions() } }
+    RefreshConsentWhile(model, s.captionStatus != "idle")
     val language = when (s.communication?.optString("sign_language")) {
         "lsec" -> R.string.sign_lsec
         "asl" -> R.string.sign_asl

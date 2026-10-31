@@ -81,6 +81,10 @@ private class Pick(val key: String, val label: String, val sub: String, val blue
     var word by remember { mutableStateOf(VoiceControl.word(context)) }
     var enrolling by remember { mutableStateOf(false) }
     var testing by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val probe = remember { VoiceInput(context) { model.state.value.speechService } }
+    var speechAsk by remember { mutableStateOf(false) }
+    var vcNote by remember { mutableStateOf<String?>(null) }
     // Devices appear and disappear as headsets connect.
     DisposableEffect(Unit) {
         val am = context.getSystemService(AudioManager::class.java)
@@ -91,7 +95,19 @@ private class Pick(val key: String, val label: String, val sub: String, val blue
         am.registerAudioDeviceCallback(callback, null)
         onDispose { am.unregisterAudioDeviceCallback(callback); model.stopSpeech() }
     }
-    val mic = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok -> if (ok) enrolling = true }
+    /** Training listens too: the person's microphone grant, Android's permission, then this account's acceptance. */
+    fun enroll() {
+        vcNote = null
+        if (probe.needsAcceptance()) speechAsk = true else enrolling = true
+    }
+    val mic = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok -> if (ok) enroll() }
+    fun startEnrollment() {
+        scope.launch {
+            if (!model.captureAllowed(Capture.MICROPHONE)) { vcNote = context.getString(R.string.capture_microphone_not_authorized); return@launch }
+            if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) enroll()
+            else mic.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
     BackHandler(!enrolling) { onBack() }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 18.dp, end = 18.dp, top = 6.dp, bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(22.dp)) {
@@ -119,8 +135,7 @@ private class Pick(val key: String, val label: String, val sub: String, val blue
                 Row(Modifier.fillMaxWidth().heightIn(min = 68.dp).toggleable(vcOn, role = Role.Switch) { on ->
                     if (!on) { vcOn = false; VoiceControl.set(context, enabled = false) }
                     else if (VoiceControl.trained(context)) { vcOn = true; VoiceControl.set(context, enabled = true) }
-                    else if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) enrolling = true
-                    else mic.launch(Manifest.permission.RECORD_AUDIO)
+                    else startEnrollment()
                 }.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                         T(title, 15, FontWeight.SemiBold, Ui.Navy)
@@ -142,13 +157,15 @@ private class Pick(val key: String, val label: String, val sub: String, val blue
                                     .selectable(on, role = Role.RadioButton) { word = w; VoiceControl.set(context, word = w) }, contentAlignment = Alignment.Center) { T(w, 14, FontWeight.SemiBold, if (on) Color.White else Ui.Navy) }
                             }
                         }
-                        LinkButton(stringResource(R.string.ui_s_vc_retrain), size = 13) { enrolling = true }
+                        LinkButton(stringResource(R.string.ui_s_vc_retrain), size = 13) { startEnrollment() }
                         T(stringResource(R.string.ui_s_vc_note), 11, color = Ui.Muted, lineHeight = 1.45f)
                     }
                 }
             }
+            vcNote?.let { T(it, 13, color = Ui.Navy, lineHeight = 1.45f, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) }
         }
     }
+    if (speechAsk) SpeechServiceNotice(model, onAccepted = { speechAsk = false; enrolling = true }, onType = { speechAsk = false })
     if (enrolling) WakeEnrollment(model, s, word, onCancel = { enrolling = false }, onDone = {
         enrolling = false; vcOn = true; VoiceControl.set(context, enabled = true, trained = true)
     })
@@ -184,7 +201,7 @@ private const val PHONE_PATH = "M9.5 2.5h5A2.5 2.5 0 0 1 17 5v14a2.5 2.5 0 0 1-2
 @Composable private fun WakeEnrollment(model: AingelViewModel, s: MobileState, word: String, onCancel: () -> Unit, onDone: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val voice = remember { VoiceInput(context) }
+    val voice = remember { VoiceInput(context) { model.state.value.speechService } }
     val locale = s.profile?.optString("locale", "es-EC") ?: "es-EC"
     val name = s.communication?.optString("preferred_name")?.takeIf { it.isNotBlank() } ?: s.profile?.optString("display_name")?.substringBefore(' ').orEmpty()
     var step by remember { mutableIntStateOf(0) }
@@ -196,7 +213,7 @@ private const val PHONE_PATH = "M9.5 2.5h5A2.5 2.5 0 0 1 17 5v14a2.5 2.5 0 0 1-2
     DisposableEffect(Unit) { onDispose { live = false; voice.stop(); model.stopSpeech() } }
 
     fun prompt(repeat: Boolean) {
-        if (!live) return
+        if (!live || !mayStart(model.state.value.consent, Capture.MICROPHONE)) return
         voice.stop()
         val text = if (step == 0 || repeat) context.getString(R.string.ui_e_prompt_first, name, word) else context.getString(if (step == 1) R.string.ui_e_prompt_again else R.string.ui_e_prompt_last, word)
         phase = "speaking"; playKey++
