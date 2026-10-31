@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Conversación general, visión (3a) y traductor de señas. -->
 <resources>
+    <string name="synthetic_conversation_title">Conversación de prueba con Meta</string>
+    <string name="synthetic_conversation_explanation">Activa esta opción solo para preguntas y respuestas inventadas, sin nombres, datos de salud ni información de personas reales. El texto y el historial reciente se envían a Meta junto con opciones generales de comunicación y, si corresponde, una fuente pública. AINGEL no detecta automáticamente datos personales. Se desactiva al cambiar de perfil o cerrar sesión; no activa la cámara ni la prueba privada de medios.</string>
+    <string name="synthetic_conversation_enable">Acepto usar solo contenido inventado y activar la conversación de prueba</string>
+    <string name="synthetic_conversation_active">Prueba con Meta activa: usa solo contenido inventado, sin datos personales. AINGEL no detecta datos sensibles.</string>
     <string name="private_test_title">Prueba privada de cámara y voz</string>
     <string name="private_test_active">Prueba privada activa: solo tus propias imágenes y voz, sin otras personas ni contenido sensible. Se envían a Meta.</string>
     <string name="private_test_explanation">Solo la persona propietaria del perfil puede activar esta prueba. Guarda la autorización para enviar a Meta y la de cámara o micrófono que desees usar. El servidor debe tener habilitada la prueba privada.</string>

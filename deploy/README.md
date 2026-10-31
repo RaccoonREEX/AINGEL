@@ -35,6 +35,11 @@ contenedor, su Caddyfile completo ni las configuraciones de otros sitios.
    proxies confiables y adaptar la IP de cliente. Revisar que los logs no
    almacenen datos sensibles, especialmente parámetros de URL.
 
+El contenedor de backend inicia Daphne con `--verbosity 0`: desactiva su log de
+acceso predeterminado que incluye URI e IP y mantiene avisos y errores. Esto no
+controla los logs del proxy compartido, de Docker ni de otras capas; revisar su
+configuración y retención por separado y evitar escribir datos sensibles en URLs.
+
 ## Credenciales, TLS y archivos externos
 
 Guardar los archivos fuera del repositorio y del contexto de compilación,
@@ -92,6 +97,14 @@ la conexión Redis, su certificado y nombre, y la confianza pública de Meta des
 el contenedor antes de habilitar el sitio.
 
 ## Meta en entornos controlados
+
+En producción, `AINGEL_META_LIMIT_PER_MINUTE` y `AINGEL_META_LIMIT_PER_DAY`
+limitan conjuntamente todas las llamadas a Meta, con valores predeterminados
+de 10 por 60 segundos y 100 por 24 horas, en ventanas móviles. Cada llamada
+HTTP y cada sesión de transcripción abierta cuentan una; una reserva se cobra
+incluso si el proveedor falla. Un límite de `0` bloquea todas las llamadas.
+Es un límite de llamadas, no de gasto: una sesión puede durar hasta 10 minutos
+y los costes varían. Mantener también alertas y límites del proveedor.
 
 Sin variables de IA adicionales, el backend arranca en `mock` y no usa Meta.
 Para una demostración sintética autorizada, añadir **solo al archivo privado del
@@ -166,7 +179,15 @@ Programar cada día `docker compose -f deploy/compose.yaml exec -T backend
 python manage.py purge_expired_memories` con el mismo entorno y supervisar sus
 errores. Hacer respaldos cifrados y comprobaciones periódicas de restauración
 de PostgreSQL, `private_media` y las claves; coordinar backups de datos y
-archivos para que sean coherentes. Redis se usa como caché y no se persiste.
+archivos para que sean coherentes. Redis usa el volumen persistente `redis_data`
+y AOF con sincronización en cada escritura para conservar los contadores al
+reiniciar. Es una defensa operativa, no una garantía de facturación: perder,
+restaurar o manipular el volumen puede devolver los contadores a un estado
+anterior. No borrar el volumen; supervisar espacio y errores de persistencia.
+Si Redis no puede aceptar escrituras, las llamadas a Meta se rechazan. En la
+primera migración desde Redis sin volumen, los contadores empiezan de nuevo;
+registrar el estado anterior y recrear solo el servicio Redis de AINGEL. No
+compartir el volumen con otras aplicaciones.
 Para actualizar, respaldar, construir, ejecutar migraciones y verificar antes de
 recargar; planificar reversión de código y datos. No usar `down -v` sobre datos
 que se quieran conservar.

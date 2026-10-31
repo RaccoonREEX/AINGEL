@@ -5,9 +5,9 @@ import org.json.JSONObject
 /** The server remains authoritative; this is the local explicit declaration for this session. */
 internal fun privateMediaAllowed(profile: JSONObject?, selectedId: String?, kind: String): Boolean {
     if (kind !in setOf("camera", "microphone") || profile == null || selectedId.isNullOrBlank()) return false
-    val consent = profile.optJSONObject("consents") ?: return false
-    return profile.optString("id") == selectedId && profile.optString("role") == "owner" &&
-        consent.optBoolean("meta_data") && consent.optBoolean(kind)
+    // The old coarse flags no longer authorize anything: only the owner who is the person may try, and the server
+    // checks that person's own grants for each purpose (backend care.consent.private_media_allowed).
+    return profile.optString("id") == selectedId && profile.optString("role") == "owner" && profile.optString("subject_status") == "self"
 }
 
 internal fun imageRequestFields(profile: JSONObject?, selectedId: String?, synthetic: Boolean): MutableMap<String, String> {

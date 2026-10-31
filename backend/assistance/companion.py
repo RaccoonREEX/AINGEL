@@ -13,6 +13,7 @@ from care.knowledge import KnowledgeUnavailable, exact_topic
 from care.consent import meta_account_denial, meta_allowed, still_current, synthetic_allowed
 from care.permissions import access, audit
 from care.serializers import COMMUNICATION_DEFAULTS
+from .meta_quota import MetaQuotaError, reserve_meta_call
 
 MAX_INPUT_CHARS = 1000
 MAX_SOURCE_CHARS = 4000
@@ -120,6 +121,10 @@ def call_spark(instructions, input_text, max_output_tokens=600, web_search=False
     if tools:
         payload["tools"] = tools
     started = time.monotonic()
+    try:
+        reserve_meta_call()
+    except MetaQuotaError as error:
+        raise CompanionUnavailable(str(error)) from None
     try:
         with httpx.Client(timeout=45, follow_redirects=False) as client:
             with client.stream(

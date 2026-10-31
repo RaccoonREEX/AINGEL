@@ -6,6 +6,7 @@ import { useSpeechSynthesisLevel } from "../components/aingel/useOutputAudioLeve
 import { useCamera } from "../components/aingel/useCamera";
 import { HandIcon } from "../components/aingel/HandIcon";
 import PrivateMediaConsent, { imageTestFields } from "../components/PrivateMediaConsent";
+import SyntheticConversationConsent, { conversationTestFields } from "../components/SyntheticConversationConsent";
 import { useCommunication } from "../Communication";
 import { useMediaQuery } from "../useMediaQuery";
 import { greetingKey, initials, longDate, summarizeToday } from "../today";
@@ -80,7 +81,7 @@ export default function Home({ profile, t, locale, run, busy, date, onOpenToday,
   const [seeking, setSeeking] = useState("");
   const [vision, setVision] = useState(false);
   const [privateTest, setPrivateTest] = useState(false);
-  useEffect(() => setPrivateTest(false), [profile.id]);
+  const [syntheticConversation, setSyntheticConversation] = useState(false);
   const timers = useRef<number[]>([]);
   // Bumped when the person clears, stops or leaves: answers still in flight for an older turn are dropped.
   const turn = useRef(0);
@@ -88,6 +89,10 @@ export default function Home({ profile, t, locale, run, busy, date, onOpenToday,
   const threadEnd = useRef<HTMLDivElement>(null);
   const nextId = useRef(1);
   const phaseRef = useRef(phase); phaseRef.current = phase;
+  useEffect(() => {
+    setPrivateTest(false); setSyntheticConversation(false); setThread([]); setDraft("");
+    turn.current++;
+  }, [profile.id]);
   const reduced = !!profile.preferences.reduced_motion;
   const name = communication?.preferred_name || profile.display_name.split(" ")[0];
   const base = `profiles/${profile.id}/`;
@@ -190,7 +195,9 @@ export default function Home({ profile, t, locale, run, busy, date, onOpenToday,
     // Oldest pairs go first until the whole conversation fits the server's cap.
     while (pairs.length && turns.reduce((n, x) => n + x.text.length, 0) > MAX_TURN_CHARS) { pairs = pairs.slice(1); turns = build(); }
     try {
-      const reply = await api<ConversationReply>(base + "conversation/", "POST", { turns, actions: ACTIONS });
+      const reply = await api<ConversationReply>(base + "conversation/", "POST", {
+        turns, actions: syntheticConversation ? [] : ACTIONS, ...conversationTestFields(syntheticConversation),
+      });
       const retrieval = reply.provenance.retrieval === "medlineplus";
       if (reply.mode === "mock") {
         return {
@@ -381,6 +388,11 @@ export default function Home({ profile, t, locale, run, busy, date, onOpenToday,
     happy: L("Toca para hablar", "Tap to talk"), confused: L("Toca para hablar", "Tap to talk"),
   };
   const busyPhase = phase !== "idle" && phase !== "happy" && phase !== "confused";
+  const syntheticControl = (
+    <SyntheticConversationConsent es={es} checked={syntheticConversation} disabled={busyPhase} onChange={(next) => {
+      clearConversation(); setDraft(""); setSyntheticConversation(next);
+    }} />
+  );
   const level = phase === "listening" ? speech.level : phase === "speaking" ? tts.level : undefined;
   const micButton = (size: "lg" | "sm") => (
     <button type="button" className={`mic-btn mic-btn--${size}`} onClick={() => void onMic()} aria-label={hint[phase]}>
@@ -493,6 +505,7 @@ export default function Home({ profile, t, locale, run, busy, date, onOpenToday,
         <div ref={threadEnd} />
       </div>
       <div className="convo-controls">
+        {syntheticControl}
         <label className="switch-line"><input type="checkbox" checked={autoRead} onChange={(e) => { setAutoRead(e.target.checked); if (!e.target.checked) tts.stop(); }} />{L("Leer respuestas en voz alta", "Read answers aloud")}</label>
         {!!thread.length && <button type="button" className="text-btn" onClick={clearConversation}>{L("Borrar conversación", "Clear conversation")}</button>}
         {!tts.supported && <span className="muted">{L("Este navegador no tiene voz para leer.", "This browser has no voice to read aloud.")}</span>}
@@ -538,6 +551,7 @@ export default function Home({ profile, t, locale, run, busy, date, onOpenToday,
               {phase === "listening" && <span className="mic-privacy">{L("Micrófono activo. El audio no se guarda.", "Microphone on. Audio is not stored.")}</span>}
               {phase === "idle" && <button type="button" className="text-btn" onClick={openComposer}>{L("Prefiero escribir", "I'd rather type")}</button>}
             </div>
+            {syntheticControl}
             {notice && <p className="home-notice" role="alert">{notice}</p>}
             <div className="suggestions">
               {suggestions.map((s) => <button type="button" key={s} className="pill" disabled={busyPhase} onClick={() => askOther(s)}>{s}</button>)}

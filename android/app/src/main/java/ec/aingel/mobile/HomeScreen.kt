@@ -591,6 +591,9 @@ private const val MAX_MODEL_PAIRS = 5
     val controls: @Composable ColumnScope.() -> Unit = {
         when (mode) {
             null -> {
+                if (s.syntheticConversationProfileId == profile.optString("id")) {
+                    Notice(stringResource(R.string.synthetic_conversation_active)); Spacer(Modifier.height(10.dp))
+                }
                 T(status, 18, FontWeight.Medium, Ui.Navy, align = TextAlign.Center, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
                 if (!menu) visionPanel()
                 Spacer(Modifier.height(18.dp))
@@ -699,6 +702,9 @@ private const val MAX_MODEL_PAIRS = 5
                 HandButton { vision = false; onSigns() }
                 Spacer(Modifier.width(8.dp))
                 EyesButton(vision) { toggleVision() }
+            }
+            if (s.syntheticConversationProfileId == profile.optString("id")) {
+                Notice(stringResource(R.string.synthetic_conversation_active))
             }
             Column(Modifier.weight(1f).verticalScroll(scroll), horizontalAlignment = Alignment.CenterHorizontally) {
                 orb(170.dp)

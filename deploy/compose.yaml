@@ -28,6 +28,18 @@ services:
     networks: [data]
     restart: unless-stopped
 
+  quota_redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--port", "0", "--tls-port", "6379", "--tls-cert-file", "/run/tls/server.crt", "--tls-key-file", "/run/tls/server.key", "--tls-ca-cert-file", "/run/tls/ca.crt", "--tls-auth-clients", "no", "--aclfile", "/run/secrets/redis.acl", "--appendonly", "yes", "--appendfsync", "always", "--maxmemory", "128mb", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - quota_redis_data:/data
+      - ${AINGEL_SECRETS_DIR:?set AINGEL_SECRETS_DIR}/quota-redis-tls:/run/tls:ro
+      - ${AINGEL_SECRETS_DIR:?set AINGEL_SECRETS_DIR}/redis.acl:/run/secrets/redis.acl:ro
+    networks:
+      quota:
+        aliases: [quota-redis]
+    restart: unless-stopped
+
   backend:
     build:
       context: ..
@@ -57,8 +69,11 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
+      quota_redis:
+        condition: service_started
     networks:
       data: {}
+      quota: {}
       proxy:
         aliases: [aingel-backend]
     restart: unless-stopped
@@ -77,6 +92,8 @@ services:
 networks:
   data:
     internal: true
+  quota:
+    internal: true
   proxy:
     external: true
     name: ${AINGEL_PROXY_NETWORK:?set AINGEL_PROXY_NETWORK}
@@ -84,3 +101,4 @@ networks:
 volumes:
   postgres_data: {}
   private_media: {}
+  quota_redis_data: {}

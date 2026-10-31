@@ -15,6 +15,7 @@ from meta_sam_parser import (
 from PIL import Image
 
 from .scene import SceneUnavailable
+from .meta_quota import MetaQuotaError, reserve_meta_call
 
 log = logging.getLogger(__name__)
 
@@ -110,6 +111,10 @@ def locate_object(image: bytes, prompt: str, allowed: bool):
         ],
     }
     started = time.monotonic()
+    try:
+        reserve_meta_call()
+    except MetaQuotaError as error:
+        raise SceneUnavailable(str(error)) from None
     try:
         with httpx.Client(timeout=60, follow_redirects=False) as client:
             with client.stream(

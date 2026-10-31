@@ -5,20 +5,20 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class PrivateMediaTest {
-    private fun profile(role: String = "owner", camera: Boolean = true, microphone: Boolean = true, meta: Boolean = true) =
-        JSONObject().put("id", "profile-1").put("locale", "es-EC").put("role", role)
-            .put("consents", JSONObject().put("camera", camera).put("microphone", microphone).put("meta_data", meta))
+    private fun profile(role: String = "owner", subject: String = "self") =
+        JSONObject().put("id", "profile-1").put("locale", "es-EC").put("role", role).put("subject_status", subject)
+            .put("consents", JSONObject().put("camera", true).put("microphone", true).put("meta_data", true))  // legacy: no effect
 
     @Test fun privateImageRequiresExplicitOwnerDeclarationAndSeparateConsent() {
         assertEquals("true", imageRequestFields(profile(), "profile-1", false)["private_test"])
         assertEquals("false", imageRequestFields(profile(), "profile-1", false)["synthetic"])
         assertFalse(imageRequestFields(profile(), null, false).containsKey("private_test"))
-        for (p in listOf(profile(role = "caregiver"), profile(camera = false), profile(meta = false))) {
+        for (p in listOf(profile(role = "caregiver"), profile(subject = "pending_confirmation"), profile(subject = "pending_consent"))) {
             try { imageRequestFields(p, "profile-1", false); fail("private image accepted without authorization") }
             catch (e: ApiFailure) { assertEquals("private_test_consent_required", e.code) }
         }
         assertFalse(privateMediaAllowed(profile(), "other-profile", "camera"))
-        assertFalse(privateMediaAllowed(profile(microphone = false), "profile-1", "microphone"))
+        assertFalse(privateMediaAllowed(profile(subject = "subject_linked"), "profile-1", "microphone"))
     }
 
     @Test fun syntheticFixtureNeverClaimsPrivateTest() {

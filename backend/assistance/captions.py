@@ -6,12 +6,14 @@ import time
 
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncWebsocketConsumer
+from asgiref.sync import sync_to_async
 from django.core.cache import cache
 from websockets.asyncio.client import connect
 from websockets.exceptions import ConnectionClosed, WebSocketException
 
 from care.consent import meta_account_denial, meta_allowed, private_media_allowed, still_current, synthetic_allowed
 from care.permissions import access
+from .meta_quota import MetaQuotaError, reserve_meta_call
 
 
 class CaptionConsumer(AsyncWebsocketConsumer):
@@ -138,6 +140,11 @@ class CaptionConsumer(AsyncWebsocketConsumer):
         key = os.environ.get("MODEL_API_KEY", "")
         if os.environ.get("AINGEL_AI_MODE") != "meta" or not key:
             await self.fail("meta_not_configured")
+            return
+        try:
+            await sync_to_async(reserve_meta_call, thread_sensitive=False)()
+        except MetaQuotaError as error:
+            await self.fail(str(error))
             return
         if self.timer:
             self.timer.cancel()

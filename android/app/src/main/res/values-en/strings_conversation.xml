@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="synthetic_conversation_title">Test conversation with Meta</string>
+    <string name="synthetic_conversation_explanation">Enable this only for invented questions and answers, without names, health information, or information about real people. Text and recent history are sent to Meta along with general communication options and, when applicable, a public source. AINGEL does not automatically detect personal information. It turns off when switching profiles or signing out; it does not enable the camera or the private media test.</string>
+    <string name="synthetic_conversation_enable">I agree to use only invented content and enable the test conversation</string>
+    <string name="synthetic_conversation_active">Meta test enabled: use only invented content without personal information. AINGEL does not detect sensitive data.</string>
     <string name="private_test_title">Private camera and voice test</string>
     <string name="private_test_active">Private test enabled: only your own images and voice, without other people or sensitive content. They are sent to Meta.</string>
     <string name="private_test_explanation">Only the profile owner can enable this test. Save permission to send to Meta and the camera or microphone permission you want to use. The server must have the private test enabled.</string>

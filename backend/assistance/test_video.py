@@ -149,3 +149,11 @@ class VideoClipTests(TestCase):
         response, call = self.post(env={**META, "AINGEL_AI_MODE": "mock"})
         self.assertEqual((response.status_code, response.data["mode"], response.data["events"]), (200, "mock", []))
         call.assert_not_called()
+
+    def test_clips_use_the_global_meta_quota(self):
+        from .meta_quota import MetaQuotaError
+        from .video import VideoUnavailable
+        with patch("assistance.video.reserve_meta_call", side_effect=MetaQuotaError("meta_quota_exceeded")),                 patch("assistance.video.httpx.Client") as client, patch.dict(os.environ, {"MODEL_API_KEY": "synthetic-key"}):
+            with self.assertRaisesMessage(VideoUnavailable, "meta_quota_exceeded"):
+                describe_changes(CLIP, "es-EC", [], {})
+            client.assert_not_called()

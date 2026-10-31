@@ -369,6 +369,11 @@ internal fun verifiedMedlinePlusUrl(raw: String): String? {
         val updated = JSONObject(profile.optJSONObject("preferences")?.toString() ?: "{}").put("large_text", large).put("high_contrast", contrast).put("voice_output", voice)
         model.savePreferences(name, allergies, notes, updated)
     }
+    Text(stringResource(R.string.synthetic_conversation_title))
+    Text(stringResource(R.string.synthetic_conversation_explanation))
+    Check(R.string.synthetic_conversation_enable, s.syntheticConversationProfileId == profile.optString("id")) {
+        model.setSyntheticConversation(it)
+    }
     if (profile.optString("role") == "owner") {
         val consents = profile.optJSONObject("consents")
         var camera by remember(profile.optString("id"), consents?.toString()) { mutableStateOf(consents?.optBoolean("camera") == true) }

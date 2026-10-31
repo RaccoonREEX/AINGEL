@@ -668,6 +668,8 @@ details summary { cursor: pointer; font-weight: 600; min-height: 44px; }
 .suggestions--inline { margin-top: 0; padding-top: 0; justify-content: flex-start; }
 .convo-controls { margin-top: 18px; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
 .switch-line { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--navy); font-weight: 500; }
+.synthetic-conversation { width: 100%; max-width: 580px; margin: 12px auto; padding: 10px 14px; border: 1px solid var(--line, #dce4ee); border-radius: 12px; text-align: left; }
+.synthetic-conversation .mic-privacy { display: block; margin: 6px 0 0; line-height: 1.45; }
 .convo .composer { margin-top: 12px; }
 
 /* ── 4a · sign translator ── */

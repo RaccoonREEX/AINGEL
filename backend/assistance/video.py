@@ -29,6 +29,7 @@ from rest_framework.views import APIView
 from care.consent import meta_account_denial, meta_allowed, still_current, synthetic_allowed
 from care.permissions import access, audit
 
+from .meta_quota import MetaQuotaError, reserve_meta_call
 from .persona import VISION_RULES, instructions as persona_instructions, profile_preferences, vision_guard
 
 MAX_CLIP_BYTES = 8 * 1024 * 1024
@@ -177,6 +178,11 @@ def describe_changes(clip, locale, previous, preferences, transport="inline"):
     timings = {}
     started = time.monotonic()
     file_id = None
+    try:
+        # The same global, fail-closed Meta admission as every other call (assistance.meta_quota).
+        reserve_meta_call()
+    except MetaQuotaError as error:
+        raise VideoUnavailable(str(error)) from None
     try:
         with httpx.Client(timeout=60, follow_redirects=False) as client:
             if transport == "files":

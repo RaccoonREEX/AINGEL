@@ -25,7 +25,7 @@ data class MobileState(
     val mfaEnabled: Boolean = false, val circle: JSONObject? = null, val inviteCode: String? = null, val faces: JSONObject? = null,
     val captions: List<CaptionTurn> = emptyList(), val recording: Boolean = false, val captionStatus: String = "idle",
     val signStatus: String = "waiting", val signText: String? = null, val signMetadata: JSONObject? = null, val signVideo: ByteArray? = null,
-    val privateTestProfileId: String? = null,
+    val privateTestProfileId: String? = null, val syntheticConversationProfileId: String? = null,
     // Age and consent policy (backend care.consent): the account's 18+ declaration, the current terms, and the
     // person's decisions for the selected profile.
     val adultDeclared: Boolean = true, val termsVersion: String = "", val consent: JSONObject? = null,
@@ -113,7 +113,11 @@ class AingelViewModel(app: Application) : AndroidViewModel(app) {
         val profiles = (api.request("profiles/") as JSONArray).rows()
         val selected = mutable.value.profile?.optString("id")
         val profile = profiles.find { p -> p.optString("id") == selected } ?: profiles.firstOrNull()
-        mutable.update { it.copy(profiles = profiles, profile = profile, communication = null) }
+        mutable.update {
+            val sameProfile = profile?.optString("id") == it.profile?.optString("id")
+            it.copy(profiles = profiles, profile = profile, communication = null,
+                syntheticConversationProfileId = if (sameProfile) it.syntheticConversationProfileId else null)
+        }
         profile?.optString("id")?.takeIf { it.isNotBlank() }?.let { refreshCommunication(it) }
     }
     private suspend fun refreshCommunication(profileId: String) {
@@ -175,7 +179,7 @@ class AingelViewModel(app: Application) : AndroidViewModel(app) {
     private fun cancelOperation() { operationGeneration++; activeOperation?.cancel(); activeOperation = null }
     fun select(profile: JSONObject) {
         cancelOperation(); stopCaptions(); WatchService.stop(getApplication())
-        mutable.update { it.copy(busy = false, profile = profile, privateTestProfileId = null, communication = null, rows = emptyList(), knowledge = null, result = null, companion = null, image = null, enrollmentPhotos = emptyList(), faces = null, circle = null) }
+        mutable.update { it.copy(busy = false, profile = profile, privateTestProfileId = null, syntheticConversationProfileId = null, communication = null, rows = emptyList(), knowledge = null, result = null, companion = null, image = null, enrollmentPhotos = emptyList(), faces = null, circle = null) }
         operation { refreshCommunication(profile.getString("id")) }
     }
     fun resetScreen() { cancelOperation(); stopCaptions(); voice.stop(); mutable.update { it.copy(busy = false, rows = emptyList(), knowledge = null, result = null, companion = null, image = null, enrollmentPhotos = emptyList(), error = null, mfaSetup = null, recovery = emptyList(), inviteCode = null) } }
@@ -198,8 +202,11 @@ class AingelViewModel(app: Application) : AndroidViewModel(app) {
     /** General conversation under the authorization given at sign-up (the server checks it, care.consent). */
     /** [actions]: app features the model may ask this phone to run (camera, watching, signs). */
     suspend fun converse(turns: JSONArray, actions: List<String> = emptyList()): JSONObject {
-        if (mutable.value.privateTestProfileId != null) throw ApiFailure("privacy_review_required")
-        return api.request(path("conversation/"), "POST", JSONObject().put("turns", turns).put("actions", JSONArray(actions))) as JSONObject
+        val state = mutable.value
+        if (state.privateTestProfileId != null) throw ApiFailure("privacy_review_required")
+        val id = state.profile?.optString("id")?.takeIf { it.isNotBlank() } ?: throw ApiFailure("profile_required")
+        val payload = conversationPayload(turns, actions, state.syntheticConversationProfileId == id)
+        return api.request("profiles/$id/conversation/", "POST", payload) as JSONObject
     }
     /** One captured frame to scene description or object search; the image is not stored. */
     suspend fun analyzeFrame(image: ByteArray, objectName: String?): JSONObject {
@@ -288,7 +295,15 @@ class AingelViewModel(app: Application) : AndroidViewModel(app) {
         val id = profile?.optString("id").orEmpty()
         if (enabled && !(privateMediaAllowed(profile, id, "camera") || privateMediaAllowed(profile, id, "microphone"))) {
             mutable.update { it.copy(privateTestProfileId = null, error = "private_test_consent_required") }
-        } else mutable.update { it.copy(privateTestProfileId = if (enabled) id else null, error = null) }
+        } else mutable.update { it.copy(privateTestProfileId = if (enabled) id else null,
+            syntheticConversationProfileId = if (enabled) null else it.syntheticConversationProfileId, error = null) }
+    }
+    /** Session-only explicit declaration; it never classifies or filters the content. */
+    fun setSyntheticConversation(enabled: Boolean) {
+        if (enabled) { stopCaptions(); WatchService.stop(getApplication()) }
+        val id = mutable.value.profile?.optString("id")?.takeIf { it.isNotBlank() }
+        mutable.update { it.copy(syntheticConversationProfileId = if (enabled) id else null,
+            privateTestProfileId = if (enabled) null else it.privateTestProfileId) }
     }
     fun privateWatchEnabled(): Boolean {
         val current = mutable.value

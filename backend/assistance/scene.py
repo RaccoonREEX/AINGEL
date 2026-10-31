@@ -10,6 +10,7 @@ import httpx
 
 from .persona import VISION_RULES, instructions as persona_instructions, profile_preferences, vision_guard
 from PIL import Image, ImageOps, UnidentifiedImageError
+from .meta_quota import MetaQuotaError, reserve_meta_call
 
 MAX_BYTES = 5 * 1024 * 1024
 MAX_PIXELS = 12_000_000
@@ -94,6 +95,10 @@ def describe_scene(image: bytes, locale: str, allowed: bool, known_person: bool 
         ],
     }
     started = time.monotonic()
+    try:
+        reserve_meta_call()
+    except MetaQuotaError as error:
+        raise SceneUnavailable(str(error)) from None
     try:
         # Fixed destination: no user-provided URLs and no forwarding redirects with credentials.
         with httpx.Client(timeout=45, follow_redirects=False) as client:
