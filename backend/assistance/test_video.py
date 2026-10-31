@@ -143,3 +143,9 @@ class VideoClipTests(TestCase):
             self.assertEqual(http.post.call_args.kwargs["json"]["input"][0]["content"][1], {"type": "input_video", "file_id": "file-123"})
             http.delete.assert_called_once()
             self.assertIn("file-123", http.delete.call_args.args[0])
+
+
+    def test_a_test_server_validates_the_clip_without_calling_meta(self):
+        response, call = self.post(env={**META, "AINGEL_AI_MODE": "mock"})
+        self.assertEqual((response.status_code, response.data["mode"], response.data["events"]), (200, "mock", []))
+        call.assert_not_called()

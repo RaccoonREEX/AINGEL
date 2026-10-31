@@ -441,7 +441,8 @@ private const val MAX_MODEL_PAIRS = 5
     LaunchedEffect(capture, mode) { if (mode == HomeMode.DESCRIBE && capture != null && said.isEmpty()) { delay(1200); describe() } }
     fun beginWatch() {
         val privateTest = try { model.privateWatchEnabled() } catch (e: ApiFailure) { model.reportError(e.code); return }
-        WatchService.start(context, profile.getString("id"), profile.optString("locale", "es-EC"), privateTest)
+        WatchService.start(context, profile.getString("id"), profile.optString("locale", "es-EC"), privateTest,
+            s.communication?.optString("spontaneous")?.takeIf { it.isNotBlank() } ?: "normal")
         endMode(); (context as? Activity)?.moveTaskToBack(true)
     }
     val watchPermissions = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { granted ->
@@ -654,6 +655,14 @@ private const val MAX_MODEL_PAIRS = 5
                 Spacer(Modifier.height(6.dp)); T(stringResource(R.string.ui_m_watch_intro), 14, color = Ui.Text, align = TextAlign.Center, lineHeight = 1.5f)
                 Spacer(Modifier.height(6.dp)); T(stringResource(R.string.ui_vision_caution), 12, color = Ui.Muted, align = TextAlign.Center)
                 Spacer(Modifier.height(8.dp)); T(stringResource(R.string.ui_m_watch_output, AudioRoute.outputLabel(context)), 12, color = Ui.Muted, align = TextAlign.Center)
+                // Experimental: short video clips instead of photos (the server must allow it; otherwise it uses photos).
+                var video by remember { mutableStateOf(WatchService.videoEnabled(context)) }
+                Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Switch(video, { video = it; WatchService.setVideo(context, it) }, colors = SwitchDefaults.colors(checkedTrackColor = Ui.Navy),
+                        modifier = Modifier.semantics { contentDescription = context.getString(R.string.watch_video) })
+                    Spacer(Modifier.width(10.dp)); T(stringResource(R.string.watch_video), 13, FontWeight.Medium, Ui.Navy, modifier = Modifier.weight(1f))
+                }
+                if (video) T(stringResource(R.string.watch_video_note), 11, color = Ui.Muted, align = TextAlign.Center)
                 PrimaryButton(stringResource(R.string.ui_m_watch_start), height = 52.dp) { startWatch() }
                 if (!Settings.canDrawOverlays(context)) LinkButton(stringResource(R.string.ui_m_bubble), size = 13) {
                     // The person decides in the system screen; AINGEL never changes that permission itself.

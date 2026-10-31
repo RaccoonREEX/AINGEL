@@ -268,6 +268,10 @@ class ClipView(APIView):
         if not MIN_SECONDS <= info["seconds"] <= MAX_SECONDS:
             return Response({"error": "clip_duration_invalid"}, status=400)
 
+        if os.environ.get("AINGEL_AI_MODE", "mock") == "mock":
+            # Test server: the clip was validated, nothing leaves AINGEL.
+            return Response({"mode": "mock", "stale": False, "events": [], "say": "", "seconds": info["seconds"],
+                             "timings": {"server_ms": round((time.monotonic() - received) * 1000)}})
         profile = access(request.user, values["profile"]) if "profile" in values else None
         synthetic = synthetic_allowed(values["synthetic"])
         real = (not synthetic and profile is not None and meta_allowed(profile, "video")

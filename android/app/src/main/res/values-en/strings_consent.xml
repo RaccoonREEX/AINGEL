@@ -42,4 +42,6 @@
     <string name="err_consent_not_pending">This profile no longer awaits a decision.</string>
     <string name="err_consent_changed">The authorization changed; the earlier answer is not shown.</string>
     <string name="err_subject_minor_not_supported">AINGEL is for adults only.</string>
+    <string name="watch_video">Watching with video (experimental)</string>
+    <string name="watch_video_note">Sends 6-second clips to understand what changes. Needs your «Send short videos to Meta» authorization and the server to allow it; otherwise it uses photos.</string>
 </resources>

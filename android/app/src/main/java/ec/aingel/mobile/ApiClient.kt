@@ -159,6 +159,7 @@ class ApiClient(context: Context) {
     suspend fun request(path: String, method: String = "GET", data: JSONObject? = null): Any = transport.request(path, method, data)
     suspend fun upload(path: String, image: ByteArray, values: Map<String, String>): JSONObject = uploadImages(path, listOf(image), values)
     suspend fun uploadImages(path: String, images: List<ByteArray>, values: Map<String, String>): JSONObject = transport.uploadImages(path, images, values)
+    suspend fun uploadClip(path: String, clip: ByteArray, values: Map<String, String>): JSONObject = transport.uploadClip(path, clip, values)
     suspend fun signClip(profileId: String, clipId: String): ByteArray = transport.signClip(profileId, clipId)
 }
 
@@ -219,6 +220,19 @@ internal class ApiTransport(
         val body = MultipartBody.Builder().setType(MultipartBody.FORM).apply {
             images.forEachIndexed { index, image -> addFormDataPart("image", "capture-$index.jpg", image.toRequestBody("image/jpeg".toMediaType())) }
             values.forEach { (key, value) -> addFormDataPart(key, value) }
+        }.build()
+        val result = send(unsafe = true) { session ->
+            Request.Builder().url(session.base + "api/v1/" + path).csrfHeaders(session).post(body).build()
+        }
+        return result as? JSONObject ?: throw ApiFailure(NetworkError.RESPONSE_INVALID)
+    }
+
+    /** One short MP4 clip (experimental continuous vision); the fields go first so the server can reject early. */
+    suspend fun uploadClip(path: String, clip: ByteArray, values: Map<String, String>): JSONObject {
+        if (clip.isEmpty() || clip.size > 8 * 1024 * 1024) throw ApiFailure("clip_too_large")
+        val body = MultipartBody.Builder().setType(MultipartBody.FORM).apply {
+            values.forEach { (key, value) -> addFormDataPart(key, value) }
+            addFormDataPart("clip", "clip.mp4", clip.toRequestBody("video/mp4".toMediaType()))
         }.build()
         val result = send(unsafe = true) { session ->
             Request.Builder().url(session.base + "api/v1/" + path).csrfHeaders(session).post(body).build()

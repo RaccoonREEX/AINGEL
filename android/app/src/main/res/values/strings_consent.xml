@@ -42,4 +42,6 @@
     <string name="err_consent_not_pending">Este perfil ya no espera una decisión.</string>
     <string name="err_consent_changed">La autorización cambió; no se muestra la respuesta anterior.</string>
     <string name="err_subject_minor_not_supported">AINGEL es solo para personas adultas.</string>
+    <string name="watch_video">Vigilancia con video (experimental)</string>
+    <string name="watch_video_note">Envía clips de 6 segundos para entender qué cambia. Requiere tu autorización «Enviar videos cortos a Meta» y que el servidor lo permita; si no, usa fotos.</string>
 </resources>

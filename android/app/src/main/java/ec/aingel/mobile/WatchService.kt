@@ -77,10 +77,14 @@ class WatchService : LifecycleService() {
         const val TICK_MS = 250L
         const val NAME_AGAIN_MS = 3 * 60_000L
 
-        fun start(context: Context, profileId: String, locale: String, privateTest: Boolean = false) {
-            val intent = Intent(context, WatchService::class.java).putExtra("profile", profileId).putExtra("locale", locale).putExtra("private_test", privateTest)
+        fun start(context: Context, profileId: String, locale: String, privateTest: Boolean = false, spontaneous: String = "normal") {
+            val intent = Intent(context, WatchService::class.java).putExtra("profile", profileId).putExtra("locale", locale).putExtra("video", videoEnabled(context)).putExtra("spontaneous", spontaneous).putExtra("private_test", privateTest)
             ContextCompat.startForegroundService(context, intent)
         }
+        /** Experimental: watching with short video clips instead of photos (off by default; the server must allow it too). */
+        fun videoEnabled(context: Context) = context.getSharedPreferences("aingel-watch", Context.MODE_PRIVATE).getBoolean("video", false)
+        fun setVideo(context: Context, on: Boolean) { context.getSharedPreferences("aingel-watch", Context.MODE_PRIVATE).edit().putBoolean("video", on).apply() }
+        const val CLIP_SECONDS = 6.0
         /** Only when it runs: starting the service just to stop it would be pointless. */
         fun stop(context: Context) { if (WatchState.status.value.running) context.startService(Intent(context, WatchService::class.java).setAction(ACTION_STOP)) }
         /** Says the last description again (tap on the outer-screen orb). */
@@ -91,6 +95,8 @@ class WatchService : LifecycleService() {
     private var loop: Job? = null
     private var capture: ImageCapture? = null
     private var analysis: ImageAnalysis? = null
+    private var recorder: ClipRecorder? = null  // experimental video mode only
+    private var clipEveryMs = 4_000L
     private var analyzer: ExecutorService? = null
     /** Latest grid of the live view (WatchChange), written by the analyzer thread. */
     @Volatile private var latest: IntArray? = null
@@ -124,7 +130,11 @@ class WatchService : LifecycleService() {
         // Closing the phone (main display off, outer display on) shows AINGEL on the outer screen.
         getSystemService(DisplayManager::class.java).registerDisplayListener(folds, null)
         bindCamera()
-        loop = lifecycleScope.launch { describeLoop(profile) }
+        // «Pocas» descriptions: a clip every 8 s; otherwise every 4 s (6 s clips, so they overlap by 2 s).
+        clipEveryMs = if (intent.getStringExtra("spontaneous") == "few") 8_000L else 4_000L
+        val video = intent.getBooleanExtra("video", false) && !privateTest
+        if (video) recorder = ClipRecorder()
+        loop = lifecycleScope.launch { if (video) clipLoop(profile) else describeLoop(profile) }
         return START_NOT_STICKY
     }
 
@@ -139,6 +149,8 @@ class WatchService : LifecycleService() {
                 var looked = 0L
                 live.setAnalyzer(executor) { image ->
                     try {
+                        recorder?.feed(image)  // video mode: the same frames go to the H.264 ring
+                        image.planes[0].buffer.rewind()
                         val now = SystemClock.elapsedRealtime()
                         if (now - looked >= LOOK_MS) {
                             looked = now
@@ -199,6 +211,58 @@ class WatchService : LifecycleService() {
             WatchState.change { it.copy(looking = false) }
             delay(TICK_MS)
         }
+    }
+
+    /**
+     * Experimental: every [clipEveryMs] the latest ~6 s go to vision/clip/ as an MP4; only changes are spoken. One clip
+     * at a time (the loop waits for the answer, so newer clips are taken fresh instead of queued), cancelled with the
+     * service. Anything unavailable falls back to photos. Timings are logged (no content) for latency measurements.
+     */
+    private suspend fun clipLoop(profile: String) {
+        val session = java.util.UUID.randomUUID().toString()
+        var seq = 0
+        var saidMock = false
+        delay(CLIP_SECONDS.toLong() * 1000 + 500)  // the first window
+        while (lifecycleScope.isActive) {
+            val r = recorder
+            if (r == null || r.failed) { fallBackToPhotos(profile, text("La vigilancia con video no funciona en este teléfono; sigo con fotos.", "Video watching does not work on this phone; I continue with photos.")); return }
+            if (SystemClock.elapsedRealtime() >= speakingUntil) {
+                val muxStarted = SystemClock.elapsedRealtime()
+                val clip = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { r.clip(CLIP_SECONDS, 3.0, cacheDir) }
+                val muxMs = SystemClock.elapsedRealtime() - muxStarted
+                if (clip != null) {
+                    seq++
+                    WatchState.change { it.copy(looking = true) }
+                    try {
+                        val sent = SystemClock.elapsedRealtime()
+                        val result = Backend.api(this).uploadClip("vision/clip/", clip, mapOf("locale" to locale, "profile" to profile,
+                            "session" to session, "seq" to seq.toString(), "synthetic" to "false"))
+                        val roundTrip = SystemClock.elapsedRealtime() - sent
+                        android.util.Log.i("AINGEL-video", "seq=$seq bytes=${clip.size} mux_ms=$muxMs roundtrip_ms=$roundTrip server=${result.optJSONObject("timings")}")
+                        when {
+                            result.optString("mode") == "mock" -> { if (!saidMock) update(text("Modo de prueba: este servidor no analiza video.", "Test mode: this server does not analyse video."), speak = true, mock = true); saidMock = true }
+                            result.optBoolean("stale") -> {}
+                            result.optString("say").isNotBlank() -> update(result.optString("say"), speak = true)
+                        }
+                    } catch (e: ApiFailure) {
+                        when (e.code) {
+                            "video_disabled", "privacy_review_required", "clip_invalid", "clip_duration_invalid", "clip_too_large" -> {
+                                fallBackToPhotos(profile, text("La vigilancia con video no está disponible; sigo con fotos.", "Video watching is not available; I continue with photos.")); return
+                            }
+                            "video_busy" -> {}  // dropped: the next clip will be newer
+                            else -> update(text("Se perdió la conexión; lo intento de nuevo.", "Connection lost; trying again."), speak = false)
+                        }
+                    } finally { WatchState.change { it.copy(looking = false) } }
+                }
+            }
+            delay(clipEveryMs)
+        }
+    }
+
+    private suspend fun fallBackToPhotos(profile: String, line: String) {
+        recorder?.close(); recorder = null
+        update(line, speak = false)
+        describeLoop(profile)
     }
 
     private var onCover = false
@@ -284,6 +348,7 @@ class WatchService : LifecycleService() {
         bubble?.let { try { (getSystemService(WINDOW_SERVICE) as WindowManager).removeView(it) } catch (_: Exception) {} }; bubble = null
         try { ProcessCameraProvider.getInstance(this).get().unbind(*listOfNotNull(capture, analysis).toTypedArray()) } catch (_: Exception) {}
         analyzer?.shutdown(); analyzer = null
+        recorder?.close(); recorder = null
         voice?.shutdown(); voice = null
         wake?.let { if (it.isHeld) it.release() }; wake = null
         WatchState.set(WatchState.Status())
