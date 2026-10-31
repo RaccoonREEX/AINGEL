@@ -31,18 +31,25 @@ internal class ClipRecorder(private val fps: Int = 10, private val bitrate: Int 
 
     /** Encodes one camera frame (throttled to [fps]); the encoder starts with the first frame's size. */
     fun feed(image: ImageProxy) {
+        feedFrame(image.width and 1.inv(), image.height and 1.inv(), image.imageInfo.rotationDegrees, image.imageInfo.timestamp / 1000) { copyPlanes(image, it) }
+    }
+
+    /**
+     * The encoding path shared by the camera and by synthetic test frames: [fill] writes one YUV_420_888 frame into the
+     * encoder's input image. [timeoutUs] lets a test wait for an input buffer; the camera never waits.
+     */
+    internal fun feedFrame(w: Int, h: Int, degrees: Int, ptsUs: Long, timeoutUs: Long = 0, fill: (android.media.Image) -> Unit) {
         if (failed) return
-        val pts = image.imageInfo.timestamp / 1000
-        if (lastFedUs != Long.MIN_VALUE && pts - lastFedUs < 1_000_000L / fps) return
+        if (lastFedUs != Long.MIN_VALUE && ptsUs - lastFedUs < 1_000_000L / fps) return
         try {
-            val encoder = codec ?: start(image.width and 1.inv(), image.height and 1.inv(), image.imageInfo.rotationDegrees)
-            val index = encoder.dequeueInputBuffer(0)
+            val encoder = codec ?: start(w, h, degrees)
+            val index = encoder.dequeueInputBuffer(timeoutUs)
             if (index >= 0) {
                 val input = encoder.getInputImage(index)
-                if (input == null) { encoder.queueInputBuffer(index, 0, 0, pts, 0) } else {
-                    copyPlanes(image, input)
-                    encoder.queueInputBuffer(index, 0, width * height * 3 / 2, pts, 0)
-                    lastFedUs = pts
+                if (input == null) { encoder.queueInputBuffer(index, 0, 0, ptsUs, 0) } else {
+                    fill(input)
+                    encoder.queueInputBuffer(index, 0, width * height * 3 / 2, ptsUs, 0)
+                    lastFedUs = ptsUs
                 }
             }
             drain(encoder)
