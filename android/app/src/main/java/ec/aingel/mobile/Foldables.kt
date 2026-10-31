@@ -1,8 +1,8 @@
 package ec.aingel.mobile
 
-import android.app.Activity
 import android.os.Build
 import android.view.Display
+import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -28,8 +28,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
@@ -59,11 +59,12 @@ internal fun windowShape(widthDp: Int, heightDp: Int, secondaryDisplay: Boolean)
 }
 
 @Composable internal fun rememberWindowShape(): WindowShape {
-    val config = LocalConfiguration.current
-    val activity = LocalContext.current as? Activity
+    val size = LocalWindowInfo.current.containerSize
+    val density = LocalDensity.current
+    val activity = LocalActivity.current
     @Suppress("DEPRECATION")
     val display = if (Build.VERSION.SDK_INT >= 30) activity?.display else activity?.windowManager?.defaultDisplay
-    return windowShape(config.screenWidthDp, config.screenHeightDp, display != null && display.displayId != Display.DEFAULT_DISPLAY)
+    return with(density) { windowShape(size.width.toDp().value.toInt(), size.height.toDp().value.toInt(), display != null && display.displayId != Display.DEFAULT_DISPLAY) }
 }
 
 /**

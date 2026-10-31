@@ -1,5 +1,6 @@
 package ec.aingel.mobile
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.SurfaceTexture
 import android.media.MediaDataSource
@@ -71,6 +72,7 @@ internal class MemoryVideoSource(bytes: ByteArray) : MediaDataSource() {
     AndroidView(factory = { context: Context ->
         TextureView(context).apply {
             surfaceTextureListener = object : TextureView.SurfaceTextureListener {
+                @SuppressLint("Recycle")  // kept in [surface]; released in onSurfaceTextureDestroyed and onDispose
                 override fun onSurfaceTextureAvailable(texture: SurfaceTexture, width: Int, height: Int) { surface = Surface(texture) }
                 override fun onSurfaceTextureSizeChanged(texture: SurfaceTexture, width: Int, height: Int) = Unit
                 override fun onSurfaceTextureDestroyed(texture: SurfaceTexture): Boolean { surface?.release(); surface = null; return true }

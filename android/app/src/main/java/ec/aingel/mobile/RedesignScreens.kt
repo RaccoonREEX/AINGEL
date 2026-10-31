@@ -26,6 +26,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
@@ -168,6 +169,7 @@ private val PRESET_LABELS = mapOf("visual_assistance" to R.string.ui_p_visual, "
 
 @Composable fun SetupFlow(model: AingelViewModel, s: MobileState) {
     val context = LocalContext.current
+    val resources = LocalResources.current
     val scope = rememberCoroutineScope()
     val (who, ownName) = model.signup
     var step by rememberSaveable { mutableIntStateOf(1) }
@@ -209,7 +211,7 @@ private val PRESET_LABELS = mapOf("visual_assistance" to R.string.ui_p_visual, "
         scope.launch {
             try {
                 val condLines = CONDITIONS.filter { enabled[it.id] == true }.joinToString("; ") {
-                    context.getString(it.title) + ": " + context.resources.getStringArray(it.captions)[levels[it.id] ?: 0]
+                    context.getString(it.title) + ": " + resources.getStringArray(it.captions)[levels[it.id] ?: 0]
                 }
                 val pending = keys.filterNot { it in SUPPORTED_PRESETS }.joinToString("; ") { context.getString(PRESET_LABELS.getValue(it)) + " ($it)" }
                 val notes = listOfNotNull(
@@ -287,8 +289,8 @@ private val PRESET_LABELS = mapOf("visual_assistance" to R.string.ui_p_visual, "
                                 T(stringResource(c.title), 15, FontWeight.SemiBold, Ui.Navy)
                             }
                             if (on) {
-                                val names = LocalContext.current.resources.getStringArray(c.levels)
-                                val full = LocalContext.current.resources.getStringArray(c.captions)
+                                val names = resources.getStringArray(c.levels)
+                                val full = resources.getStringArray(c.captions)
                                 Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                                     names.forEachIndexed { i, l -> Choice(l, levels[c.id] == i, Modifier.weight(1f), height = 40.dp, size = 11) { levels[c.id] = i } }
                                 }
