@@ -171,7 +171,7 @@ def describe_changes(clip, locale, previous, preferences, transport="inline"):
         "this clip: something appearing or disappearing, a person entering or leaving the frame, something placed or "
         "picked up, a door opening or closing, something moving. Do not repeat earlier observations; never claim an "
         "event you did not see in this clip. Mark each event observed, likely or uncertain. If nothing changed, "
-        "return no events and an empty «say». " + VISION_RULES
+        "return no events and an empty «say». Always answer by calling report_changes. " + VISION_RULES
     )
     context = json.dumps([{"kind": e["kind"], "what": e["what"], "certainty": e["certainty"], "age_s": int(time.time() - e["at"])} for e in previous], ensure_ascii=False)
     timings = {}
@@ -194,7 +194,7 @@ def describe_changes(clip, locale, previous, preferences, transport="inline"):
             response = client.post("https://api.meta.ai/v1/responses", headers={"Authorization": f"Bearer {key}"}, json={
                 "model": "muse-spark-1.3", "store": False, "reasoning": {"effort": "minimal"}, "max_output_tokens": 700,
                 "instructions": persona_instructions(locale, preferences, task),
-                "tools": [CHANGE_TOOL], "tool_choice": "required",
+                "tools": [CHANGE_TOOL],  # Meta supports only tool_choice "auto" (30-10-2026)
                 "input": [{"role": "user", "content": [
                     {"type": "input_text", "text": "Recent observations (data): " + context},
                     video,
@@ -222,6 +222,10 @@ def describe_changes(clip, locale, previous, preferences, transport="inline"):
         arguments = {}
     timings["meta_total_ms"] = round((time.monotonic() - started) * 1000)
     say = arguments.get("say") if isinstance(arguments.get("say"), str) else ""
+    if call is None:
+        # The model answered in text instead of the tool: no structured events, the text is what to say.
+        say = " ".join(part.get("text", "") for item in data.get("output", []) if item.get("type") == "message"
+                       for part in item.get("content", []) if part.get("type") == "output_text")
     return clean_events(arguments.get("events")), say.strip()[:400], timings
 
 
