@@ -1,7 +1,8 @@
 # Cuenta `prueba.persona` creada por error en producción (30-10-2026)
 
-**Estado:** sin tocar. No se ha borrado nada. Este documento sirve para comprobarlo y, solo con la aprobación del
-propietario, eliminarla.
+**Estado:** el propietario aprobó el 30-10-2026 eliminarla después de las comprobaciones. Todavía no se ha borrado
+nada. La ejecuta Astra en el VPS, siguiendo los pasos 1 y 2 en orden; solo se borra si la comprobación del paso 1 da
+exactamente el resultado esperado.
 
 ## Qué pasó
 
@@ -41,7 +42,7 @@ No hay señales `post_save` ni `user_logged_in` en el backend que escriban más 
 Desde el contenedor del backend de producción:
 
 ```bash
-docker compose exec backend python manage.py shell -c "
+docker compose -f deploy/compose.yaml exec -T backend python manage.py shell -c "
 from django.contrib.admin.utils import NestedObjects
 from django.contrib.auth import get_user_model
 from django.contrib.sessions.models import Session
@@ -64,10 +65,16 @@ Si aparece cualquier otra cosa, **no borrar** y revisarlo primero.
 
 ## 2. Eliminar (solo con aprobación expresa del propietario)
 
-Primero, una copia de seguridad (`pg_dump`). Después:
+Primero, una copia de seguridad, que se guarda fuera del repositorio:
 
 ```bash
-docker compose exec backend python manage.py shell -c "
+docker compose -f deploy/compose.yaml exec -T db pg_dump -U aingel -Fc aingel > "aingel-$(date +%Y%m%d-%H%M%S).dump"
+```
+
+Después:
+
+```bash
+docker compose -f deploy/compose.yaml exec -T backend python manage.py shell -c "
 from django.contrib.admin.utils import NestedObjects
 from django.contrib.auth import get_user_model
 from django.contrib.sessions.models import Session
@@ -87,7 +94,7 @@ with transaction.atomic():
 **Alternativa reversible:** desactivar la cuenta en lugar de borrarla:
 
 ```bash
-docker compose exec backend python manage.py shell -c "from django.contrib.auth import get_user_model as g; print(g().objects.filter(username='prueba.persona').update(is_active=False))"
+docker compose -f deploy/compose.yaml exec -T backend python manage.py shell -c "from django.contrib.auth import get_user_model as g; print(g().objects.filter(username='prueba.persona').update(is_active=False))"
 ```
 
 Las líneas de los registros de acceso se eliminan por su propia rotación. Si hay que borrarlas antes, es una tarea de
