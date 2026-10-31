@@ -16,6 +16,11 @@ COMMUNICATION_DEFAULTS = {
     "distress": "quiet_reassurance",
     "sign_language": "none",
     "communication_notes": "",
+    # Added 30-10-2026 (assistance.persona); existing profiles get these defaults.
+    "priority_support": "none",
+    "detail": "brief",
+    "spontaneous": "normal",
+    "repeat_important": "no",
 }
 
 
@@ -32,6 +37,10 @@ class CommunicationSerializer(serializers.Serializer):
     )
     sign_language = serializers.ChoiceField(choices=["none", "lsec", "asl", "other"])
     communication_notes = serializers.CharField(max_length=1000, allow_blank=True)
+    priority_support = serializers.ChoiceField(choices=["visual", "auditory", "cognitive", "communication", "none"], required=False)
+    detail = serializers.ChoiceField(choices=["brief", "detailed"], required=False)
+    spontaneous = serializers.ChoiceField(choices=["few", "normal", "many"], required=False)
+    repeat_important = serializers.ChoiceField(choices=["yes", "no"], required=False)
 
     def to_internal_value(self, data):
         if not isinstance(data, dict) or set(data) - set(self.fields):

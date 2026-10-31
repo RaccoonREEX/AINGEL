@@ -37,7 +37,7 @@ class SceneFamilyTests(TestCase):
     def post(self, family=True, locale="es-EC"):
         captured = {}
 
-        def describe(image, loc, allowed, known_person=False):
+        def describe(image, loc, allowed, known_person=False, preferences=None):
             captured["known_person"] = known_person
             return {"text": "Lleva un suéter verde y mira el teléfono.", "mode": "meta", "model": "muse-spark-1.3", "latency_ms": 5}
 

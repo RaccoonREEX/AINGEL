@@ -12,6 +12,7 @@ from care.consent import granted, meta_account_denial, meta_allowed, private_med
 from care.faces import family_matches
 from care.permissions import access, audit
 
+from .persona import profile_preferences
 from .scene import SceneUnavailable, describe_scene, normalize_image
 from .locate import locate_object
 
@@ -101,7 +102,9 @@ class SceneView(APIView):
         # Own-media tests do not request local recognition of other people.
         people = known_people(request, values, image) if allowed and not values["private_test"] else []
         try:
-            result = describe_scene(image, values["locale"], allowed, known_person=bool(people))
+            # The person's style preferences (and priority support only with their personalization grant).
+            preferences = profile_preferences(profile.communication, meta_allowed(profile, "personalization")) if profile else None
+            result = describe_scene(image, values["locale"], allowed, known_person=bool(people), preferences=preferences)
         except SceneUnavailable as error:
             return Response(
                 {"error": str(error)}, status=503, headers={"Cache-Control": "no-store"}
