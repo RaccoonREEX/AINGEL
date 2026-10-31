@@ -523,9 +523,15 @@ private const val MAX_MODEL_PAIRS = 5
     RefreshConsentWhile(model, vision || phase == AingelOrbState.LISTENING || mode == HomeMode.HEAR || wakeIdle)
     // Decisions that no longer allow the camera or microphone close them here (the ViewModel stops watching and
     // captions); opening them again needs a new grant. Withdrawing the speech-service acceptance ends listening too.
+    // Only what was really open: a mode still checking before it opens leaves the refusal to that check
+    // («no ha autorizado»), instead of claiming the camera turned off and the person withdrew something.
     LaunchedEffect(s.consent, s.speechService) {
-        val camera = !mayStart(s.consent, Capture.CAMERA) && (vision || mode?.camera == true)
-        val microphone = (!mayStart(s.consent, Capture.MICROPHONE) || voice.needsAcceptance()) && (phase == AingelOrbState.LISTENING || mode == HomeMode.HEAR)
+        val cameraOpen = vision || visionPending != null
+        val micOpen = phase == AingelOrbState.LISTENING || (mode == HomeMode.HEAR && phase != AingelOrbState.IDLE)
+        val stopped = stoppedCapture(cameraOpen, mayStart(s.consent, Capture.CAMERA),
+            micOpen, mayStart(s.consent, Capture.MICROPHONE) && !voice.needsAcceptance())
+        val camera = cameraOpen && !mayStart(s.consent, Capture.CAMERA)
+        val microphone = micOpen && (!mayStart(s.consent, Capture.MICROPHONE) || voice.needsAcceptance())
         if (camera) {
             if (visionJob?.isActive == true) { visionJob?.cancel(); phase = AingelOrbState.IDLE }
             visionPending?.let { id -> visionPending = null; str(R.string.capture_camera_stopped).let { reply(id, Answer(it, it, source = str(R.string.ui_src_local), origin = Origin.NOTICE)) } }
@@ -533,7 +539,7 @@ private const val MAX_MODEL_PAIRS = 5
         }
         if (microphone) { voice.stop(); continuous = false; silenceUntil = 0L; if (phase == AingelOrbState.LISTENING) phase = AingelOrbState.IDLE }
         if ((camera && mode?.camera == true) || (microphone && mode == HomeMode.HEAR)) endMode()
-        if (camera || microphone) notice = str(if (camera) R.string.capture_camera_stopped else R.string.capture_microphone_stopped)
+        if (stopped != null) notice = str(if (stopped == Capture.CAMERA) R.string.capture_camera_stopped else R.string.capture_microphone_stopped)
     }
     // Watching that ended on its own (a refused authorization) says why here, once.
     LaunchedEffect(watch.stopped) { if (watch.stopped.isNotBlank() && !watch.running) { notice = watch.stopped; WatchState.change { it.copy(stopped = "") } } }

@@ -48,6 +48,17 @@ internal fun stopsCapture(errorCode: String): Boolean = errorCode in setOf(
     "legal_review_required", "subject_confirmation_required", "adult_declaration_required",
     "authentication_required", "session_changed")
 
+/**
+ * The capture to close and report as stopped after the decisions changed: only one that was really open. A screen
+ * that is still checking before opening (a mode just chosen) is not "stopped" and is left to that check, which says
+ * "not authorized" instead: the camera or microphone never turned on and nobody withdrew anything.
+ */
+internal fun stoppedCapture(cameraOpen: Boolean, cameraAllowed: Boolean, micOpen: Boolean, micAllowed: Boolean): Capture? = when {
+    cameraOpen && !cameraAllowed -> Capture.CAMERA
+    micOpen && !micAllowed -> Capture.MICROPHONE
+    else -> null
+}
+
 /** Captures that depend on [purpose]: refusing it in the app stops them at once, before the server answers. */
 internal fun capturesFor(purpose: String): Set<Capture> = when (purpose) {
     "camera_local", "meta_photos", "meta_video" -> setOf(Capture.CAMERA)
