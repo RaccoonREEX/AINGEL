@@ -86,7 +86,7 @@ class AingelViewModel(app: Application) : AndroidViewModel(app) {
             catch (cancelled: CancellationException) { throw cancelled }
             catch (failure: ApiFailure) {
                 if (current == operationGeneration) {
-                    if (failure.status == 403 && failure.code == "authentication_required") mutable.update { MobileState(busy = false, error = "session_expired") }
+                    if (failure.status in setOf(401, 403) && failure.code == "authentication_required") mutable.update { MobileState(busy = false, error = "session_expired") }
                     else mutable.update { it.copy(error = failure.code) }
                 }
             } catch (_: Exception) {

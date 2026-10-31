@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="net_error_csrf_failed">La sesión de seguridad caducó. Vuelve a intentarlo; si continúa, cierra sesión y entra de nuevo.</string>
+    <string name="net_error_tls_failed">No se pudo crear una conexión segura con el servidor. Revisa la fecha y hora del teléfono o prueba con otra red.</string>
+    <string name="net_error_server_html_error">El servidor no está disponible en este momento (mantenimiento o error). Inténtalo de nuevo en unos minutos.</string>
+    <string name="net_error_rate_limited">Demasiados intentos seguidos. Espera un momento y vuelve a intentarlo.</string>
+    <string name="net_error_rate_limited_seconds">Demasiados intentos seguidos. Vuelve a intentarlo en %1$d s.</string>
+    <string name="net_error_redirect_unexpected">La dirección del servidor redirige a otro sitio. Revisa la dirección configurada.</string>
+    <string name="net_error_https_required">El servidor exige una conexión segura. Usa una dirección que empiece por https://.</string>
+    <string name="net_error_network_unavailable">No hay conexión a internet. Revisa el wifi o los datos móviles.</string>
+    <string name="net_error_timeout">El servidor tardó demasiado en responder. Inténtalo de nuevo.</string>
+    <string name="net_error_dns_failed">No se encontró el servidor. Revisa tu conexión a internet y la dirección del servidor.</string>
+    <string name="net_error_server_unreachable">No se pudo conectar con el servidor. Inténtalo de nuevo en unos minutos.</string>
+    <string name="net_error_server_error">El servidor tuvo un problema al procesar la solicitud. Inténtalo de nuevo más tarde.</string>
+    <string name="net_error_not_found">El servidor no reconoce esta solicitud. Puede que la app o la dirección del servidor no estén actualizadas.</string>
+    <string name="net_error_validation_failed">Algunos datos no son válidos. Revísalos e inténtalo de nuevo.</string>
+    <string name="net_error_payload_too_large">El contenido es demasiado grande para enviarlo.</string>
+    <string name="net_error_response_invalid">La respuesta del servidor no es válida. Inténtalo de nuevo más tarde.</string>
+    <string name="net_error_detail">Código técnico: %1$s</string>
+</resources>

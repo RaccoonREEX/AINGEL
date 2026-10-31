@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="net_error_csrf_failed">Your security session expired. Try again; if it continues, sign out and sign in again.</string>
+    <string name="net_error_tls_failed">Could not create a secure connection to the server. Check the phone date and time or try another network.</string>
+    <string name="net_error_server_html_error">The server is not available right now (maintenance or an error). Try again in a few minutes.</string>
+    <string name="net_error_rate_limited">Too many attempts in a row. Wait a moment and try again.</string>
+    <string name="net_error_rate_limited_seconds">Too many attempts in a row. Try again in %1$d s.</string>
+    <string name="net_error_redirect_unexpected">The server address redirects somewhere else. Check the configured address.</string>
+    <string name="net_error_https_required">The server requires a secure connection. Use an address that starts with https://.</string>
+    <string name="net_error_network_unavailable">No internet connection. Check Wi-Fi or mobile data.</string>
+    <string name="net_error_timeout">The server took too long to respond. Try again.</string>
+    <string name="net_error_dns_failed">The server could not be found. Check your internet connection and the server address.</string>
+    <string name="net_error_server_unreachable">Could not connect to the server. Try again in a few minutes.</string>
+    <string name="net_error_server_error">The server had a problem processing the request. Try again later.</string>
+    <string name="net_error_not_found">The server does not recognise this request. The app or the server address may be out of date.</string>
+    <string name="net_error_validation_failed">Some information is not valid. Check it and try again.</string>
+    <string name="net_error_payload_too_large">The content is too large to send.</string>
+    <string name="net_error_response_invalid">The server response is not valid. Try again later.</string>
+    <string name="net_error_detail">Technical code: %1$s</string>
+</resources>

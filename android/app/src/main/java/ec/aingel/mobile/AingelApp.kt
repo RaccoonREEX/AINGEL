@@ -188,7 +188,8 @@ internal fun errorMessage(error: String): Int = when (error) {
     "camera_unavailable", "microphone_unavailable" -> R.string.device_error
     "private_test_consent_required" -> R.string.private_test_missing_consent
     "privacy_review_required" -> R.string.private_test_server_denied
-    else -> R.string.failed
+    // Network and server failures (NetworkErrors.kt): specific messages instead of a generic «failed».
+    else -> networkErrorMessage(error) ?: R.string.failed
 }
 
 @Composable private fun AcceptInvitation(model: AingelViewModel, busy: Boolean) {

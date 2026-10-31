@@ -236,7 +236,7 @@ private const val MAX_MODEL_PAIRS = 5
             }
         } catch (e: ApiFailure) {
             val message = when {
-                e.status == 429 || e.code == "throttled" -> str(R.string.ui_conv_throttled)
+                e.status == 429 -> str(R.string.ui_conv_throttled)
                 e.code == "privacy_review_required" -> str(R.string.ui_conv_privacy_off)
                 else -> str(R.string.ui_conv_offline)
             }
