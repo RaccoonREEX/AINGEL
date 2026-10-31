@@ -11,19 +11,21 @@ from django.middleware.csrf import get_token
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_http_methods
 
-from .consent import TERMS_VERSION, adult_declared, declare_adult
+from .consent import SPEECH_SERVICE_VERSION, TERMS_VERSION, adult_declared, decide_speech_service, declare_adult, speech_service_accepted
 
 
 def session_data(request):
     return {
         "user": (
-            {"id": request.user.id, "username": request.user.username, "adult_declared": adult_declared(request.user)}
+            {"id": request.user.id, "username": request.user.username, "adult_declared": adult_declared(request.user),
+             "speech_service": speech_service_accepted(request.user)}
             if request.user.is_authenticated
             else None
         ),
         "csrf": get_token(request),
         # Current terms the 18+ declaration refers to (care.consent): clients show and send it back.
         "terms_version": TERMS_VERSION,
+        "speech_service_version": SPEECH_SERVICE_VERSION,
         "mfa_required": bool(
             request.session.get("mfa_pending_user")
             and request.session.get("mfa_pending_until", 0) > time.time()
@@ -109,6 +111,25 @@ def declare(request):
     if not adult_statement(data):
         return JsonResponse({"error": "adult_declaration_required"}, status=400)
     declare_adult(request.user, TERMS_VERSION)
+    return JsonResponse(session_data(request))
+
+
+@csrf_protect
+@require_http_methods(["POST"])
+def speech_service(request):
+    """The signed-in account accepts (for the current notice) or withdraws that the browser's speech recognition may
+    send their voice to its vendor. Never inferred, never shared between accounts."""
+    if not request.user.is_authenticated:
+        return JsonResponse({"error": "authentication_required"}, status=401)
+    try:
+        data = json.loads(request.body)
+    except ValueError:
+        data = None
+    if not isinstance(data, dict) or not isinstance(data.get("accept"), bool) or (
+        data["accept"] and data.get("version") != SPEECH_SERVICE_VERSION
+    ):
+        return JsonResponse({"error": "speech_service_request_invalid"}, status=400)
+    decide_speech_service(request.user, data["accept"])
     return JsonResponse(session_data(request))
 
 

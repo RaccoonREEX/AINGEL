@@ -1,9 +1,11 @@
 /** adult_declared: the account's own 18+ self-declaration (backend care.consent); Meta stays closed without it. */
-export type User = { id: number; username: string; adult_declared?: boolean };
+/** speech_service: this account accepted that the browser's recognition may send its voice to the vendor. */
+export type User = { id: number; username: string; adult_declared?: boolean; speech_service?: boolean };
 export type Session = {
   user: User | null;
   csrf: string;
   terms_version?: string;
+  speech_service_version?: string;
   mfa_required?: boolean;
 };
 export type Profile = {

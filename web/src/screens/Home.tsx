@@ -62,12 +62,12 @@ const MAX_MODEL_PAIRS = 5;
 const MAX_TURN_CHARS = 8000;
 
 /** 1b / 1c on the web and 1f / 1g / 1h on phones, wired to the real routines, messages and memories. */
-export default function Home({ profile, t, locale, run, busy, date, onOpenToday, onOpenSigns, initialQuestion }: WithProfile & { onOpenToday: () => void; onOpenSigns: () => void; initialQuestion?: string }) {
+export default function Home({ profile, t, locale, run, busy, date, speech: accountSpeech, onOpenToday, onOpenSigns, initialQuestion }: WithProfile & { onOpenToday: () => void; onOpenSigns: () => void; initialQuestion?: string }) {
   const es = locale === "es-EC";
   const L = (a: string, b: string) => (es ? a : b);
   const mobile = useMediaQuery("(max-width: 760px)");
   const { value: communication } = useCommunication(profile.id);
-  const speech = useSpeechInput(profile.locale);
+  const speech = useSpeechInput(profile.locale, accountSpeech);
   const [askSpeech, setAskSpeech] = useState(false);
   const tts = useSpeechSynthesisLevel(profile.locale, communication?.pace === "slow" ? 0.8 : 1);
   const camera = useCamera();
@@ -423,8 +423,8 @@ export default function Home({ profile, t, locale, run, busy, date, onOpenToday,
     }} onPick={(q) => void askFixture(q)} />
   );
   const speechConsent = askSpeech
-    ? <BrowserSpeechConsent es={es} onAccept={() => { speech.accept(true); setAskSpeech(false); void onMic(); }} onDecline={() => { setAskSpeech(false); openComposer(); }} />
-    : speech.accepted && speech.place === "browser_service" && phase !== "listening" ? <BrowserSpeechRevoke es={es} onRevoke={() => speech.accept(false)} /> : null;
+    ? <BrowserSpeechConsent es={es} onAccept={() => void speech.accept(true).then((ok) => { setAskSpeech(false); if (ok) void onMic(); else openComposer(); })} onDecline={() => { setAskSpeech(false); openComposer(); }} />
+    : speech.accepted && speech.place === "browser_service" && phase !== "listening" ? <BrowserSpeechRevoke es={es} onRevoke={() => void speech.accept(false)} /> : null;
   const level = phase === "listening" ? speech.level : phase === "speaking" ? tts.level : undefined;
   const micButton = (size: "lg" | "sm") => (
     <button type="button" className={`mic-btn mic-btn--${size}`} onClick={() => void onMic()} aria-label={hint[phase]}>

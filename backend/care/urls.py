@@ -12,6 +12,7 @@ urlpatterns = [
     path("auth/register/", auth.authenticate_user, {"register": True}),
     path("auth/logout/", auth.sign_out),
     path("auth/adult/", auth.declare),
+    path("auth/speech-service/", auth.speech_service),
     path("auth/mfa/verify/", mfa.verify_challenge),
     path("auth/mfa/status/", mfa.mfa_status),
     path("auth/mfa/setup/", mfa.mfa_setup),

@@ -140,6 +140,29 @@ def meta_account_denial(user):
     return None
 
 
+# The notice shown before the browser's speech recognition may use its vendor's service (web/.../browserSpeech.ts).
+SPEECH_SERVICE_VERSION = "2026-10-30"
+
+
+def speech_service_accepted(user):
+    """The account holder accepted the current notice: their voice may go to the browser vendor's recognition."""
+    if user is None or not getattr(user, "is_authenticated", False) or user.pk is None:
+        return False
+    from .models import AccountPolicy
+
+    return AccountPolicy.objects.filter(user=user, speech_service_accepted_at__isnull=False,
+                                        speech_service_version=SPEECH_SERVICE_VERSION).exists()
+
+
+def decide_speech_service(user, accept):
+    from .models import AccountPolicy
+
+    AccountPolicy.objects.update_or_create(user=user, defaults={
+        "speech_service_accepted_at": timezone.now() if accept else None,
+        "speech_service_version": SPEECH_SERVICE_VERSION if accept else "",
+    })
+
+
 # --- People and their decisions --------------------------------------------------------------------------------
 
 def subject_account(profile):

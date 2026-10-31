@@ -188,6 +188,10 @@ class AccountPolicy(models.Model):
     adult_declared_at = models.DateTimeField(null=True, blank=True)
     terms_version = models.CharField(max_length=20, blank=True)
     declaration = models.CharField(max_length=30, default="self_declaration")
+    # The account holder's own decision that the browser's (or phone's) speech recognition may send their voice to its
+    # vendor (care.consent.SPEECH_SERVICE_VERSION). Their voice, so their account: never inherited by another one.
+    speech_service_accepted_at = models.DateTimeField(null=True, blank=True)
+    speech_service_version = models.CharField(max_length=20, blank=True, default="", db_default="")
 
 
 class ConsentGrant(models.Model):

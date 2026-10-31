@@ -29,12 +29,22 @@ try {
   onDevice = "downloadable";
   assert.equal(await speech.recognitionPlace("es-EC"), "browser_service");
 
-  // The person's acceptance is per browser and can be withdrawn.
-  assert.equal(speech.browserServiceAccepted(), false);
-  speech.setBrowserServiceAccepted(true);
-  assert.equal(speech.browserServiceAccepted(), true);
-  speech.setBrowserServiceAccepted(false);
-  assert.equal(speech.browserServiceAccepted(), false);
+  // Two accounts in turn on this browser: the first one's acceptance (even a leftover flag of the old design in
+  // localStorage) never lets the second one's voice go to the vendor. Only the signed-in account's own decision,
+  // which the backend records per account (care/test_speech_service.py), counts.
+  store.set("aingel.browser-speech-service.v1", "accepted");
+  const first = { accepted: true }, second = { accepted: false };
+  assert.equal(speech.recognitionDecision("browser_service", first.accepted), "service");
+  assert.equal(speech.recognitionDecision("browser_service", second.accepted), "ask");
+  assert.equal(speech.recognitionDecision("device", second.accepted), "device");
+  assert.equal(speech.recognitionDecision("unsupported", true), "none");
+  const fs = await import("node:fs");
+  for (const file of ["src/components/aingel/browserSpeech.ts", "src/components/aingel/useSpeechInput.ts"]) {
+    assert.doesNotMatch(fs.readFileSync(file, "utf8"), /localStorage|sessionStorage/, `${file} must not read browser storage`);
+  }
+  const hook = fs.readFileSync("src/components/aingel/useSpeechInput.ts", "utf8");
+  assert.match(hook, /useEffect\(\(\) => cancel, \[consent\.identity, cancel\]\)/, "a new account or profile cancels recognition");
+  assert.match(hook, /if \(!consent\.accepted && placeNow\.current !== "device"\) cancel\(\)/, "a withdrawal stops recognition");
 
   // Text-to-speech never uses a network voice.
   voices = [{ lang: "es-EC", localService: false, name: "network" }];

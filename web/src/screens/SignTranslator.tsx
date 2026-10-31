@@ -36,7 +36,7 @@ const EXAMPLES = ["Mañana quiero ir al parque con mi hija", "¿Tienes hambre?",
  * rest is fingerspelled and articles are dropped. Signs → voice / text: no automatic recognition exists yet,
  * so the signer builds the message on a pictogram board and AINGEL says it or shows it.
  */
-export default function SignTranslator({ profile, locale, onBack }: WithProfile & { onBack: () => void }) {
+export default function SignTranslator({ profile, locale, speech: speechConsent, onBack }: WithProfile & { onBack: () => void }) {
   const es = locale === "es-EC";
   const L = (a: string, b: string) => (es ? a : b);
   const name = (id: SignId) => signName(id, es);
@@ -44,7 +44,7 @@ export default function SignTranslator({ profile, locale, onBack }: WithProfile 
   const label = (id: SignId) => { const n = name(id).replace(/[¿?]/g, ""); return n.charAt(0).toUpperCase() + n.slice(1); };
   const mobile = useMediaQuery("(max-width: 760px)");
   const { value: communication } = useCommunication(profile.id);
-  const speech = useSpeechInput(profile.locale);
+  const speech = useSpeechInput(profile.locale, speechConsent);
   const [askSpeech, setAskSpeech] = useState(false);
   const tts = useSpeechSynthesisLevel(profile.locale, communication?.pace === "slow" ? 0.8 : 1);
   const camera = useCamera();
@@ -210,8 +210,8 @@ export default function SignTranslator({ profile, locale, onBack }: WithProfile 
             {speech.listening ? <span className="mic-stop" /> : <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0" /><path d="M12 17.5V21" /></svg>}
           </button>
           {speech.listening && <span className="mic-privacy">{micPrivacyLine(es, speech.place)}</span>}
-          {askSpeech && <BrowserSpeechConsent es={es} onAccept={() => { speech.accept(true); setAskSpeech(false); void listen(); }} onDecline={() => setAskSpeech(false)} />}
-          {speech.accepted && speech.place === "browser_service" && !speech.listening && <BrowserSpeechRevoke es={es} onRevoke={() => speech.accept(false)} />}
+          {askSpeech && <BrowserSpeechConsent es={es} onAccept={() => void speech.accept(true).then((ok) => { setAskSpeech(false); if (ok) void listen(); })} onDecline={() => setAskSpeech(false)} />}
+          {speech.accepted && speech.place === "browser_service" && !speech.listening && <BrowserSpeechRevoke es={es} onRevoke={() => void speech.accept(false)} />}
           {heard && <p className="heard"><span className="chip">{L("Escuché", "I heard")}</span> {heard}</p>}
         </section>
       )}

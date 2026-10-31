@@ -59,6 +59,7 @@ export default function App() {
   const [mfaRequired, setMfaRequired] = useState(false);
   // The terms the 18+ declaration refers to; sent back as-is (the server rejects a stale version).
   const [termsVersion, setTermsVersion] = useState("");
+  const [speechVersion, setSpeechVersion] = useState("");
   const [focusConsent, setFocusConsent] = useState(false);
   const [version, setVersion] = useState(0);
   const [homeKey, setHomeKey] = useState(0);
@@ -90,6 +91,7 @@ export default function App() {
       .then(async (result) => {
         setUser(result.user);
         setTermsVersion(result.terms_version ?? "");
+        setSpeechVersion(result.speech_service_version ?? "");
         setMfaRequired(!!result.mfa_required);
         if (result.user) await loadProfiles();
       })
@@ -105,6 +107,7 @@ export default function App() {
     setMfaRequired(false);
     setUser(session.user);
     if (session.terms_version) setTermsVersion(session.terms_version);
+    if (session.speech_service_version) setSpeechVersion(session.speech_service_version);
     await loadProfiles();
   };
   /** After a code: the profile is now this account's own (role subject); open its permissions. */
@@ -137,6 +140,15 @@ export default function App() {
     run,
     date,
     currentUser: user?.username,
+    speech: {
+      identity: `${user?.id ?? ""}:${profile?.id ?? ""}`,
+      accepted: !!user?.speech_service,
+      decide: async (accept: boolean) => {
+        const session = await api<Session>("auth/speech-service/", "POST", { accept, version: speechVersion });
+        setUser(session.user);
+        return !!session.user?.speech_service;
+      },
+    },
     refresh: async () => {
       await loadProfiles();
       setNotice(t("saved"));

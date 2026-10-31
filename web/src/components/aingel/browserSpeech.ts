@@ -5,7 +5,8 @@
  *   browser's service, not AINGEL's: browsers may send the audio to their vendor (Chrome does unless it can process it
  *   on the device), and the Web Speech API does not always say which. AINGEL uses it only when the browser confirms
  *   on-device processing for the language (`available({ processLocally: true })`, then `processLocally = true`), or
- *   after the person accepts, on this browser, that the audio may go to the browser's provider. Typing always works.
+ *   after the signed-in account accepts that the audio may go to the browser's provider (recorded by the backend for
+ *   that account only, and withdrawable). Typing always works.
  *   AINGEL never sends this audio anywhere itself; the recognized text follows the person's Meta authorizations.
  * - Text-to-speech (speechSynthesis) reads text aloud. AINGEL uses only voices the browser marks as local
  *   (SpeechSynthesisVoice.localService); a network voice would send the text being read to its provider.
@@ -37,18 +38,15 @@ export async function recognitionPlace(lang: string): Promise<RecognitionPlace> 
   return "browser_service";
 }
 
-const CONSENT_KEY = "aingel.browser-speech-service.v1";
-
-/** The person accepted, on this browser, that recognition may use the browser vendor's service. */
-export function browserServiceAccepted(): boolean {
-  try { return window.localStorage.getItem(CONSENT_KEY) === "accepted"; } catch { return false; }
-}
-
-export function setBrowserServiceAccepted(accepted: boolean) {
-  try {
-    if (accepted) window.localStorage.setItem(CONSENT_KEY, "accepted");
-    else window.localStorage.removeItem(CONSENT_KEY);
-  } catch { /* storage unavailable: the choice lasts until the page reloads */ }
+/**
+ * Whether recognition may start: "device" when the browser processes on the device; "service" when it may use its
+ * vendor and the signed-in account accepted that (recorded by the backend for that account, never in browser
+ * storage, so another account on this browser never inherits it); otherwise "ask".
+ */
+export function recognitionDecision(place: RecognitionPlace, accountAccepted: boolean): "device" | "service" | "ask" | "none" {
+  if (place === "unsupported") return "none";
+  if (place === "device") return "device";
+  return accountAccepted ? "service" : "ask";
 }
 
 /** A local voice for [lang], or null (none installed, or the voice list is not loaded yet). */
