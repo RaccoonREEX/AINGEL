@@ -160,8 +160,7 @@ la voz de la app y puede pedirle al teléfono que haga cosas.
 
 - **Cuándo.** Al describir («qué ves», «Ver y describir») y en la vigilancia continua, el teléfono envía
   `family=true` a `scene/`.
-- **Qué dice.** Si un familiar inscrito está delante, AINGEL dice primero quién parece ser («Parece ser tu hijo
-  David.») y Meta describe su ropa y qué hace.
+- **Qué dice.** Si un familiar inscrito está delante, AINGEL dice primero quién parece ser («Parece ser tu hijo Mateo.») y Meta describe su ropa y qué hace.
 - **Límites.**
   - Solo para la persona dueña del perfil, con «Reconocer familiares» activado (contraseña y consentimiento).
   - Solo reconoce a familiares que inscribieron su propia foto con su consentimiento (`care/faces.py`).
@@ -170,19 +169,19 @@ la voz de la app y puede pedirle al teléfono que haga cosas.
   - Es una coincidencia posible, no una identidad verificada; por eso dice «parece ser».
 - **Vigilancia continua.** El nombre no se repite en cada captura: se vuelve a decir pasados 3 minutos.
 - **Prueba (29-10-2026):**
-  - David inscrito como «Hijo» en la cuenta de demostración, con 1 foto.
-  - `scene/` con esa foto → «Parece ser tu hijo David.» y «lleva gafas y una chompa verde oscura».
+  - Un familiar adulto de prueba inscrito como «Hijo» (nombre ficticio «Mateo» en este documento), con 1 foto.
+  - `scene/` con esa foto → «Parece ser tu hijo Mateo.» y una descripción de su ropa.
   - Con 2–3 fotos (de frente, con distinta luz) el reconocimiento por la cámara es más fiable.
-  - En vivo, con la vigilancia por cambios, el reconocimiento corrió en cada captura y no reconoció a David. Era una
-    selfie frente al espejo, con el teléfono delante; Meta describió «lentes y un buzo oscuro con cuello rojo».
+  - En vivo, con la vigilancia por cambios, el reconocimiento corrió en cada captura y no lo reconoció. Era una
+    selfie frente al espejo, con el teléfono delante; Meta describió la ropa sin identificar a nadie.
     Con una sola foto pequeña (189×204) no alcanza: hay que inscribir 2–3 fotos de frente.
   - Reinscrito con 3 fotos de frente:
     - Similitud entre las dos fotos buenas: 0,68. La foto pequeña quedaba en 0,50–0,52.
     - Una cuarta foto en blanco y negro con la cabeza inclinada no pasó el detector (confianza 0,90 justo en el
       umbral), así que no se inscribió.
     - Comparada aparte contra la inscripción, esa foto coincidió con 0,58 (umbral 0,55).
-  - En vivo con la cámara trasera del Flip 4, «qué ves» → «Parece ser tu hijo David. La persona al frente lleva gafas
-    y un suéter azul oscuro con cuello rojo, y parece estar posando con las manos en la cintura…».
+  - En vivo con la cámara trasera del Flip 4, «qué ves» → «Parece ser tu hijo Mateo.» seguido
+    de una descripción de su ropa y su postura.
 - **Vigilancia por cambios (29-10-2026):**
   - Con la escena quieta envió 2 fotos en 45 s; antes, cada 7 s, habrían sido unas 6.
   - La segunda foto salió cuando apareció una persona delante.
@@ -231,7 +230,7 @@ la voz de la app y puede pedirle al teléfono que haga cosas.
   | «¿Qué tal te fue hoy?» | HOY TÚ BIEN ? |
   | «Tengo mucha hambre» | YO COMER |
   | «Mañana a las 3 viene el doctor» | MAÑANA 3 DOCTOR VENIR |
-  | «Me llamo David y soy tu hijo» | YO D-A-V-I-D TÚ HIJO |
+  | «Me llamo Mateo y soy tu hijo» | YO M-A-T-E-O TÚ HIJO |
   | «Hola mamá, te traje agua» | HOLA MAMÁ YO VENIR AGUA |
 
   - Con un límite de 300 tokens Meta devolvió una respuesta incompleta; se subió a 600.

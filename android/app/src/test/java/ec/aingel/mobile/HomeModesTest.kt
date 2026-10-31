@@ -64,8 +64,8 @@ class HomeModesTest {
     }
 
     @Test fun recognizedFamilyIsSaidBeforeTheDescription() {
-        val scene = JSONObject("""{"text":"Lleva un suéter verde.","people":[{"id":"f1","line":"Parece ser tu hijo David."}]}""")
-        assertEquals("Parece ser tu hijo David. Lleva un suéter verde.", withKnownPeople(scene, scene.optString("text")))
+        val scene = JSONObject("""{"text":"Lleva un suéter verde.","people":[{"id":"f1","line":"Parece ser tu hijo Mateo."}]}""")
+        assertEquals("Parece ser tu hijo Mateo. Lleva un suéter verde.", withKnownPeople(scene, scene.optString("text")))
         // Continuous watching: not repeated while the same person stays in front.
         assertEquals("Lleva un suéter verde.", withKnownPeople(scene, scene.optString("text"), skip = setOf("f1")))
         assertEquals("Hay una mesa.", withKnownPeople(JSONObject("""{"text":"Hay una mesa."}"""), "Hay una mesa."))

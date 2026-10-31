@@ -11,7 +11,7 @@ from rest_framework.test import APIClient
 from care.models import Membership, Profile
 from care.testing import adult, authorize
 
-DAVID = {"box": [0.2, 0.1, 0.6, 0.7], "candidate": {"id": "face-1", "display_name": "David", "relationship": "Hijo"}}
+MATEO = {"box": [0.2, 0.1, 0.6, 0.7], "candidate": {"id": "face-1", "display_name": "Mateo", "relationship": "Hijo"}}
 
 
 def photo():
@@ -42,7 +42,7 @@ class SceneFamilyTests(TestCase):
             return {"text": "Lleva un suéter verde y mira el teléfono.", "mode": "meta", "model": "muse-spark-1.3", "latency_ms": 5}
 
         with patch("assistance.views.image_allowed", return_value=True), patch(
-            "assistance.views.family_matches", return_value=[DAVID, {"box": [0, 0, 0.1, 0.1], "candidate": None}]
+            "assistance.views.family_matches", return_value=[MATEO, {"box": [0, 0, 0.1, 0.1], "candidate": None}]
         ) as matches, patch("assistance.views.describe_scene", describe):
             response = self.client.post(
                 "/api/v1/scene/",
@@ -56,11 +56,11 @@ class SceneFamilyTests(TestCase):
         self.assertEqual(response.status_code, 200, response.data)
         self.assertEqual(
             response.data["people"],
-            [{"id": "face-1", "display_name": "David", "relationship": "Hijo", "line": "Parece ser tu hijo David."}],
+            [{"id": "face-1", "display_name": "Mateo", "relationship": "Hijo", "line": "Parece ser tu hijo Mateo."}],
         )
         self.assertTrue(captured["known_person"])
         english, _, _ = self.post(locale="en-US")
-        self.assertEqual(english.data["people"][0]["line"], "It looks like David (Hijo).")
+        self.assertEqual(english.data["people"][0]["line"], "It looks like Mateo (Hijo).")
 
     def test_recognition_only_when_asked_by_the_owner_with_the_feature_on(self):
         response, captured, matches = self.post(family=False)
