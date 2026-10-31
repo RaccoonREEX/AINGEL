@@ -1,9 +1,15 @@
 # Cuenta `prueba.persona` creada por error en producción (30-10-2026)
 
-**Estado:** borrado pendiente de aprobación explícita del propietario. No hay ninguna autorización para borrar.
-No se ha borrado ni desactivado nada, y no se han tocado los registros de acceso. Este documento sirve para
-comprobarlo; el paso 2 solo se ejecuta si el propietario lo aprueba expresamente y si la comprobación del paso 1 da
-exactamente el resultado esperado.
+**Estado:** eliminada. Según el informe de la segunda auditoría de Astra, Astra la eliminó en producción con la
+autorización del propietario, después de hacer una copia de seguridad y de verificar el resultado.
+
+**Qué está verificado y qué no.**
+- Esta eliminación **no la ha verificado** quien redacta este documento: no tiene acceso a producción. Es lo que
+  informa Astra.
+- Desde esta rama no se ha ejecutado ninguna eliminación ni ninguna otra operación sobre producción, y no debe
+  volver a ejecutarse.
+- Los pasos de abajo se conservan solo como registro del procedimiento.
+- Los registros de acceso del proxy y de Daphne siguen su propia rotación; no consta que se hayan tocado.
 
 ## Qué pasó
 
