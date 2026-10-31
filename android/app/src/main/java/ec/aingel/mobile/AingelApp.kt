@@ -12,6 +12,12 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.selectableGroup
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -374,6 +380,88 @@ internal fun verifiedMedlinePlusUrl(raw: String): String? {
         Action(R.string.private_test_save_consent, !s.busy) { model.saveMediaConsents(camera, microphone, meta) }
         Text(stringResource(R.string.private_test_declaration))
         Check(R.string.private_test_enable, s.privateTestProfileId == profile.optString("id")) { model.setPrivateTest(it) }
+    }
+    CommunicationPrefs(model, s)
+}
+
+private fun JSONObject.choice(key: String, options: Set<String>, default: String) = optString(key).takeIf { it in options } ?: default
+private val PRIORITY = listOf("visual" to R.string.cp_prio_visual, "auditory" to R.string.cp_prio_auditory, "cognitive" to R.string.cp_prio_cognitive,
+    "communication" to R.string.cp_prio_communication, "none" to R.string.cp_prio_none)
+private val DETAIL = listOf("brief" to R.string.cp_detail_brief, "detailed" to R.string.cp_detail_detailed)
+private val SPONTANEOUS = listOf("few" to R.string.cp_spont_few, "normal" to R.string.cp_spont_normal, "many" to R.string.cp_spont_many)
+private val YES_NO = listOf("yes" to R.string.cp_yes, "no" to R.string.cp_no)
+
+/**
+ * «Cómo quiere comunicarse»: the four style preferences of backend care.serializers.CommunicationSerializer.
+ * Editable by whoever may configure the profile (owner, the person, caregivers with configure); the server checks it too.
+ * Saved with a partial PATCH straight to the API (the ViewModel has no communication save yet), so only these fields change.
+ */
+@Composable private fun CommunicationPrefs(model: AingelViewModel, s: MobileState) {
+    val profile = s.profile ?: return
+    val current = s.communication ?: return  // still loading
+    val canEdit = profile.optJSONObject("permissions")?.optBoolean("configure") == true
+    val scope = rememberCoroutineScope()
+    var base by remember(profile.optString("id"), current.toString()) { mutableStateOf(current) }
+    var priority by remember(base) { mutableStateOf(base.choice("priority_support", PRIORITY.map { it.first }.toSet(), "none")) }
+    var detail by remember(base) { mutableStateOf(base.choice("detail", setOf("brief", "detailed"), "brief")) }
+    var spontaneous by remember(base) { mutableStateOf(base.choice("spontaneous", setOf("few", "normal", "many"), "normal")) }
+    var repeat by remember(base) { mutableStateOf(base.choice("repeat_important", setOf("yes", "no"), "no")) }
+    var saving by remember { mutableStateOf(false) }
+    var saved by remember { mutableStateOf(false) }
+    val editable = canEdit && !saving && !s.busy
+    fun edit(change: () -> Unit) { change(); saved = false }
+    HorizontalDivider(color = Ui.Divider)
+    Text(stringResource(R.string.cp_title), style = MaterialTheme.typography.titleLarge, color = Ui.Navy, modifier = Modifier.semantics { heading() })
+    Text(stringResource(R.string.cp_intro), color = Muted)
+    if (!canEdit) Text(stringResource(R.string.cp_read_only), color = Muted)
+    PrefGroup(R.string.cp_priority, R.string.cp_priority_help, PRIORITY, priority, editable, R.string.cp_priority_meta) { edit { priority = it } }
+    PrefGroup(R.string.cp_detail, R.string.cp_detail_help, DETAIL, detail, editable) { edit { detail = it } }
+    PrefGroup(R.string.cp_spontaneous, R.string.cp_spontaneous_help, SPONTANEOUS, spontaneous, editable) { edit { spontaneous = it } }
+    PrefGroup(R.string.cp_repeat, R.string.cp_repeat_help, YES_NO, repeat, editable) { edit { repeat = it } }
+    // A.3 transparency: what may accompany Meta requests and what stays in AINGEL (backend assistance.persona).
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Ui.Selected).padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(stringResource(R.string.cp_legend_title), fontWeight = FontWeight.SemiBold, color = Ui.Navy, modifier = Modifier.semantics { heading() })
+        Text("• " + stringResource(R.string.cp_legend_style), style = MaterialTheme.typography.bodyMedium)
+        Text("• " + stringResource(R.string.cp_legend_priority), style = MaterialTheme.typography.bodyMedium)
+        Text("• " + stringResource(R.string.cp_legend_local), style = MaterialTheme.typography.bodyMedium)
+    }
+    if (canEdit) Action(R.string.cp_save, editable) {
+        val patch = JSONObject().put("priority_support", priority).put("detail", detail).put("spontaneous", spontaneous).put("repeat_important", repeat)
+        saving = true; saved = false
+        scope.launch {
+            try { base = model.saveCommunication(patch); saved = true }
+            catch (failure: ApiFailure) { model.reportError(failure.code) }
+            catch (_: Exception) { model.reportError("request_invalid") }
+            finally { saving = false }
+        }
+    }
+    if (saved) Text(stringResource(R.string.cp_saved), color = Ui.Navy, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+}
+
+/** One labelled radio group of segmented choices (48 dp targets), at most three per row. */
+@Composable private fun PrefGroup(label: Int, help: Int, options: List<Pair<String, Int>>, value: String, enabled: Boolean, note: Int? = null, pick: (String) -> Unit) {
+    val title = stringResource(label)
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(title, fontWeight = FontWeight.SemiBold, color = Ui.Navy)
+        Column(Modifier.fillMaxWidth().semantics { contentDescription = title; selectableGroup() }, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            options.chunked(3).forEach { row ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    row.forEach { (key, res) ->
+                        val on = key == value
+                        Box(Modifier.weight(1f).heightIn(min = 48.dp).clip(RoundedCornerShape(12.dp)).background(if (on) Ui.Navy else Color.White)
+                            .border(1.5.dp, if (on) Ui.Navy else Ui.Control, RoundedCornerShape(12.dp))
+                            .selectable(on, enabled = enabled, role = Role.RadioButton) { pick(key) }.padding(horizontal = 6.dp, vertical = 8.dp),
+                            contentAlignment = Alignment.Center) {
+                            Text(stringResource(res), color = if (on) Color.White else Ui.Navy, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
+                                modifier = if (enabled || on) Modifier else Modifier.alpha(0.6f))
+                        }
+                    }
+                    if (options.size > 3) repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }  // keep widths equal across rows
+                }
+            }
+        }
+        Text(stringResource(help), color = Muted, style = MaterialTheme.typography.bodySmall)
+        if (note != null) Text(stringResource(note), style = MaterialTheme.typography.bodySmall)
     }
 }
 @Composable private fun CircleScreen(model: AingelViewModel, s: MobileState) {

@@ -152,6 +152,13 @@ class AingelViewModel(app: Application) : AndroidViewModel(app) {
         mutable.update { it.copy(profile = profile ?: it.profile, consent = null, openConsent = true) }
     }
     fun consentOpened() { mutable.update { it.copy(openConsent = false) } }
+    /** Saves communication preferences and keeps the app's copy current (watching reads «spontaneous» from it). */
+    suspend fun saveCommunication(patch: JSONObject): JSONObject {
+        val id = mutable.value.profile?.optString("id") ?: throw ApiFailure("profile_required")
+        val saved = api.request("profiles/$id/communication/", "PATCH", patch) as JSONObject
+        mutable.update { if (it.profile?.optString("id") == id) it.copy(communication = saved) else it }
+        return saved
+    }
     fun verifyMfa(code: String) = operation { applySession(api.request("auth/mfa/verify/", "POST", JSONObject().put("code", code)) as JSONObject) }
     fun logout() = operation {
         stopCaptions(); WatchService.stop(getApplication()); voice.stop()

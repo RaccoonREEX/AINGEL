@@ -353,6 +353,20 @@ details.panel summary { cursor: pointer; font-weight: 600; color: var(--navy); m
 .empty { padding: 24px 0; color: var(--muted); }
 .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 0 24px; }
 .preference-grid { display: grid; grid-template-columns: 1fr 1fr; margin-bottom: 24px; }
+/* Communication: segmented radio groups (44px targets) and the data legend (what may go to Meta). */
+.segmented-field { margin-bottom: 18px; }
+.segmented-field legend { padding: 0; margin-bottom: 8px; font-size: 13px; font-weight: 600; color: var(--navy); }
+.segmented { display: flex; flex-wrap: wrap; gap: 8px; }
+.segment { cursor: pointer; display: inline-flex; align-items: center; justify-content: center; min-height: 44px; min-width: 44px; padding: 0 16px; border-radius: 12px; border: 1.5px solid var(--control); background: #fff; color: var(--navy); font-size: 14px; font-weight: 600; }
+.segment.is-on { border-color: var(--navy); background: var(--navy); color: #fff; }
+.segment:focus-within { outline: 2px solid var(--blue); outline-offset: 2px; }
+fieldset:disabled .segment { cursor: default; opacity: .6; }
+.segmented-help { display: block; margin-top: 6px; font-size: 12px; line-height: 1.5; color: var(--muted); }
+.segmented-note { color: var(--text); }
+.data-legend { margin: 6px 0 18px; padding: 14px 16px; border-radius: 14px; border: 1px solid var(--border); background: var(--subtle); }
+.data-legend h3 { margin: 0 0 8px; font-size: 14px; }
+.data-legend ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: 13px; line-height: 1.5; color: var(--text); }
+.data-legend b { color: var(--navy); font-weight: 600; }
 .list-row { padding: 16px 0; border-bottom: 1px solid var(--divider); display: flex; justify-content: space-between; align-items: center; gap: 20px; }
 .list-row p { margin: 4px 0; font-size: 13px; }
 .count { color: var(--muted); font-size: 14px; margin-inline-start: 10px; }
