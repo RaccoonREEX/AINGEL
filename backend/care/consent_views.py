@@ -13,7 +13,7 @@ from rest_framework.decorators import api_view, throttle_classes
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 
-from .consent import adult_declared, consent_state, decide
+from .consent import CONSENT_VERSION, CREDITS_NOTICE, PURPOSES, TERMS_VERSION, adult_declared, consent_state, decide
 from .models import Profile, SubjectInvite
 from .permissions import access, audit
 
@@ -27,6 +27,16 @@ class ConsentCodeRate(ScopedRateThrottle):
 
 def code_hash(code):
     return hashlib.sha256(f"{settings.SECRET_KEY}:subject-invite:{code}".encode()).hexdigest()
+
+
+@api_view(["GET"])
+def purposes(request):
+    """The purposes and their texts (same wording everywhere), e.g. for sign-up before a profile exists."""
+    language = "en" if request.query_params.get("locale") == "en-US" else "es"
+    return Response({
+        "version": CONSENT_VERSION, "terms_version": TERMS_VERSION, "credits_notice": CREDITS_NOTICE[language],
+        "purposes": [{"id": key, "to": value["to"], "title": value[language][0], "detail": value[language][1]} for key, value in PURPOSES.items()],
+    })
 
 
 @api_view(["GET", "POST"])

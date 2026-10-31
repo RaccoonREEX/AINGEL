@@ -27,6 +27,7 @@ urlpatterns = [
     path("profiles/<uuid:profile_id>/consent/invite/", consent_views.invite),
     path("profiles/<uuid:profile_id>/consent/legal-review/", consent_views.legal_review),
     path("consent/redeem/", consent_views.redeem),
+    path("consent/purposes/", consent_views.purposes),
     path("profiles/<uuid:profile_id>/signs/catalog/", signs.catalog),
     path("profiles/<uuid:profile_id>/signs/lookup/", signs.lookup),
     path("profiles/<uuid:profile_id>/signs/gloss/", gloss),

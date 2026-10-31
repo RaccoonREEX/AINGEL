@@ -157,3 +157,9 @@ class AgeAndConsentTests(TestCase):
         state = self.as_user(self.person).get(f"/api/v1/profiles/{created.data['id']}/consent/?locale=en-US").data
         self.assertTrue(state["is_subject"])
         self.assertIn("free credits", state["credits_notice"])
+
+    def test_purpose_texts_are_served_for_sign_up(self):
+        data = self.as_user(self.person).get("/api/v1/consent/purposes/?locale=es-EC").data
+        self.assertEqual([p["id"] for p in data["purposes"]][:3], ["camera_local", "microphone_local", "meta_conversation"])
+        self.assertEqual(data["terms_version"], TERMS_VERSION)
+        self.assertTrue(all(p["title"] and p["detail"] for p in data["purposes"]))
