@@ -32,7 +32,7 @@ Prefijo `/api/v1/`. HTTP-session authentication, cookies HTTP-only y CSRF para e
 
 ## Imagen y memoria
 
-Uploads JPEG/PNG/WebP de hasta 5 MiB, máximo 12 millones de píxeles, normalizados a JPEG sin metadatos y lado máximo 1600 px. `scene/` y `locate/` aceptan `image`, `locale` (`es-EC`, `en-US`), `synthetic=true`; `locate/` añade `object_name` de una sola cosa. Devuelven modo/modelo/latencia; SAM también cajas normalizadas, confianza suministrada por el modelo y máscaras PNG localizadas al recuadro. Se usa la gramática oficial, no regex improvisadas para las máscaras.
+Uploads JPEG/PNG/WebP de hasta 5 MiB, máximo 12 millones de píxeles, normalizados a JPEG sin metadatos y lado máximo 1600 px. `scene/` y `locate/` aceptan `image`, `locale` (`es-EC`, `en-US`) y `profile`; `locate/` añade `object_name` de una sola cosa. Sin la autorización de la persona, una prueba sintética solo puede nombrar un fixture del servidor (`fixture`: `shapes` en `scene/`; `red_circle` o `blue_square` en `locate/`; catálogo en `GET synthetic/`), sin imagen ni perfil. El campo `synthetic` se rechaza. Devuelven modo/modelo/latencia; SAM también cajas normalizadas, confianza suministrada por el modelo y máscaras PNG localizadas al recuadro. Se usa la gramática oficial, no regex improvisadas para las máscaras.
 
 Memory POST: entity, location, observed_at ISO8601, confirmed=true, note opcional y evidence opcional. La observación no puede ser futura ni de más de siete días. La fuente está fijada a user_report; no se inventa confianza. Fotos y registros vencidos se ocultan y se purgan mediante la tarea de limpieza. Las cuentas ajenas reciben 404; los permisos insuficientes de un miembro reciben 403.
 
