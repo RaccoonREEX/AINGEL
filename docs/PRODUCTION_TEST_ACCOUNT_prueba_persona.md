@@ -1,7 +1,8 @@
 # Cuenta `prueba.persona` creada por error en producción (30-10-2026)
 
-**Estado:** el propietario aprobó el 30-10-2026 eliminarla después de las comprobaciones. Todavía no se ha borrado
-nada. La ejecuta Astra en el VPS, siguiendo los pasos 1 y 2 en orden; solo se borra si la comprobación del paso 1 da
+**Estado:** borrado pendiente de aprobación explícita del propietario. No hay ninguna autorización para borrar.
+No se ha borrado ni desactivado nada, y no se han tocado los registros de acceso. Este documento sirve para
+comprobarlo; el paso 2 solo se ejecuta si el propietario lo aprueba expresamente y si la comprobación del paso 1 da
 exactamente el resultado esperado.
 
 ## Qué pasó
