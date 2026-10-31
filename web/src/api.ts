@@ -24,6 +24,8 @@ export function errorKey(e: unknown, notFound: Key = "errorGeneric"): Key {
   if (detail.includes("consent_not_pending")) return "errorNotPending";
   if (detail.includes("consents_moved")) return "errorConsentsMoved";
   if (detail.includes("consent_changed")) return "errorConsentChanged";
+  if (detail.includes("subject_confirmation_required")) return "errorSubjectConfirm";
+  if (detail.includes("subject_already_confirmed")) return "errorSubjectConfirmed";
   // Not a Meta failure: the person has not allowed sending this data to Meta (decided in Personalizar).
   if (detail.includes("privacy_review_required")) return "errorPrivacy";
   if (detail.includes("mfa_")) return "mfaError";

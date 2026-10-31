@@ -144,6 +144,12 @@ class AingelViewModel(app: Application) : AndroidViewModel(app) {
         mutable.update { it.copy(consent = c) }
     }
     fun createConsentCode() = operation { val code = api.request(path("consent/invite/"), "POST") as JSONObject; mutable.update { it.copy(consentCode = code) } }
+    /** Profiles from before the policy: the owner says whose data this is (never inferred). */
+    fun confirmSubject(forSelf: Boolean) = operation {
+        val body = if (forSelf) JSONObject().put("for_self", true) else JSONObject().put("for_self", false).put("subject_adult", true)
+        val c = api.request(path("consent/confirm-subject/"), "POST", body) as JSONObject
+        mutable.update { it.copy(consent = c) }; refreshProfiles()
+    }
     fun requestLegalReview() = operation { val c = api.request(path("consent/legal-review/"), "POST") as JSONObject; mutable.update { it.copy(consent = c) }; refreshProfiles() }
     fun redeemConsentCode(code: String) = operation {
         val linked = api.request("consent/redeem/", "POST", JSONObject().put("code", code)) as JSONObject

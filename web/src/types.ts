@@ -29,7 +29,7 @@ export type Profile = {
 };
 /** Legacy coarse flags, read-only: they no longer authorize anything (decisions are per purpose). */
 export type Consents = { camera?: boolean; microphone?: boolean; meta_data?: boolean; version?: string; granted_at?: string; granted_by?: string };
-export type SubjectStatus = "self" | "pending_consent" | "subject_linked" | "requires_legal_review";
+export type SubjectStatus = "pending_confirmation" | "self" | "pending_consent" | "subject_linked" | "requires_legal_review";
 export type Purpose = { id: string; to: "local" | "meta" | "aingel"; title: string; detail: string };
 export type PurposeStatus = "granted" | "declined" | "revoked" | "pending";
 export type Purposes = { version: string; terms_version: string; credits_notice: string; purposes: Purpose[] };
@@ -41,6 +41,7 @@ export type ConsentState = {
   subject_adult: boolean;
   purposes: (Purpose & { status: PurposeStatus })[];
   credits_notice: string;
+  can_confirm?: boolean;
 };
 export type Routine = {
   id: string;

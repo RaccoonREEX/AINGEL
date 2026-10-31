@@ -6,6 +6,8 @@ identity verification. Accounts without it cannot use any Meta endpoint (meta_ac
 
 People: the data of a profile belongs to the person it describes (the subject), not to whoever created it. Only that
 adult decides, purpose by purpose (PURPOSES), from their own account:
+- "pending_confirmation": profiles from before this policy: who the data belongs to was never recorded and is not
+  inferred; the owner confirms it explicitly (confirm_subject). Nothing reaches Meta meanwhile.
 - "self": the owner account is the person.
 - "pending_consent": an adult created it for another adult, who has not accepted yet (SubjectInvite code).
 - "subject_linked": the person linked their own account (subject_user) and decides there.
@@ -172,6 +174,8 @@ def decide(profile, user, purpose, decision, method="own_account"):
         return "consent_request_invalid"
     if profile.subject_status == "requires_legal_review":
         return "legal_review_required"
+    if profile.subject_status == "pending_confirmation":
+        return "subject_confirmation_required"
     subject = subject_account(profile)
     if subject is None or subject.pk != user.pk:
         return "consent_subject_only"
@@ -182,6 +186,28 @@ def decide(profile, user, purpose, decision, method="own_account"):
                                     version=CONSENT_VERSION, decided_by=user, method=method)
         if decision != "grant":
             Profile.objects.filter(pk=profile.pk).update(consent_epoch=F("consent_epoch") + 1)
+    return None
+
+
+def confirm_subject(profile, user, for_self, subject_adult):
+    """The owner states, explicitly, whose data the profile holds. Returns an error code, or None when recorded."""
+    from .models import Profile
+
+    if profile.owner_id != user.pk:
+        return "permission_denied"
+    if profile.subject_status != "pending_confirmation":
+        return "subject_already_confirmed"
+    if for_self is True:
+        if not adult_declared(user):
+            return "adult_declaration_required"
+        status = "self"
+    elif for_self is False:
+        if subject_adult is not True:
+            return "subject_minor_not_supported"
+        status = "pending_consent"
+    else:
+        return "consent_request_invalid"
+    Profile.objects.filter(pk=profile.pk, subject_status="pending_confirmation").update(subject_status=status)
     return None
 
 
@@ -200,6 +226,8 @@ def consent_state(profile, user, locale="es-EC"):
         "version": CONSENT_VERSION,
         "subject_status": profile.subject_status,
         "is_subject": subject is not None and subject.pk == user.pk,
+        # Profiles from before the policy: only the owner can say whose data they hold.
+        "can_confirm": profile.subject_status == "pending_confirmation" and profile.owner_id == user.pk,
         "subject_adult": subject is not None and adult_declared(subject),
         "purposes": [
             {"id": key, "to": value["to"], "title": value[language][0], "detail": value[language][1], "status": states.get(key, "pending")}

@@ -27,6 +27,7 @@ urlpatterns = [
     path("profiles/<uuid:profile_id>/consent/", consent_views.consent),
     path("profiles/<uuid:profile_id>/consent/invite/", consent_views.invite),
     path("profiles/<uuid:profile_id>/consent/legal-review/", consent_views.legal_review),
+    path("profiles/<uuid:profile_id>/consent/confirm-subject/", consent_views.confirm),
     path("consent/redeem/", consent_views.redeem),
     path("vision/clip/", ClipView.as_view()),
     path("consent/purposes/", consent_views.purposes),

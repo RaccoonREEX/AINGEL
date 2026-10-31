@@ -108,6 +108,14 @@ export default function ConsentPanel({ profile, autoFocus = false, ...ctx }: Wit
     setState(next);
     setLive(`${p.title}: ${word(next.purposes.find((x) => x.id === p.id)?.status ?? "pending")}.`);
   });
+  const [otherAdult, setOtherAdult] = useState(false);
+  // Profiles from before the policy: the owner says, explicitly, whose data this is (nothing is inferred).
+  const confirmSubject = (forSelf: boolean) => void run(async () => {
+    setState(await api<ConsentState>(`profiles/${profile.id}/consent/confirm-subject/`, "POST", forSelf ? { for_self: true } : { for_self: false, subject_adult: true }));
+    setLive(forSelf ? L("Confirmado: este perfil es tuyo. Ahora decide tus permisos.", "Confirmed: this profile is yours. Now decide your permissions.")
+      : L("Confirmado: la persona decidirá desde su cuenta.", "Confirmed: the person will decide from their account."));
+    await refresh();
+  });
   const legal = () => void run(async () => {
     setState(await api<ConsentState>(`profiles/${profile.id}/consent/legal-review/`, "POST"));
     setConfirm(false);
@@ -145,7 +153,26 @@ export default function ConsentPanel({ profile, autoFocus = false, ...ctx }: Wit
       <h2 ref={title} tabIndex={-1} id={`${ids}-title`}>{state?.is_subject ? L("Lo que permites", "What you allow") : L("Permisos de la persona", "The person's permissions")}</h2>
       <p className="consent-live" role="status" aria-live="polite">{live}</p>
       {!state ? <p className="hint">{ctx.t("loading")}</p>
-        : status === "requires_legal_review" ? (
+        : status === "pending_confirmation" ? (
+          <div className="callout">
+            <p className="consent-state"><span aria-hidden="true">❔</span> {L("Falta confirmar de quién es este perfil", "Whose profile this is has not been confirmed")}</p>
+            {state.can_confirm ? <>
+              <p>{L("Este perfil se creó antes de que AINGEL registrara de quién son los datos. Hasta que lo confirmes no se envía nada a Meta.",
+                "This profile was created before AINGEL recorded whose data it holds. Until you confirm, nothing is sent to Meta.")}</p>
+              <div className="actions">
+                <button type="button" className="btn btn-pill btn-primary" disabled={busy} onClick={() => confirmSubject(true)}>{L(`Soy ${name}: el perfil es mío`, `I am ${name}: the profile is mine`)}</button>
+              </div>
+              <label className="consent-row">
+                <input type="checkbox" checked={otherAdult} onChange={(e) => setOtherAdult(e.target.checked)} />
+                <span>{L(`Lo configuré para ${name}, que tiene 18 años o más`, `I set it up for ${name}, who is 18 or older`)}</span>
+              </label>
+              <div className="actions">
+                <button type="button" className="btn btn-pill btn-outline" disabled={busy || !otherAdult} onClick={() => confirmSubject(false)}>{L("Es de otra persona adulta", "It belongs to another adult")}</button>
+              </div>
+            </> : <p>{L("Solo quien creó el perfil puede confirmarlo. Mientras tanto no se activa nada que dependa de un permiso.",
+              "Only whoever created the profile can confirm it. Meanwhile nothing that depends on a permission is enabled.")}</p>}
+          </div>
+        ) : status === "requires_legal_review" ? (
           <div className="callout">
             <p className="consent-state"><span aria-hidden="true">⚖</span> {L("En revisión legal", "Under legal review")}</p>
             <p>{L(`Se indicó que ${name} no puede dar su consentimiento. Para proteger sus datos, AINGEL no activa nada que dependa de un permiso hasta que el equipo de AINGEL registre una base legal revisada. Esto no se deduce de ningún diagnóstico.`,

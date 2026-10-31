@@ -5,17 +5,9 @@ import uuid
 from django.conf import settings
 from django.db import migrations, models
 
-MARKERS = ("Relación de quien configura", "Relationship of the person setting up")
-
-
-def classify_existing(apps, schema_editor):
-    """Non-destructive: profiles set up by someone else wait for that person; the others belong to their owner.
-    Legacy coarse consents stay as history and are not converted (a general authorization never stands in for
-    specific ones): every person decides again, purpose by purpose."""
-    Profile = apps.get_model("care", "Profile")
-    for profile in Profile.objects.all().only("id", "support_notes"):
-        other = any(marker in (profile.support_notes or "") for marker in MARKERS)
-        Profile.objects.filter(pk=profile.pk).update(subject_status="pending_consent" if other else "self")
+# Existing profiles get "pending_confirmation" (the field default): who the data belongs to was never recorded, so it
+# is not inferred from free text. Nothing reaches Meta until the owner confirms it explicitly
+# (profiles/<id>/consent/confirm-subject/) and the person decides. Legacy coarse consents stay as history only.
 
 
 class Migration(migrations.Migration):
@@ -34,7 +26,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='profile',
             name='subject_status',
-            field=models.CharField(default='pending_consent', max_length=30),
+            field=models.CharField(default='pending_confirmation', max_length=30),
         ),
         migrations.AddField(
             model_name='profile',
@@ -79,5 +71,4 @@ class Migration(migrations.Migration):
                 'indexes': [models.Index(fields=['profile', 'purpose', 'decided_at'], name='care_consen_profile_41c161_idx')],
             },
         ),
-        migrations.RunPython(classify_existing, migrations.RunPython.noop),
     ]

@@ -13,12 +13,12 @@ from rest_framework.decorators import api_view, throttle_classes
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 
-from .consent import CONSENT_VERSION, CREDITS_NOTICE, PURPOSES, TERMS_VERSION, adult_declared, consent_state, decide
+from .consent import CONSENT_VERSION, CREDITS_NOTICE, PURPOSES, TERMS_VERSION, adult_declared, confirm_subject, consent_state, decide
 from .models import Profile, SubjectInvite
 from .permissions import access, audit
 
 CODE_HOURS = 48
-DENIED = {"consent_subject_only", "legal_review_required", "adult_declaration_required"}
+DENIED = {"consent_subject_only", "legal_review_required", "adult_declaration_required", "subject_confirmation_required", "permission_denied"}
 
 
 class ConsentCodeRate(ScopedRateThrottle):
@@ -99,6 +99,19 @@ def redeem(request):
         profile.save(update_fields=["subject_user", "subject_status"])
     audit(profile, request.user, "consent.subject_linked", item.id)
     return Response({"profile": str(profile.pk), **consent_state(profile, request.user)}, status=200)
+
+
+@api_view(["POST"])
+def confirm(request, profile_id):
+    """Profiles from before the policy: the owner says whether they are the person, or set it up for another adult."""
+    profile = access(request.user, profile_id)
+    data = request.data if isinstance(request.data, dict) else {}
+    error = confirm_subject(profile, request.user, data.get("for_self"), data.get("subject_adult"))
+    if error:
+        return Response({"error": error}, status=403 if error in DENIED else 400)
+    audit(profile, request.user, "consent.subject_confirmed", "self" if data.get("for_self") else "other")
+    profile.refresh_from_db()
+    return Response(consent_state(profile, request.user))
 
 
 @api_view(["POST"])

@@ -23,11 +23,12 @@ class Profile(models.Model):
     # Legacy sign-up authorizations (camera, microphone, meta_data), kept for history only: the granular
     # ConsentGrant decisions of the person themselves replace them (care.consent).
     consents = models.JSONField(default=dict, blank=True)
-    # Who the data belongs to. "self": the owner account is the person; "pending_consent": created by an adult for
+    # Who the data belongs to. "pending_confirmation": not recorded (profiles from before 30-10-2026): the owner must
+    # confirm it explicitly, nothing is inferred. "self": the owner account is the person; "pending_consent": created by an adult for
     # another adult, who has not accepted yet; "subject_linked": that person accepted from their own account
     # (subject_user); "requires_legal_review": consent cannot be given by the person and no reviewed legal basis
     # exists yet. Only the person decides; nothing reaches Meta until they do.
-    subject_status = models.CharField(max_length=30, default="pending_consent")
+    subject_status = models.CharField(max_length=30, default="pending_confirmation")
     subject_user = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="subject_profiles"
     )

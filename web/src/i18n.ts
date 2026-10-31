@@ -391,6 +391,8 @@ export const es = {
     "Las autorizaciones ahora las decide la propia persona, una por una, en Personalizar.",
   errorConsentChanged:
     "La autorización cambió; no se muestra la respuesta anterior.",
+  errorSubjectConfirm: "Primero hay que confirmar de quién es este perfil.",
+  errorSubjectConfirmed: "Ya se confirmó de quién es este perfil.",
 } as const;
 
 const en: Record<keyof typeof es, string> = {
@@ -784,6 +786,8 @@ const en: Record<keyof typeof es, string> = {
     "Authorizations are now decided by the person, one by one, in Personalize.",
   errorConsentChanged:
     "The authorization changed; the previous answer is not shown.",
+  errorSubjectConfirm: "First confirm whose profile this is.",
+  errorSubjectConfirmed: "Whose profile this is was already confirmed.",
 };
 export type Key = keyof typeof es;
 export type Locale = "es-EC" | "en-US";

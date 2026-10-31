@@ -163,3 +163,46 @@ class AgeAndConsentTests(TestCase):
         self.assertEqual([p["id"] for p in data["purposes"]][:3], ["camera_local", "microphone_local", "meta_conversation"])
         self.assertEqual(data["terms_version"], TERMS_VERSION)
         self.assertTrue(all(p["title"] and p["detail"] for p in data["purposes"]))
+
+
+class SubjectConfirmationTests(TestCase):
+    """Profiles from before the policy: whose data they hold is confirmed explicitly by the owner, never inferred."""
+
+    def setUp(self):
+        cache.clear()
+        users = get_user_model().objects
+        self.owner = adult(users.create_user(username="legacy-owner"))
+        self.carer = adult(users.create_user(username="legacy-carer"))
+        self.profile = Profile.objects.create(owner=self.owner, display_name="Legacy")  # default: pending_confirmation
+        Membership.objects.create(profile=self.profile, user=self.carer, relationship="Hija")
+        self.client = APIClient()
+
+    def post(self, user, url, body=None):
+        self.client.force_authenticate(user)
+        return self.client.post(f"/api/v1/profiles/{self.profile.pk}/consent/{url}", body or {}, format="json")
+
+    def test_nothing_is_enabled_until_the_owner_confirms(self):
+        self.assertEqual(self.profile.subject_status, "pending_confirmation")
+        self.assertEqual(self.post(self.owner, "", {"purpose": "meta_conversation", "decision": "grant"}).data,
+                         {"error": "subject_confirmation_required"})
+        with patch.dict(os.environ, META):
+            self.assertFalse(meta_allowed(self.profile, "conversation"))
+        self.client.force_authenticate(self.owner)
+        self.assertTrue(self.client.get(f"/api/v1/profiles/{self.profile.pk}/consent/").data["can_confirm"])
+        self.client.force_authenticate(self.carer)
+        self.assertFalse(self.client.get(f"/api/v1/profiles/{self.profile.pk}/consent/").data["can_confirm"])
+
+    def test_only_the_owner_confirms_and_only_once(self):
+        self.assertEqual(self.post(self.carer, "confirm-subject/", {"for_self": True}).status_code, 403)
+        self.assertEqual(self.post(self.owner, "confirm-subject/", {"for_self": "yes"}).data, {"error": "consent_request_invalid"})
+        confirmed = self.post(self.owner, "confirm-subject/", {"for_self": True})
+        self.assertEqual((confirmed.status_code, confirmed.data["subject_status"], confirmed.data["is_subject"]), (200, "self", True))
+        self.assertEqual(self.post(self.owner, "confirm-subject/", {"for_self": False, "subject_adult": True}).data,
+                         {"error": "subject_already_confirmed"})
+        self.assertEqual(self.post(self.owner, "", {"purpose": "meta_conversation", "decision": "grant"}).status_code, 200)
+
+    def test_set_up_for_another_adult_waits_for_that_person(self):
+        self.assertEqual(self.post(self.owner, "confirm-subject/", {"for_self": False}).data, {"error": "subject_minor_not_supported"})
+        confirmed = self.post(self.owner, "confirm-subject/", {"for_self": False, "subject_adult": True})
+        self.assertEqual(confirmed.data["subject_status"], "pending_consent")
+        self.assertEqual(self.post(self.owner, "invite/").status_code, 201)

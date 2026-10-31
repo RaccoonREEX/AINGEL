@@ -49,10 +49,12 @@ import org.json.JSONObject
         T(stringResource(when (status) {
             "self", "subject_linked" -> if (state.optBoolean("is_subject")) R.string.consent_yours else R.string.consent_theirs
             "requires_legal_review" -> R.string.consent_legal_review_state
+            "pending_confirmation" -> if (state.optBoolean("can_confirm")) R.string.consent_confirm_owner else R.string.consent_confirm_wait
             else -> R.string.consent_pending_state
         }), 14, color = Ui.Text, lineHeight = 1.45f, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
         when {
             state.optBoolean("is_subject") -> Purposes(state, decide = true, model = model, busy = s.busy)
+            status == "pending_confirmation" -> if (state.optBoolean("can_confirm")) ConfirmSubject(model, s)
             status == "pending_consent" -> PendingSubject(model, s)
             status == "requires_legal_review" -> {}
             else -> Purposes(state, decide = false, model = model, busy = s.busy)
@@ -97,6 +99,14 @@ import org.json.JSONObject
             }
         }
     }
+}
+
+/** Profiles from before the policy: the owner confirms, explicitly, whose data this is. */
+@Composable private fun ConfirmSubject(model: AingelViewModel, s: MobileState) {
+    var otherAdult by remember { mutableStateOf(false) }
+    PrimaryButton(stringResource(R.string.consent_confirm_self), height = 50.dp, enabled = !s.busy) { model.confirmSubject(true) }
+    Choice((if (otherAdult) "✓  " else "") + stringResource(R.string.consent_other_adult), otherAdult, Modifier.fillMaxWidth(), start = true) { otherAdult = !otherAdult }
+    OutlineButton(stringResource(R.string.consent_confirm_other), height = 48.dp, enabled = !s.busy && otherAdult) { model.confirmSubject(false) }
 }
 
 /** Set up for another adult: the one-time code for them, or recording that they cannot consent (nothing enabled). */

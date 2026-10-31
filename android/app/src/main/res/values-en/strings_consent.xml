@@ -44,4 +44,10 @@
     <string name="err_subject_minor_not_supported">AINGEL is for adults only.</string>
     <string name="watch_video">Watching with video (experimental)</string>
     <string name="watch_video_note">Sends 6-second clips to understand what changes. Needs your «Send short videos to Meta» authorization and the server to allow it; otherwise it uses photos.</string>
+    <string name="consent_confirm_owner">This profile was created before AINGEL recorded whose data it holds. Confirm whose it is; until then nothing is sent to Meta.</string>
+    <string name="consent_confirm_wait">Whoever created the profile still has to confirm whose it is. Meanwhile nothing that depends on a permission is enabled.</string>
+    <string name="consent_confirm_self">I am the person: the profile is mine</string>
+    <string name="consent_confirm_other">It belongs to another adult</string>
+    <string name="err_subject_confirmation_required">First confirm whose profile this is.</string>
+    <string name="err_subject_already_confirmed">Whose profile this is was already confirmed.</string>
 </resources>

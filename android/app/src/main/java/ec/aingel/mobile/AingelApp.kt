@@ -205,6 +205,8 @@ internal fun errorMessage(error: String): Int = when (error) {
     "consent_not_pending" -> R.string.err_consent_not_pending
     "consent_changed" -> R.string.err_consent_changed
     "subject_minor_not_supported" -> R.string.err_subject_minor_not_supported
+    "subject_confirmation_required" -> R.string.err_subject_confirmation_required
+    "subject_already_confirmed" -> R.string.err_subject_already_confirmed
     // Network and server failures (NetworkErrors.kt): specific messages instead of a generic «failed».
     else -> networkErrorMessage(error) ?: R.string.failed
 }
