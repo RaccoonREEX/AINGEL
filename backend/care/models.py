@@ -28,12 +28,14 @@ class Profile(models.Model):
     # another adult, who has not accepted yet; "subject_linked": that person accepted from their own account
     # (subject_user); "requires_legal_review": consent cannot be given by the person and no reviewed legal basis
     # exists yet. Only the person decides; nothing reaches Meta until they do.
-    subject_status = models.CharField(max_length=30, default="pending_confirmation")
+    # Database defaults too: code from before 0007 (a rollback, or the old container during a deploy) inserts
+    # profiles without these columns.
+    subject_status = models.CharField(max_length=30, default="pending_confirmation", db_default="pending_confirmation")
     subject_user = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="subject_profiles"
     )
     # Bumped on every revocation or decline: work started before it cannot be presented as current.
-    consent_epoch = models.PositiveIntegerField(default=0)
+    consent_epoch = models.PositiveIntegerField(default=0, db_default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

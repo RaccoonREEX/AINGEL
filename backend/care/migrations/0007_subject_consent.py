@@ -5,8 +5,9 @@ import uuid
 from django.conf import settings
 from django.db import migrations, models
 
-# Existing profiles get "pending_confirmation" (the field default): who the data belongs to was never recorded, so it
-# is not inferred from free text. Nothing reaches Meta until the owner confirms it explicitly
+# Existing profiles get "pending_confirmation" (the column default): who the data belongs to was never recorded, so it
+# is not inferred from free text. Both new columns keep a database default, so code from before this migration (the
+# old container during a deploy, or a code rollback) can still create profiles; they start pending too. Nothing reaches Meta until the owner confirms it explicitly
 # (profiles/<id>/consent/confirm-subject/) and the person decides. Legacy coarse consents stay as history only.
 
 
@@ -21,12 +22,12 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='profile',
             name='consent_epoch',
-            field=models.PositiveIntegerField(default=0),
+            field=models.PositiveIntegerField(db_default=0, default=0),
         ),
         migrations.AddField(
             model_name='profile',
             name='subject_status',
-            field=models.CharField(default='pending_confirmation', max_length=30),
+            field=models.CharField(db_default='pending_confirmation', default='pending_confirmation', max_length=30),
         ),
         migrations.AddField(
             model_name='profile',
