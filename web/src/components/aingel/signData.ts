@@ -80,7 +80,8 @@ S.n8 = { d: 1.2, A: still(letter("open", { x: -1.0, y: 1.3 })), B: nb("n3") };
 S.n9 = { d: 1.2, A: still(letter("open", { x: -1.0, y: 1.3 })), B: nb("n4") };
 S.n10 = { d: 1.3, A: [[0, letter("open", { x: -1.0, y: 1.3 })], [0.3, { roll: 0.2 }], [0.6, { roll: -0.15 }], [1, { roll: 0 }]], B: [[0, { x: 0.95, y: 1.25, s: 1.05, yaw: 0, pitch: 0, roll: 0, hs: "open" }], [0.3, { roll: 0.2 }], [0.6, { roll: -0.15 }], [1, { roll: 0 }]] };
 S.yo = { d: 1.2, A: [[0, P({ x: -0.35, y: 2.1, s: 1, yaw: 1.5, pitch: 0, roll: 1.6, hs: "idx" })], [0.4, { x: -0.15, y: 2.0, s: 0.95 }], [0.7, { x: -0.2 }], [1, {}]] };
-S.tu = { d: 1.2, A: [[0, P({ x: -0.5, y: 1.6, s: 1, yaw: 0.3, pitch: 1.2, roll: 0, hs: "idx" })], [0.45, { y: 1.45, s: 1.3, pitch: 1.45 }], [1, {}]] };
+// The index points out of the screen, at the person AINGEL talks to (a positive pitch tilted it back, at AINGEL itself).
+S.tu = { d: 1.2, A: [[0, P({ x: -0.5, y: 1.6, s: 1, yaw: 0.3, pitch: -1.2, roll: 0, hs: "idx" })], [0.45, { y: 1.45, s: 1.3, pitch: -1.45 }], [1, {}]] };
 S.hola = { d: 1.5, A: [[0, P({ x: -0.9, y: -0.3, s: 1.05, yaw: 0, pitch: 0, roll: -0.1, hs: "b" })], [0.35, { x: -1.4, y: -0.1, roll: -0.35, hs: "open" }], [0.55, { roll: 0.05 }], [0.75, { roll: -0.35 }], [1, { roll: -0.1 }]] };
 S.gracias = { d: 1.5, A: [[0, P({ x: -0.2, y: 0.85, s: 1, yaw: 0.2, pitch: 0.2, roll: 0.1, hs: "flat" })], [0.25, {}], [0.75, { x: -0.55, y: 1.55, s: 1.25, pitch: 1.1 }], [1, {}]] };
 S.porfavor = { d: 1.6, A: [[0, P({ x: -0.25, y: 2.0, s: 1, yaw: 0, pitch: 0.1, roll: 0.3, hs: "flat" })], [0.25, { x: 0.1, y: 1.85 }], [0.5, { x: 0.15, y: 2.15 }], [0.75, { x: -0.25, y: 2.25 }], [1, { x: -0.25, y: 2.0 }]] };
