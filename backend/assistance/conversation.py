@@ -1,10 +1,11 @@
 """General multi-turn conversation with AINGEL.
 
 Two ways to reach Meta:
-- Synthetic test (request declares "synthetic"): turns, categorical options and a public MedlinePlus excerpt.
-- Real data, authorized at sign-up (care.consent, profile.consents.meta_data, server AINGEL_REAL_DATA=1): also the
-  support needs written at sign-up and the allergies, so recommendations fit the person; Meta's web search
-  is available and the model uses it only when the question needs it (recommendations, current information).
+- Synthetic test: the request names a server fixture (assistance.synthetic); the server writes the question, uses a
+  fictitious profile and adds a public MedlinePlus excerpt. Nothing typed by the client and nothing of the profile.
+- The person's own authorization (care.consent: meta_conversation, server AINGEL_REAL_DATA=1): their turns; with
+  «profile_personalization» also the support needs written at sign-up and the allergies, so recommendations fit
+  the person. Meta's web search is available and the model uses it only when the question needs it.
 Never sent: names, routines, messages, memories or other notes. Nothing is stored server-side: the client keeps
 the bounded history in memory and can clear it.
 """
@@ -17,9 +18,10 @@ from rest_framework.response import Response
 from rest_framework.throttling import UserRateThrottle
 
 from care.knowledge import KnowledgeUnavailable, best_topic
-from care.consent import meta_account_denial, meta_allowed, still_current, synthetic_allowed
+from care.consent import meta_account_denial, meta_allowed, still_current
 from care.permissions import access, audit
 
+from . import synthetic
 from .persona import instructions as persona_instructions
 from .companion import (
     MAX_SOURCE_CHARS,
@@ -189,6 +191,7 @@ def converse(turns, locale, preferences, profile=None, actions=(), real=None):
         700 if real else 500,
         web_search=real,
         functions={name: APP_ACTIONS[name] for name in actions},
+        basis=synthetic.REAL if real else synthetic.FIXTURE,
     )
     result["action"] = valid_action(result.get("action"))
     if not result.get("text", "").strip() and result["action"] is None:
@@ -212,7 +215,28 @@ def conversation(request, profile_id):
         return Response({"error": denial}, status=403)
     profile = access(request.user, profile_id)
     data = request.data
-    if not isinstance(data, dict) or "turns" not in data or set(data) - {"turns", "synthetic", "actions"}:
+    if not isinstance(data, dict) or set(data) - {"turns", "synthetic", "fixture", "locale", "actions"}:
+        return Response({"error": "conversation_request_invalid"}, status=400)
+    # Decided before anything is built: a server fixture, or the person's own grants (care.consent).
+    real = meta_allowed(profile, "conversation")
+    path, value = synthetic.route(data, "question", real, ("turns", "actions"))
+    if path is None:
+        return Response({"error": value}, status=400)
+    if path == "fixture":
+        language = synthetic.locale(data)
+        if language is None:
+            return Response({"error": "conversation_request_invalid"}, status=400)
+        turns = [{"role": "user", "text": synthetic.question(value, language)}]
+        try:
+            # A fictitious profile and no app actions: nothing of this person's profile is read.
+            result = converse(turns, language, synthetic.FICTIONAL_PREFERENCES, None, (), real=False)
+        except CompanionUnavailable as error:
+            return Response({"error": str(error)}, status=503)
+        result["synthetic_fixture"] = value
+        result["question"] = turns[0]["text"]
+        audit(profile, request.user, "companion.synthetic_conversation")
+        return Response(result)
+    if "locale" in data or "turns" not in data:
         return Response({"error": "conversation_request_invalid"}, status=400)
     actions = data.get("actions", [])
     if not isinstance(actions, list) or not set(actions) <= set(APP_ACTIONS):
@@ -220,11 +244,8 @@ def conversation(request, profile_id):
     turns = valid_turns(data["turns"])
     if turns is None:
         return Response({"error": "conversation_request_invalid"}, status=400)
-    # The person's own grants (care.consent); the synthetic declaration remains for tests.
-    real = meta_allowed(profile, "conversation")
+    real = path == "real"
     personalized = real and meta_allowed(profile, "personalization")
-    if os.environ.get("AINGEL_AI_MODE", "mock") == "meta" and not real and not synthetic_allowed(data.get("synthetic")):
-        return Response({"error": "privacy_review_required"}, status=400)
     epoch = profile.consent_epoch
     try:
         result = converse(turns, profile.locale, categorical_preferences(profile.communication, personalized), profile if personalized else None,

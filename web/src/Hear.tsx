@@ -16,9 +16,8 @@ export default function Hear({
 }) {
   const { value: communication } = useCommunication(profile.id);
   const [privateTest, setPrivateTest] = useState(false);
-  const [syntheticTest, setSyntheticTest] = useState(false);
   const es = profile.locale.toLowerCase().startsWith("es");
-  useEffect(() => { setPrivateTest(false); setSyntheticTest(false); }, [profile.id]);
+  useEffect(() => { setPrivateTest(false); }, [profile.id]);
   const [status, setStatus] = useState<
       "idle" | "connecting" | "recording" | "finishing"
     >("idle"),
@@ -54,9 +53,8 @@ export default function Hear({
     [],
   );
   const start = async () => {
-    const testFields = audioTestFields(profile, privateTest, syntheticTest);
+    const testFields = audioTestFields(profile, privateTest);
     setPrivateTest(false);
-    setSyntheticTest(false);
     const current = ++generation.current;
     setError("");
     setTurns([]);
@@ -241,12 +239,9 @@ export default function Hear({
         />
       </section>
       <section className="panel">
-        <PrivateMediaConsent profile={profile} kind="audio" checked={privateTest} disabled={status !== "idle"} onChange={(checked) => { setPrivateTest(checked); if (checked) setSyntheticTest(false); }} />
-        <label className="consent-row">
-          <input type="checkbox" checked={syntheticTest} disabled={status !== "idle"} onChange={(e) => { setSyntheticTest(e.target.checked); if (e.target.checked) setPrivateTest(false); }} />
-          <span>{es ? "Prueba sintética: confirmo que reproduciré solo voz sintética, sin información personal o de salud, y autorizo su envío a Meta." : "Synthetic test: I confirm I will play only synthetic speech without personal or health information and authorize sending it to Meta."}</span>
-        </label>
-        <p className="hint">{es ? "La declaración no verifica el contenido automáticamente y se usa solo para esta sesión." : "This declaration does not automatically verify the content and applies only to this session."}</p>
+        <PrivateMediaConsent profile={profile} kind="audio" checked={privateTest} disabled={status !== "idle"} onChange={setPrivateTest} />
+        {/* There is no synthetic captions test: live microphone audio could be anyone's (assistance.synthetic). */}
+        <p className="hint">{es ? "Los subtítulos en vivo envían el audio del micrófono a Meta solo con la autorización «Enviar voz a Meta» de la persona." : "Live captions send microphone audio to Meta only with the person's «Send voice to Meta» authorization."}</p>
         <div className="hear-orb"><AingelOrb state={status === "recording" ? "listening" : status === "connecting" || status === "finishing" ? "thinking" : error ? "retrying" : "idle"} audioLevel={micLevel} reducedMotion={profile.preferences.reduced_motion} size={200} /></div>
         <div className="actions">
           <button

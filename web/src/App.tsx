@@ -1,3 +1,4 @@
+import { speakLocally } from "./components/aingel/browserSpeech";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { WithProfile } from "./ui";
 import Auth, { AdultDeclaration, Brand, type Who } from "./screens/Auth";
@@ -349,8 +350,7 @@ function SupportDialog({ profile, t, onClose }: { profile: Profile; t: ReturnTyp
     const u = new SpeechSynthesisUtterance(text);
     u.lang = profile.locale;
     u.rate = value?.pace === "slow" ? 0.8 : 1;
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(u);
+    speakLocally(u);
   };
   return (
     <dialog ref={ref} className="support-dialog" onClose={onClose} aria-labelledby="support-title">

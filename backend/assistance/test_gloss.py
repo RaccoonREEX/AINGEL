@@ -9,6 +9,8 @@ from rest_framework.test import APIClient
 from care.models import AuditEvent, Profile
 from care.testing import adult, authorize
 
+from . import synthetic
+
 VOCABULARY = {"tu": "tú / you", "bien": "bien / good", "pregunta": "¿pregunta? / question?", "yo": "yo / I", "comer": "comer / eat"}
 META = {"AINGEL_AI_MODE": "meta", "MODEL_API_KEY": "synthetic-key", "AINGEL_REAL_DATA": "1"}
 
@@ -29,8 +31,8 @@ class GlossTests(TestCase):
     def post(self, signs, text="¿Qué tal?", env=META, vocabulary=VOCABULARY):
         captured = {}
 
-        def fake(instructions, input_text, limit, web_search=False, functions=None):
-            captured.update(instructions=instructions, input=input_text, functions=functions)
+        def fake(instructions, input_text, limit, web_search=False, functions=None, basis=None):
+            captured.update(instructions=instructions, input=input_text, functions=functions, basis=basis)
             return {"mode": "meta", "model": "muse-spark-1.3", "text": "", "action": {"name": "sign_sequence", "arguments": {"signs": signs}}, "latency_ms": 5}
 
         with patch.dict(os.environ, env), patch("assistance.gloss.call_spark", fake):
@@ -45,6 +47,8 @@ class GlossTests(TestCase):
         self.assertIn("pregunta: ¿pregunta? / question?", captured["instructions"])
         self.assertIn("pending validation with Deaf LSEC signers", captured["instructions"])
         self.assertEqual(set(captured["functions"]), {"sign_sequence"})
+        # Signing has no synthetic path: only the person's own authorization.
+        self.assertEqual(captured["basis"], synthetic.REAL)
         named, _ = self.post(["yo", "spell:Ramírez"], text="Soy Ramírez")
         self.assertEqual(named.data["gloss"], [{"sign": "yo"}, {"spell": "ramirez"}])
         self.assertEqual(AuditEvent.objects.filter(action="signs.gloss").count(), 2)

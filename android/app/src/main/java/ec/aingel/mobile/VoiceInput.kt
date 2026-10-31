@@ -19,6 +19,7 @@ internal fun shapeLevel(rms: Float): Float = if (rms < 0.02f) 0f else (rms * 5).
 /** SpeechRecognizer reports loudness in dB (about -2..10); map it onto the RMS scale used by [shapeLevel]. */
 /** Android's answer when a session starts right after another one closed (or another screen still holds the
  * microphone): trying again shortly works, so it is not «this phone cannot recognize speech». */
+@SuppressLint("InlinedApi")  // compile-time int: before API 31 the recognizer never reports it, so the comparison is just false
 internal fun transientRecognizerError(error: Int) = error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY ||
     error == SpeechRecognizer.ERROR_CLIENT || error == SpeechRecognizer.ERROR_SERVER_DISCONNECTED
 
@@ -85,6 +86,8 @@ class VoiceInput(private val context: Context) {
         engine.startListening(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
             .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             .putExtra(RecognizerIntent.EXTRA_LANGUAGE, locale)
+            // On the phone when its language pack allows; otherwise the system recognizer may use its vendor's service.
+            .putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
             .putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
             .putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1))
         return id

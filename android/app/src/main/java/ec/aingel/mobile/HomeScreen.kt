@@ -238,6 +238,7 @@ private const val MAX_MODEL_PAIRS = 5
             val message = when {
                 e.status == 429 -> str(R.string.ui_conv_throttled)
                 e.code == "privacy_review_required" -> str(R.string.ui_conv_privacy_off)
+                e.code == "synthetic_fixture_required" -> str(R.string.ui_conv_synthetic_pick)
                 else -> str(R.string.ui_conv_offline)
             }
             Answer(message, message, source = str(R.string.ui_src_local), origin = Origin.NOTICE, offerLocal = true)
@@ -279,6 +280,22 @@ private const val MAX_MODEL_PAIRS = 5
             delay((600 - (System.currentTimeMillis() - started)).coerceAtLeast(0))
             val action = answer.action
             if (action != null) { thread.removeAll { it.id == id }; runAction(action.first, action.second, text) } else reply(id, answer)
+        }
+    }
+
+    /** Synthetic demo: a question the server wrote, answered with a fictitious profile; nothing typed or said is sent. */
+    fun askFixture(fixture: String, question: String) {
+        settleJob?.cancel(); model.stopSpeech()
+        val id = nextId++
+        thread.add(Exchange(id, question, null)); notice = null; phase = AingelOrbState.THINKING; composerOpen = true
+        scope.launch {
+            val answer = try {
+                val reply = model.converseFixture(fixture)
+                val text = reply.optString("text")
+                if (reply.optString("mode") == "mock") Answer(text, text, source = str(R.string.ui_src_mock), origin = Origin.MOCK)
+                else Answer(text, text, source = str(R.string.ui_src_synthetic), origin = Origin.MODEL)
+            } catch (_: Exception) { str(R.string.ui_conv_offline).let { Answer(it, it, source = str(R.string.ui_src_local), origin = Origin.NOTICE) } }
+            reply(id, answer)
         }
     }
 
@@ -592,7 +609,8 @@ private const val MAX_MODEL_PAIRS = 5
         when (mode) {
             null -> {
                 if (s.syntheticConversationProfileId == profile.optString("id")) {
-                    Notice(stringResource(R.string.synthetic_conversation_active)); Spacer(Modifier.height(10.dp))
+                    Notice(stringResource(R.string.synthetic_conversation_active)); Spacer(Modifier.height(8.dp))
+                    SyntheticQuestions(s.syntheticQuestions, busy) { id, q -> askFixture(id, q) }; Spacer(Modifier.height(10.dp))
                 }
                 T(status, 18, FontWeight.Medium, Ui.Navy, align = TextAlign.Center, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
                 if (!menu) visionPanel()
@@ -705,6 +723,7 @@ private const val MAX_MODEL_PAIRS = 5
             }
             if (s.syntheticConversationProfileId == profile.optString("id")) {
                 Notice(stringResource(R.string.synthetic_conversation_active))
+                SyntheticQuestions(s.syntheticQuestions, busy) { id, q -> askFixture(id, q) }
             }
             Column(Modifier.weight(1f).verticalScroll(scroll), horizontalAlignment = Alignment.CenterHorizontally) {
                 orb(170.dp)
@@ -840,6 +859,18 @@ private const val MAX_MODEL_PAIRS = 5
     }
 }
 
+
+/** The server's example questions for the synthetic demo (the only content it sends to Meta). */
+@Composable private fun SyntheticQuestions(questions: List<Pair<String, String>>, busy: Boolean, onPick: (String, String) -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(top = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        questions.forEach { (id, question) ->
+            Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(50)).border(1.dp, Ui.Control, RoundedCornerShape(50))
+                .clickable(enabled = !busy, role = Role.Button) { onPick(id, question) }.padding(horizontal = 14.dp, vertical = 9.dp)) {
+                T(question, 13, FontWeight.Medium, Ui.Navy)
+            }
+        }
+    }
+}
 
 @Composable private fun Notice(text: String) {
     Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Ui.Subtle).border(1.dp, Ui.Border, RoundedCornerShape(12.dp)).padding(horizontal = 14.dp, vertical = 10.dp)

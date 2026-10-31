@@ -36,7 +36,7 @@ class HttpsCsrfOriginTest {
             assertEquals(base.removeSuffix("/"), login.getHeader("Origin"))
             assertEquals("test-csrf", login.getHeader("X-CSRFToken"))
             server.enqueue(MockResponse().setBody("{}"))
-            api.upload("scene/", byteArrayOf(1, 2, 3), mapOf("synthetic" to "true"))
+            api.upload("scene/", byteArrayOf(1, 2, 3), mapOf("locale" to "es-EC"))
             val upload = server.takeRequest()
             assertEquals(base.removeSuffix("/"), upload.getHeader("Origin"))
             assertEquals("test-csrf", upload.getHeader("X-CSRFToken"))

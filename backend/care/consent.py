@@ -42,8 +42,8 @@ PURPOSES = {
     },
     "microphone_local": {
         "to": "local",
-        "es": ("Usar el micrófono", "AINGEL escucha cuando le hablas, para conversar, subtitular o traducir a señas. Esto solo no envía audio a nadie."),
-        "en": ("Use the microphone", "AINGEL listens when you speak, to talk, caption or translate to signs. On its own this sends audio to no one."),
+        "es": ("Usar el micrófono", "AINGEL escucha cuando le hablas, para conversar, subtitular o traducir a señas. Con este permiso AINGEL no envía audio a nadie. Para pasar tu voz a texto, el navegador o el teléfono usan su propio reconocimiento de voz, que puede ser un servicio de su fabricante; AINGEL lo indica antes de usarlo."),
+        "en": ("Use the microphone", "AINGEL listens when you speak, to talk, caption or translate to signs. With this permission AINGEL sends audio to no one. To turn your voice into text, the browser or phone uses its own speech recognition, which may be its vendor's service; AINGEL says so before using it."),
     },
     "meta_conversation": {
         "to": "meta",
@@ -121,7 +121,7 @@ def meta_user_allowed(user):
         return False
     allowed = {item.strip() for item in os.environ.get("AINGEL_META_ALLOWED_USER_IDS", "").split(",")}
     # A public demo must be an explicit operator choice, and only enables the
-    # synthetic-declaration path. The declaration cannot classify content.
+    # server's own synthetic fixtures (assistance.synthetic); clients cannot declare content synthetic.
     public_synthetic_demo = (
         "*" in allowed
         and os.environ.get("AINGEL_SYNTHETIC_TESTS_ONLY") == "1"
@@ -284,8 +284,3 @@ def private_media_allowed(profile, user, kind, declared):
     ):
         return False
     return adult_declared(user) and granted(profile, NEEDS[kind])
-
-
-def synthetic_allowed(synthetic):
-    """The original synthetic-test path: a request declared synthetic on a server limited to tests."""
-    return synthetic is True and os.environ.get("AINGEL_SYNTHETIC_TESTS_ONLY", "1") == "1"

@@ -6,12 +6,13 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ProtocolTest {
-    @Test fun companionPayloadContainsOnlySyntheticQuestionAndOptionalPublicTopic() {
-        val question = companionPayload(" Synthetic question ", null)
-        assertEquals(setOf("text", "synthetic"), question.keys().asSequence().toSet())
-        assertEquals("Synthetic question", question.getString("text")); assertTrue(question.getBoolean("synthetic"))
+    @Test fun companionPayloadContainsOnlyTheQuestionAndOptionalPublicTopic() {
+        // No `synthetic` declaration: the server sends it to Meta only under the person's authorization.
+        val question = companionPayload(" Invented question ", null)
+        assertEquals(setOf("text"), question.keys().asSequence().toSet())
+        assertEquals("Invented question", question.getString("text"))
         val topic = companionPayload("Question", CompanionTopic("Sleep", "en"))
-        assertEquals(setOf("text", "synthetic", "topic_title", "topic_lang"), topic.keys().asSequence().toSet())
+        assertEquals(setOf("text", "topic_title", "topic_lang"), topic.keys().asSequence().toSet())
         assertEquals("Sleep", topic.getString("topic_title")); assertEquals("en", topic.getString("topic_lang"))
         listOf("", "a".repeat(1001)).forEach { value ->
             try { companionPayload(value, null); fail("Invalid question accepted") } catch (_: ApiFailure) { }

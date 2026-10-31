@@ -26,6 +26,8 @@ data class MobileState(
     val captions: List<CaptionTurn> = emptyList(), val recording: Boolean = false, val captionStatus: String = "idle",
     val signStatus: String = "waiting", val signText: String? = null, val signMetadata: JSONObject? = null, val signVideo: ByteArray? = null,
     val privateTestProfileId: String? = null, val syntheticConversationProfileId: String? = null,
+    // The server's synthetic example questions (id to text in the app language), shown while the demo is on.
+    val syntheticQuestions: List<Pair<String, String>> = emptyList(),
     // Age and consent policy (backend care.consent): the account's 18+ declaration, the current terms, and the
     // person's decisions for the selected profile.
     val adultDeclared: Boolean = true, val termsVersion: String = "", val consent: JSONObject? = null,
@@ -205,13 +207,20 @@ class AingelViewModel(app: Application) : AndroidViewModel(app) {
         val state = mutable.value
         if (state.privateTestProfileId != null) throw ApiFailure("privacy_review_required")
         val id = state.profile?.optString("id")?.takeIf { it.isNotBlank() } ?: throw ApiFailure("profile_required")
-        val payload = conversationPayload(turns, actions, state.syntheticConversationProfileId == id)
-        return api.request("profiles/$id/conversation/", "POST", payload) as JSONObject
+        // The synthetic demo never sends what was typed or said: only the server's questions (converseFixture).
+        if (state.syntheticConversationProfileId == id) throw ApiFailure("synthetic_fixture_required")
+        return api.request("profiles/$id/conversation/", "POST", conversationPayload(turns, actions)) as JSONObject
     }
+    /** Synthetic demo: the server writes the question and answers it with a fictitious profile. */
+    suspend fun converseFixture(fixture: String): JSONObject {
+        val id = mutable.value.profile?.optString("id")?.takeIf { it.isNotBlank() } ?: throw ApiFailure("profile_required")
+        return api.request("profiles/$id/conversation/", "POST", fixtureConversationPayload(fixture, appLocale())) as JSONObject
+    }
+    private fun appLocale() = if (getApplication<Application>().resources.configuration.locales[0].language == "es") "es-EC" else "en-US"
     /** One captured frame to scene description or object search; the image is not stored. */
     suspend fun analyzeFrame(image: ByteArray, objectName: String?): JSONObject {
         // The profile lets the server apply its sign-up authorization (camera + Meta).
-        val fields = imageRequestFields(mutable.value.profile, mutable.value.privateTestProfileId, false)
+        val fields = imageRequestFields(mutable.value.profile, mutable.value.privateTestProfileId)
         // Describing also says which enrolled family members are in front (matched on our server, not by Meta).
         if (objectName != null) fields["object_name"] = objectName else if (mutable.value.privateTestProfileId == null) fields["family"] = "true"
         return api.upload(if (objectName == null) "scene/" else "locate/", image, fields)
@@ -304,6 +313,15 @@ class AingelViewModel(app: Application) : AndroidViewModel(app) {
         val id = mutable.value.profile?.optString("id")?.takeIf { it.isNotBlank() }
         mutable.update { it.copy(syntheticConversationProfileId = if (enabled) id else null,
             privateTestProfileId = if (enabled) null else it.privateTestProfileId) }
+        if (enabled) viewModelScope.launch {
+            val language = appLocale()
+            val questions = try {
+                val catalog = api.request("synthetic/") as JSONObject
+                if (!catalog.optBoolean("enabled")) emptyList()
+                else (catalog.optJSONArray("questions") ?: JSONArray()).rows().map { it.getString("id") to it.optString(language) }
+            } catch (_: Exception) { emptyList() }
+            mutable.update { if (it.syntheticConversationProfileId == id) it.copy(syntheticQuestions = questions) else it }
+        }
     }
     fun privateWatchEnabled(): Boolean {
         val current = mutable.value
@@ -324,12 +342,17 @@ class AingelViewModel(app: Application) : AndroidViewModel(app) {
         mutable.update { it.copy(circle = circle) }
     }
     fun setImage(image: ByteArray) { mutable.update { it.copy(image = image, result = null) } }
-    /** [synthetic]: the included shapes image (test); real photos use the sign-up authorization of the profile. */
+    /** [synthetic]: the shapes preview stands for the server fixture, so only fixture ids are sent ([objectName] is then
+     * "red_circle" or "blue_square"); real photos need the person's own grants, which the server checks. */
     fun analyze(synthetic: Boolean, objectName: String? = null) = operation {
-        val image = mutable.value.image ?: throw ApiFailure("image_required")
-        val fields = imageRequestFields(mutable.value.profile, mutable.value.privateTestProfileId, synthetic)
-        if (objectName != null) fields["object_name"] = objectName
-        val result = api.upload(if (objectName == null) "scene/" else "locate/", image, fields)
+        val result = if (synthetic) {
+            api.uploadForm(if (objectName == null) "scene/" else "locate/", fixtureImageFields(appLocale(), objectName ?: "shapes"))
+        } else {
+            val image = mutable.value.image ?: throw ApiFailure("image_required")
+            val fields = imageRequestFields(mutable.value.profile, mutable.value.privateTestProfileId)
+            if (objectName != null) fields["object_name"] = objectName
+            api.upload(if (objectName == null) "scene/" else "locate/", image, fields)
+        }
         mutable.update { it.copy(result = result) }
         if (result.has("text") && mutable.value.profile?.optJSONObject("preferences")?.optBoolean("voice_output") == true) speak(result.getString("text"))
     }

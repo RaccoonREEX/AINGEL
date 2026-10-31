@@ -70,8 +70,7 @@
     <string name="camera_active">Cámara activa. La captura se procesa solo al pulsar el botón.</string>
     <string name="capture">Tomar foto</string>
     <string name="fixture">Cargar imagen sintética de prueba</string>
-    <string name="synthetic_only">Las pruebas de Meta están limitadas a contenido sintético. No envíes fotos o voces personales.</string>
-    <string name="synthetic_confirm">Confirmo que el contenido es sintético y no contiene datos personales.</string>
+    <string name="synthetic_only">La imagen de figuras es la prueba sintética del servidor: se envía la del servidor, no una foto tuya. Las fotos reales solo se envían con tu autorización «Enviar fotos a Meta».</string>
     <string name="describe">Describir escena</string>
     <string name="locate">Localizar objeto</string>
     <string name="object_prompt">Objeto a localizar, por ejemplo círculo rojo</string>
@@ -82,7 +81,7 @@
     <string name="setup">Preparar autenticador</string>
     <string name="close">Ocultar</string>
     <string name="recovery">Guarda estos códigos: solo se muestran una vez.</string>
-    <string name="mic_intro">Subtítulos de prueba: el servidor envía audio a Meta y no lo guarda localmente. Reproduce solo voz sintética. El micrófono se apaga al salir de esta pantalla.</string>
+    <string name="mic_intro">Subtítulos en vivo: el audio del micrófono se envía a Meta solo con la autorización «Enviar voz a Meta» de la persona, y no se guarda. No hay prueba sintética de voz. El micrófono se apaga al salir de esta pantalla.</string>
     <string name="start">Iniciar micrófono de prueba</string>
     <string name="recording">Micrófono activo</string>
     <string name="connecting">Conectando…</string>
@@ -222,4 +221,6 @@
     <string name="setup_continue">Continuar</string>
     <string name="setup_skip">Omitir</string>
     <string name="setup_invited">¿Tienes una invitación?</string>
+    <string name="locate_red_circle">Buscar el círculo rojo (prueba)</string>
+    <string name="locate_blue_square">Buscar el cuadrado azul (prueba)</string>
 </resources>

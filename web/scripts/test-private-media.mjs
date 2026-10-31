@@ -15,15 +15,14 @@ try {
   assert.equal(canTestPrivateMedia({ ...owner, subject_status: "pending_confirmation" }, "image"), false);
   assert.equal(canTestPrivateMedia({ ...owner, subject_status: "pending_consent" }, "audio"), false);
   assert.equal(canTestPrivateMedia({ ...owner, consents: { camera: true, microphone: true, meta_data: true }, subject_status: "pending_confirmation" }, "image"), false);
-  assert.deepEqual(imageTestFields(owner, false, false), { synthetic: false });
-  assert.deepEqual(imageTestFields(owner, true, false), { synthetic: false, private_test: true });
-  assert.deepEqual(imageTestFields(owner, true, true), { synthetic: true });
-  assert.deepEqual(imageTestFields({ ...owner, role: "caregiver" }, true, false), { synthetic: false });
-  assert.deepEqual(audioTestFields(owner, false, false), {});
-  assert.deepEqual(audioTestFields(owner, false, true), { synthetic: true });
-  assert.deepEqual(audioTestFields(owner, true, false), { private_test: true });
-  assert.deepEqual(audioTestFields({ ...owner, role: "caregiver" }, true, false), {});
-  assert.deepEqual(audioTestFields({ ...owner, subject_status: "subject_linked" }, true, false), {});
+  // Synthetic tests are server fixtures: no field ever declares the person's own media synthetic.
+  assert.deepEqual(imageTestFields(owner, false), {});
+  assert.deepEqual(imageTestFields(owner, true), { private_test: true });
+  assert.deepEqual(imageTestFields({ ...owner, role: "caregiver" }, true), {});
+  assert.deepEqual(audioTestFields(owner, false), {});
+  assert.deepEqual(audioTestFields(owner, true), { private_test: true });
+  assert.deepEqual(audioTestFields({ ...owner, role: "caregiver" }, true), {});
+  assert.deepEqual(audioTestFields({ ...owner, subject_status: "subject_linked" }, true), {});
   const render = (profile, checked = false) => renderToStaticMarkup(React.createElement(Consent, { profile, kind: "image", checked, onChange: () => {} }));
   assert.match(render(owner), /type="checkbox"/);
   assert.doesNotMatch(render(owner), /checked=""/);

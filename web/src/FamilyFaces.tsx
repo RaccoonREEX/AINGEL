@@ -1,3 +1,4 @@
+import { speakLocally } from "./components/aingel/browserSpeech";
 import { useEffect, useState } from "react";
 import { api } from "./api";
 import type { translator } from "./i18n";
@@ -55,8 +56,7 @@ export default function FamilyFaces({
       : t("faceNone");
     const speech = new SpeechSynthesisUtterance(text);
     speech.lang = profile.locale;
-    window.speechSynthesis?.cancel();
-    window.speechSynthesis?.speak(speech);
+    speakLocally(speech);
   };
   return (
     <>

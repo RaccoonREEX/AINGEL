@@ -14,6 +14,8 @@ from care.consent import CONSENT_VERSION
 from care.models import ConsentGrant
 from care.testing import adult, authorize
 
+from assistance import synthetic
+
 
 def png():
     buffer = io.BytesIO()
@@ -58,10 +60,11 @@ class SignUpConsentTests(TestCase):
             authorize(self.profile, {"camera": True, "microphone": False, "meta_data": True})
             with patch("assistance.views.describe_scene", return_value=fake) as describe:
                 self.assertEqual(self.describe(self.profile.id).status_code, 200)
-                self.assertTrue(describe.call_args.args[2])
+                self.assertEqual(describe.call_args.args[2], synthetic.REAL)
             self.client.force_authenticate(self.outsider)
             self.assertEqual(self.describe(self.profile.id).status_code, 404)
         with patch.dict(os.environ, {**env, "AINGEL_REAL_DATA": "0"}), patch("assistance.views.describe_scene", return_value=fake) as describe:
             self.client.force_authenticate(self.owner)
-            self.describe(self.profile.id)
-            self.assertFalse(describe.call_args.args[2])
+            # Without the operator switch the real image is refused before any provider request is built.
+            self.assertEqual(self.describe(self.profile.id).data["error"], "privacy_review_required")
+            describe.assert_not_called()

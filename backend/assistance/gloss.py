@@ -18,6 +18,7 @@ from rest_framework.throttling import UserRateThrottle
 from care.consent import meta_account_denial, meta_allowed, still_current
 from care.permissions import access, audit
 
+from . import synthetic
 from .companion import CompanionUnavailable, call_spark
 
 MAX_TEXT = 300
@@ -126,7 +127,8 @@ def gloss(request, profile_id):
         return Response({"error": "privacy_review_required"}, status=400)
     epoch = profile.consent_epoch
     try:
-        result = call_spark(instructions(vocabulary), text, 600, functions=SIGN_TOOL)
+        # Real only: there is no synthetic path for signing (the person's own meta_conversation grant).
+        result = call_spark(instructions(vocabulary), text, 600, functions=SIGN_TOOL, basis=synthetic.REAL)
     except CompanionUnavailable as error:
         return Response({"error": str(error)}, status=503)
     if not still_current(profile, epoch):

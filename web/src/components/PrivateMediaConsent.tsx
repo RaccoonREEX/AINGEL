@@ -8,16 +8,14 @@ export function canTestPrivateMedia(profile: Profile, _kind: "image" | "audio") 
   return profile.role === "owner" && profile.subject_status === "self";
 }
 
-/** Only an explicit, eligible private declaration can set private_test. */
-export function imageTestFields(profile: Profile, confirmed: boolean, synthetic: boolean) {
-  return { synthetic, ...(confirmed && !synthetic && canTestPrivateMedia(profile, "image") ? { private_test: true } : {}) };
+/** Only an explicit, eligible private declaration can set private_test. Synthetic tests are server fixtures, never a
+ * declaration about the person's own media (assistance.synthetic). */
+export function imageTestFields(profile: Profile, confirmed: boolean) {
+  return confirmed && canTestPrivateMedia(profile, "image") ? { private_test: true } : {};
 }
 
-/** Synthetic and private audio are separate, explicit declarations. */
-export function audioTestFields(profile: Profile, confirmed: boolean, synthetic: boolean) {
-  if (confirmed && canTestPrivateMedia(profile, "audio")) return { private_test: true };
-  if (synthetic) return { synthetic: true };
-  return {};
+export function audioTestFields(profile: Profile, confirmed: boolean) {
+  return confirmed && canTestPrivateMedia(profile, "audio") ? { private_test: true } : {};
 }
 
 export default function PrivateMediaConsent({ profile, kind, checked, onChange, disabled = false }: {

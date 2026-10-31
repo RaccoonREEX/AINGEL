@@ -10,6 +10,7 @@ from rest_framework.test import APIClient
 from care.models import Profile
 from care.testing import adult, authorize
 
+from . import synthetic
 from .companion import companion_response
 from .conversation import instructions as conversation_instructions
 from .persona import SEED, instructions, profile_preferences, vision_guard
@@ -74,7 +75,7 @@ class PersonaTests(TestCase):
 
         with patch.dict(os.environ, META), patch("assistance.scene.httpx.Client") as client:
             client.return_value.__enter__.return_value.post.return_value = Reply()
-            result = describe_scene(b"jpeg", "es-EC", True)
+            result = describe_scene(b"jpeg", "es-EC", synthetic.REAL)
         self.assertTrue(result["ai_generated"] and result["safety_adjusted"])
         self.assertNotIn("despejado", result["text"])
 
@@ -102,8 +103,9 @@ class PreferenceSettingsTests(TestCase):
         authorize(self.profile, meta_conversation=True)
         captured = {}
 
-        def fake(instructions_text, input_text, limit, web_search=False, functions=None):
+        def fake(instructions_text, input_text, limit, web_search=False, functions=None, basis=None):
             captured["instructions"] = instructions_text
+            captured["basis"] = basis
             return {"mode": "meta", "model": "muse-spark-1.3", "text": "Hola.", "latency_ms": 1}
 
         ask = {"turns": [{"role": "user", "text": "Hola"}]}
@@ -111,6 +113,7 @@ class PreferenceSettingsTests(TestCase):
                 patch("assistance.conversation.best_topic", return_value=None):
             self.client.post(f"/api/v1/profiles/{self.profile.pk}/conversation/", ask, format="json")
             self.assertNotIn("priority_support", captured["instructions"])
+            self.assertEqual(captured["basis"], synthetic.REAL)
             authorize(self.profile, profile_personalization=True)
             self.client.post(f"/api/v1/profiles/{self.profile.pk}/conversation/", ask, format="json")
         self.assertIn('"priority_support": "auditory"', captured["instructions"])

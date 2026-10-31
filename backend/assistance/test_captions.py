@@ -65,14 +65,24 @@ class CaptionTests(TransactionTestCase):
         self.assertFalse(ok)
         await ws.disconnect()
 
-    async def test_synthetic_consent_required_before_meta_connection(self):
-        ws = self.socket()
-        self.assertTrue((await ws.connect())[0])
-        await ws.send_json_to({"type": "start", "locale": "es-EC", "synthetic": False})
-        self.assertEqual(
-            (await ws.receive_json_from())["code"], "privacy_review_required"
-        )
-        await ws.disconnect()
+    @patch.dict(os.environ, {"AINGEL_AI_MODE": "meta", "MODEL_API_KEY": "test-key", "AINGEL_REAL_DATA": "0", "AINGEL_SYNTHETIC_TESTS_ONLY": "1"})
+    async def test_synthetic_declaration_refused_and_real_authorization_required_before_meta_connection(self):
+        with patch("assistance.captions.connect", new=AsyncMock(return_value=FakeMeta())) as connect:
+            # Calling microphone audio synthetic proves nothing, and there is no server-held synthetic speech.
+            for extra in ({"synthetic": False}, {"synthetic": True}, {"fixture": "greeting"}, {"synthetic": True, "profile": str(self.profile.pk)}):
+                ws = self.socket()
+                self.assertTrue((await ws.connect())[0])
+                await ws.send_json_to({"type": "start", "locale": "es-EC", **extra})
+                self.assertEqual((await ws.receive_json_from())["code"], "synthetic_captions_unavailable", extra)
+                await ws.disconnect()
+            # Without the operator switch for real data, even an authorized profile sends nothing.
+            for extra in ({}, {"profile": str(self.profile.pk)}):
+                ws = self.socket()
+                self.assertTrue((await ws.connect())[0])
+                await ws.send_json_to({"type": "start", "locale": "es-EC", **extra})
+                self.assertEqual((await ws.receive_json_from())["code"], "privacy_review_required", extra)
+                await ws.disconnect()
+            connect.assert_not_called()
 
     @patch.dict(os.environ, {"AINGEL_AI_MODE": "meta", "MODEL_API_KEY": "test-key", "AINGEL_REAL_DATA": "1", "AINGEL_PRIVATE_OWN_MEDIA_TEST": "1", "AINGEL_SYNTHETIC_TESTS_ONLY": "0"})
     async def test_private_audio_requires_explicit_declaration_before_upstream(self):
@@ -97,6 +107,8 @@ class CaptionTests(TransactionTestCase):
             "AINGEL_AI_MODE": "meta",
             "MODEL_API_KEY": "synthetic-key",
             "AINGEL_SYNTHETIC_TESTS_ONLY": "1",
+            "AINGEL_REAL_DATA": "1",
+            "AINGEL_PRIVATE_OWN_MEDIA_TEST": "0",
         },
     )
     async def test_meta_handshake_pcm_forwarding_and_partial_events(self):
@@ -105,7 +117,7 @@ class CaptionTests(TransactionTestCase):
             ws = self.socket()
             self.assertTrue((await ws.connect())[0])
             await ws.send_json_to(
-                {"type": "start", "locale": "es-EC", "synthetic": True}
+                {"type": "start", "locale": "es-EC", "profile": str(self.profile.pk)}
             )
             self.assertEqual((await ws.receive_json_from())["type"], "ready")
             handshake = json.loads(meta.sent[0])
@@ -149,7 +161,7 @@ class CaptionTests(TransactionTestCase):
     async def test_unsupported_language_rejected(self):
         ws = self.socket()
         await ws.connect()
-        await ws.send_json_to({"type": "start", "locale": "ru-RU", "synthetic": True})
+        await ws.send_json_to({"type": "start", "locale": "ru-RU", "profile": str(self.profile.pk)})
         self.assertEqual(
             (await ws.receive_json_from())["code"], "caption_language_unsupported"
         )

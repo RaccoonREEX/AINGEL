@@ -1,7 +1,13 @@
-"""Opt-in actual Meta caption test via the local authenticated WebSocket relay."""
+"""Opt-in actual Meta caption test via the local authenticated WebSocket relay.
+
+Captions have no synthetic path: the relay accepts only a profile whose person granted microphone_local and
+meta_voice (care.consent) on a local server in real-data mode. Use a local test person and a WAV of synthetic
+speech; set AINGEL_SMOKE_PROFILE to that profile id.
+"""
 
 import asyncio
 import json
+import os
 from pathlib import Path
 import wave
 
@@ -42,7 +48,7 @@ async def main():
             open_timeout=10,
         ) as ws:
             await ws.send(
-                json.dumps({"type": "start", "locale": "en-US", "synthetic": True})
+                json.dumps({"type": "start", "locale": "en-US", "profile": os.environ["AINGEL_SMOKE_PROFILE"]})
             )
             ack = json.loads(await asyncio.wait_for(ws.recv(), 30))
             if ack.get("type") != "ready":

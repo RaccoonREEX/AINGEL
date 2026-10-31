@@ -120,7 +120,8 @@ class WatchService : LifecycleService() {
         privateTest = intent.getBooleanExtra("private_test", false)
         val first = text("Te acompaño. Te avisaré de lo que vea.", "I'm with you. I'll tell you what I see.")
         val notification = notification(first)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) startForeground(NOTIFICATION, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA)
+        // The camera foreground-service type exists from API 30.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) startForeground(NOTIFICATION, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA)
         else startForeground(NOTIFICATION, notification)
         WatchState.set(WatchState.Status(running = true, line = first))
         wake = (getSystemService(POWER_SERVICE) as PowerManager).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "aingel:watch").apply { setReferenceCounted(false); acquire(4 * 60 * 60 * 1000L) }
@@ -185,7 +186,7 @@ class WatchService : LifecycleService() {
                 WatchState.change { it.copy(looking = true) }
                 try {
                     val fields = mutableMapOf("locale" to locale, "profile" to profile)
-                    if (privateTest) { fields["private_test"] = "true"; fields["synthetic"] = "false" } else fields["family"] = "true"
+                    if (privateTest) fields["private_test"] = "true" else fields["family"] = "true"
                     val result = Backend.api(this).upload("scene/", use.jpegFrame(this), fields)
                     val mock = result.optString("mode") == "mock"
                     val clock = System.currentTimeMillis()
@@ -236,7 +237,7 @@ class WatchService : LifecycleService() {
                     try {
                         val sent = SystemClock.elapsedRealtime()
                         val result = Backend.api(this).uploadClip("vision/clip/", clip, mapOf("locale" to locale, "profile" to profile,
-                            "session" to session, "seq" to seq.toString(), "synthetic" to "false"))
+                            "session" to session, "seq" to seq.toString()))
                         val roundTrip = SystemClock.elapsedRealtime() - sent
                         android.util.Log.i("AINGEL-video", "seq=$seq bytes=${clip.size} mux_ms=$muxMs roundtrip_ms=$roundTrip server=${result.optJSONObject("timings")}")
                         when {

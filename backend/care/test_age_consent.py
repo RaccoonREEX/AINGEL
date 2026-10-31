@@ -54,9 +54,9 @@ class AgeAndConsentTests(TestCase):
         profile = authorize(Profile.objects.create(owner=legacy, display_name="Legacy"), {"meta_data": True})
         legacy.aingel_policy.delete()  # created before the age policy
         self.assertEqual(self.ask(legacy, profile.pk).data, {"error": "adult_declaration_required"})
-        # Not even the synthetic test path skips it.
+        # Not even a server synthetic fixture skips it.
         with patch.dict(os.environ, {**META, "AINGEL_SYNTHETIC_TESTS_ONLY": "1"}):
-            synthetic = self.as_user(legacy).post(f"/api/v1/profiles/{profile.pk}/conversation/", {**ASK, "synthetic": True}, format="json")
+            synthetic = self.as_user(legacy).post(f"/api/v1/profiles/{profile.pk}/conversation/", {"fixture": "greeting"}, format="json")
         self.assertEqual(synthetic.data, {"error": "adult_declaration_required"})
         client = APIClient(enforce_csrf_checks=False)
         client.force_login(legacy)

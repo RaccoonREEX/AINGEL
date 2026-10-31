@@ -1,14 +1,14 @@
+import { speakLocally } from "./aingel/browserSpeech";
 import { useId } from "react";
 import type { Purpose } from "../types";
 
-/** Reads [text] with the browser's own voice: local TTS, nothing leaves the device. */
+/** Reads [text] with a local browser voice only (browserSpeech.ts): network voices would send the text. */
 export function speak(text: string, lang: string, rate = 1) {
   if (!("speechSynthesis" in window)) return;
   const u = new SpeechSynthesisUtterance(text);
   u.lang = lang;
   u.rate = rate;
-  window.speechSynthesis.cancel();
-  window.speechSynthesis.speak(u);
+  speakLocally(u);
 }
 
 /** Purposes grouped by where the data goes, so a transfer to Meta is never mixed with local use. */

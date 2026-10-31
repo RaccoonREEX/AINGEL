@@ -2,9 +2,9 @@
 <!-- Conversación general, visión (3a) y traductor de señas. -->
 <resources>
     <string name="synthetic_conversation_title">Conversación de prueba con Meta</string>
-    <string name="synthetic_conversation_explanation">Activa esta opción solo para preguntas y respuestas inventadas, sin nombres, datos de salud ni información de personas reales. El texto y el historial reciente se envían a Meta junto con opciones generales de comunicación y, si corresponde, una fuente pública. AINGEL no detecta automáticamente datos personales. Se desactiva al cambiar de perfil o cerrar sesión; no activa la cámara ni la prueba privada de medios.</string>
-    <string name="synthetic_conversation_enable">Acepto usar solo contenido inventado y activar la conversación de prueba</string>
-    <string name="synthetic_conversation_active">Prueba con Meta activa: usa solo contenido inventado, sin datos personales. AINGEL no detecta datos sensibles.</string>
+    <string name="synthetic_conversation_explanation">Elige una pregunta de ejemplo escrita por el servidor: AINGEL la envía a Meta con un perfil ficticio, sin tus datos ni tu historial. En esta prueba no se envía a Meta nada que escribas o digas. Se desactiva al cambiar de perfil o cerrar sesión; no activa la cámara ni la prueba privada de medios.</string>
+    <string name="synthetic_conversation_enable">Activar la conversación de prueba con preguntas de ejemplo</string>
+    <string name="synthetic_conversation_active">Prueba sintética activa: elige una pregunta de ejemplo. Lo que escribes o dices no se envía a Meta.</string>
     <string name="private_test_title">Prueba privada de cámara y voz</string>
     <string name="private_test_active">Prueba privada activa: solo tus propias imágenes y voz, sin otras personas ni contenido sensible. Se envían a Meta.</string>
     <string name="private_test_explanation">Solo la persona propietaria del perfil puede activar esta prueba. Guarda la autorización para enviar a Meta y la de cámara o micrófono que desees usar. El servidor debe tener habilitada la prueba privada.</string>
@@ -174,4 +174,6 @@
     <string name="ui_auth_meta">Enviar datos a Meta para responder</string>
     <string name="ui_auth_meta_d">Las preguntas, imágenes y audio que hay que analizar, y los apoyos indicados y alergias, se envían a Meta Muse Spark. Mientras la cuenta use créditos gratuitos, Meta advierte que puede usar ese contenido para mejorar sus productos. No se envían nombres, rutinas, mensajes ni recuerdos.</string>
     <string name="ui_auth_hint">Sin estas autorizaciones AINGEL sigue funcionando con rutinas, mensajes y recuerdos. Se pueden cambiar en la web, en Personalizar.</string>
+    <string name="ui_src_synthetic">Prueba sintética · Meta Muse Spark con un perfil ficticio</string>
+    <string name="ui_conv_synthetic_pick">En la prueba sintética elige una de las preguntas de ejemplo: lo que escribes o dices no se envía a Meta.</string>
 </resources>

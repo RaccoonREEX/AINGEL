@@ -1,8 +1,8 @@
 """Live check, synthetic only: Meta receives a real MP4 with motion and answers about what changed over time.
 
 Usage: python scripts/smoke_video.py --key-file <file with one LLM_ key> [--transport inline|files]
-The clip is generated here (a blue square entering from the left and crossing a grey table line); no camera, no
-person, no personal data. Prints the events, the sentence to speak and the timings; never prints the key.
+The clip is the server fixture (assistance.synthetic: a blue square entering from the left and crossing a grey
+table line); no camera, no person, no personal data. Prints the events, the sentence to speak and the timings; never prints the key.
 """
 
 import argparse
@@ -10,27 +10,7 @@ import json
 import os
 import re
 import sys
-import tempfile
 from pathlib import Path
-
-import cv2
-import numpy as np
-
-
-def synthetic_clip(seconds=6, fps=10):
-    path = os.path.join(tempfile.mkdtemp(), "smoke.mp4")
-    writer = cv2.VideoWriter(path, cv2.VideoWriter_fourcc(*"mp4v"), fps, (480, 320))
-    for i in range(seconds * fps):
-        frame = np.full((320, 480, 3), 230, np.uint8)
-        cv2.rectangle(frame, (0, 220), (480, 235), (120, 120, 120), -1)  # a table edge
-        if i >= fps:  # nothing during the first second, then the square enters and crosses
-            x = -60 + (i - fps) * 9
-            cv2.rectangle(frame, (x, 150), (x + 60, 210), (200, 80, 20), -1)
-        writer.write(frame)
-    writer.release()
-    data = Path(path).read_bytes()
-    os.remove(path)
-    return data
 
 
 def main():
@@ -49,11 +29,12 @@ def main():
     import django
 
     django.setup()
-    from assistance.persona import profile_preferences
+    from assistance import synthetic
     from assistance.video import describe_changes, mp4_info
 
-    clip = synthetic_clip()
-    events, say, timings = describe_changes(clip, "es-EC", [], profile_preferences({}), args.transport)
+    clip = synthetic.clip("moving_square")
+    events, say, timings = describe_changes(clip, "es-EC", [], synthetic.FICTIONAL_PREFERENCES, args.transport,
+                                             basis=synthetic.FIXTURE)
     print(json.dumps({"clip": {**mp4_info(clip), "bytes": len(clip)}, "events": events, "say": say, "timings": timings}, ensure_ascii=False, indent=2))
     return 0
 

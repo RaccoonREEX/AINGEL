@@ -45,7 +45,7 @@ class AuditFixTests(TestCase):
     def test_an_invalid_action_alone_is_not_an_empty_answer(self):
         self.client.force_authenticate(self.owner)
 
-        def fake(instructions, input_text, limit, web_search=False, functions=None):
+        def fake(instructions, input_text, limit, web_search=False, functions=None, basis=None):
             return {"mode": "meta", "model": "muse-spark-1.3", "text": "", "action": {"name": "find_object", "arguments": {"object_name": "<b>"}}, "latency_ms": 5}
 
         with patch.dict(os.environ, META), patch("assistance.conversation.call_spark", fake), patch("assistance.conversation.best_topic", return_value=None):

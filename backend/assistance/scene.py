@@ -11,6 +11,7 @@ import httpx
 from .persona import VISION_RULES, instructions as persona_instructions, profile_preferences, vision_guard
 from PIL import Image, ImageOps, UnidentifiedImageError
 from .meta_quota import MetaQuotaError, reserve_meta_call
+from .synthetic import require_basis
 
 MAX_BYTES = 5 * 1024 * 1024
 MAX_PIXELS = 12_000_000
@@ -49,8 +50,8 @@ def normalize_image(upload) -> bytes:
         raise ValueError("image_invalid") from None
 
 
-def describe_scene(image: bytes, locale: str, allowed: bool, known_person: bool = False, preferences=None) -> dict:
-    """[allowed]: synthetic test or real image authorized at sign-up (decided by the view, care.consent).
+def describe_scene(image: bytes, locale: str, allowed, known_person: bool = False, preferences=None) -> dict:
+    """[allowed]: the basis the view decided (assistance.synthetic FIXTURE or REAL); anything else sends nothing.
     [known_person]: AINGEL recognized a family member locally; Meta never gets the name, only asked to describe them."""
     mode = os.environ.get("AINGEL_AI_MODE", "mock")
     if mode == "mock":
@@ -66,7 +67,7 @@ def describe_scene(image: bytes, locale: str, allowed: bool, known_person: bool 
     key = os.environ.get("MODEL_API_KEY", "").strip()
     if not key:
         raise SceneUnavailable("meta_not_configured")
-    if not allowed:
+    if not require_basis(allowed):
         raise SceneUnavailable("privacy_review_required")
     language = "Ecuadorian Spanish" if locale == "es-EC" else "English"
     task = "Scene description from one photo, at most three short sentences. " + VISION_RULES + (

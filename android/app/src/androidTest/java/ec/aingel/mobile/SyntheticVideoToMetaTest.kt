@@ -18,9 +18,10 @@ import org.junit.runner.RunWith
 import java.util.UUID
 
 /**
- * Live, synthetic only: frames drawn here (a blue square crossing a plain background; no camera, no person) go through
- * the same H.264 encoder and MP4 muxer as the camera (ClipRecorder), are uploaded by the app's own client to a
- * backend on this debug loopback (vision/clip/, `synthetic=true`), and that backend asks Meta what changed.
+ * Live, synthetic only. (1) Frames drawn here (a blue square crossing a plain background; no camera, no person) go
+ * through the same H.264 encoder and MP4 muxer as the camera (ClipRecorder). (2) The server refuses to forward that
+ * clip without the person's authorization: a client cannot declare its own media synthetic. (3) The app's client asks
+ * for the server's own synthetic clip (fixture «moving_square»), and the server asks Meta what changed.
  * Opt-in: -Pandroid.testInstrumentationRunnerArguments.aingelLiveVideo=true, with a local backend in meta mode and
  * AINGEL_VIDEO_CLIPS=1 behind `adb reverse tcp:8010 tcp:<port>`. It creates one test account on that local backend.
  */
@@ -51,10 +52,14 @@ class SyntheticVideoToMetaTest {
         val terms = (api.request("auth/session/") as JSONObject).getString("terms_version")
         api.request("auth/register/", "POST", JSONObject().put("username", "synthetic-video-${suffix.take(8)}")
             .put("password", "Synthetic-" + UUID.randomUUID()).put("adult", true).put("terms_version", terms))
+        // The phone's own clip is never forwarded without the person's authorization, whatever the client says.
+        val refused = try { api.uploadClip("vision/clip/", clip!!, mapOf("locale" to "es-EC", "session" to suffix, "seq" to "1")); null }
+            catch (e: ApiFailure) { e.code }
+        assertEquals("privacy_review_required", refused)
         val sent = SystemClock.elapsedRealtime()
-        val result = api.uploadClip("vision/clip/", clip!!, mapOf("locale" to "es-EC", "session" to suffix, "seq" to "1", "synthetic" to "true"))
+        val result = api.uploadForm("vision/clip/", mapOf("locale" to "es-EC", "session" to suffix, "seq" to "2", "fixture" to "moving_square"))
         val roundTripMs = SystemClock.elapsedRealtime() - sent
-        Log.i("AINGEL-video-test", "bytes=${clip.size} encode_ms=$encodeMs roundtrip_ms=$roundTripMs seconds=${result.optDouble("seconds")} " +
+        Log.i("AINGEL-video-test", "phone_clip_bytes=${clip!!.size} encode_ms=$encodeMs fixture_roundtrip_ms=$roundTripMs seconds=${result.optDouble("seconds")} " +
             "events=${result.optJSONArray("events")} say=${result.optString("say")} server=${result.optJSONObject("timings")}")
         api.clear()
 

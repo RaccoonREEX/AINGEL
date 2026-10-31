@@ -160,6 +160,8 @@ class ApiClient(context: Context) {
     suspend fun upload(path: String, image: ByteArray, values: Map<String, String>): JSONObject = uploadImages(path, listOf(image), values)
     suspend fun uploadImages(path: String, images: List<ByteArray>, values: Map<String, String>): JSONObject = transport.uploadImages(path, images, values)
     suspend fun uploadClip(path: String, clip: ByteArray, values: Map<String, String>): JSONObject = transport.uploadClip(path, clip, values)
+    /** A multipart form without files: synthetic tests name a server fixture instead of sending media. */
+    suspend fun uploadForm(path: String, values: Map<String, String>): JSONObject = transport.uploadForm(path, values)
     suspend fun signClip(profileId: String, clipId: String): ByteArray = transport.signClip(profileId, clipId)
 }
 
@@ -213,6 +215,14 @@ internal class ApiTransport(
         return send(unsafe) { session ->
             Request.Builder().url(session.base + "api/v1/" + path).method(method, body).apply { if (unsafe) csrfHeaders(session) }.build()
         }
+    }
+
+    suspend fun uploadForm(path: String, values: Map<String, String>): JSONObject {
+        val body = MultipartBody.Builder().setType(MultipartBody.FORM).apply { values.forEach { (key, value) -> addFormDataPart(key, value) } }.build()
+        val result = send(unsafe = true) { session ->
+            Request.Builder().url(session.base + "api/v1/" + path).csrfHeaders(session).post(body).build()
+        }
+        return result as? JSONObject ?: throw ApiFailure(NetworkError.RESPONSE_INVALID)
     }
 
     suspend fun uploadImages(path: String, images: List<ByteArray>, values: Map<String, String>): JSONObject {

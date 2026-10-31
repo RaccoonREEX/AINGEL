@@ -13,6 +13,8 @@ from rest_framework.test import APIClient
 from care.models import AuditEvent, Membership, Profile
 from care.testing import adult, authorize
 
+from . import synthetic
+
 TOPIC = {
     "title": "Synthetic source title",
     "lang": "es",
@@ -55,40 +57,71 @@ class CompanionTests(TestCase):
     def post(self, **data):
         return self.client.post(self.path, data, format="json")
 
+    def authorize_real(self, **purposes):
+        # The owner is the person and grants sending their questions (fictitious markers only).
+        authorize(self.profile, meta_conversation=True, **purposes)
+
     def test_authentication_scope_and_mock_mode_are_explicit(self):
         self.assertEqual(
             APIClient()
-            .post(self.path, {"text": "Synthetic", "synthetic": True}, format="json")
+            .post(self.path, {"text": "Synthetic"}, format="json")
             .status_code,
             403,
         )
         self.client.force_authenticate(self.outsider)
-        self.assertEqual(self.post(text="Synthetic", synthetic=True).status_code, 404)
+        self.assertEqual(self.post(text="Synthetic").status_code, 404)
         self.client.force_authenticate(self.reader)
         with patch.dict(os.environ, {"AINGEL_AI_MODE": "mock"}):
-            response = self.post(text="Synthetic question", synthetic=True)
+            response = self.post(text="Synthetic question")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["mode"], "mock")
         self.assertIsNone(response.data["model"])
         self.assertIsNone(response.data["source"])
         self.assertIn("no se generó", response.data["text"])
         self.assertEqual(response["Cache-Control"], "no-store")
+        # Unauthorized free text only reaches the local test mode, recorded as such.
+        self.assertTrue(AuditEvent.objects.filter(action="companion.local_test").exists())
 
-    def test_explicit_synthetic_assertion_and_bounded_single_request(self):
+    def test_synthetic_declaration_is_refused_and_bounded_single_request(self):
         meta = {"AINGEL_AI_MODE": "meta", "MODEL_API_KEY": "synthetic-key", "AINGEL_SYNTHETIC_TESTS_ONLY": "1"}
         with patch.dict(os.environ, meta), patch("assistance.companion.httpx.Client") as provider:
-            # Meta mode without sign-up authorization: a real question needs the synthetic declaration.
-            for value in ({"text": "Synthetic"}, {"text": "Synthetic", "synthetic": False}, {"text": "Synthetic", "synthetic": 1}):
+            # Meta mode without the person's authorization: free text is refused before anything is built.
+            cache.clear()
+            response = self.client.post(self.path, {"text": "Synthetic"}, format="json")
+            self.assertEqual(response.status_code, 400)
+            self.assertEqual(response.data["error"], "privacy_review_required")
+            # A client declaring its text synthetic proves nothing, whatever the value.
+            for flag in (True, False, 1):
                 cache.clear()
-                self.assertEqual(self.client.post(self.path, value, format="json").status_code, 400)
+                response = self.client.post(self.path, {"text": "Synthetic", "synthetic": flag}, format="json")
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(response.data["error"], "synthetic_fixture_required")
+            # Free content or a topic next to a fixture is refused; so is an unknown fixture.
+            for value, error in (
+                ({"fixture": "greeting", "text": "PRIVATE_TEXT_MARKER"}, "synthetic_fixture_only"),
+                ({"fixture": "greeting", "topic_title": "x", "topic_lang": "es"}, "synthetic_fixture_only"),
+                ({"fixture": "PRIVATE_TEXT_MARKER"}, "synthetic_fixture_invalid"),
+                ({"fixture": ["greeting"]}, "synthetic_fixture_invalid"),
+                ({"fixture": "greeting", "synthetic": True}, "synthetic_fixture_required"),
+            ):
+                cache.clear()
+                response = self.client.post(self.path, value, format="json")
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(response.data["error"], error)
+            cache.clear()
+            response = self.client.post(self.path, {"fixture": "greeting", "locale": "fr-FR"}, format="json")
+            self.assertEqual(response.status_code, 400)
             provider.assert_not_called()
+        # The person's authorized path is still a single bounded request.
+        self.authorize_real()
         invalid = [
-            {"text": " ", "synthetic": True},
-            {"text": "x" * 1001, "synthetic": True},
-            {"text": ["synthetic"], "synthetic": True},
-            {"text": "Synthetic", "synthetic": True, "history": ["PRIVATE"]},
+            {"text": " "},
+            {"text": "x" * 1001},
+            {"text": ["synthetic"]},
+            {"text": "Synthetic", "history": ["PRIVATE"]},
+            {"text": "Synthetic", "locale": "en-US"},
         ]
-        with patch("assistance.companion.httpx.Client") as provider:
+        with patch.dict(os.environ, {**meta, "AINGEL_REAL_DATA": "1"}), patch("assistance.companion.httpx.Client") as provider:
             for value in invalid:
                 cache.clear()
                 self.assertEqual(
@@ -106,23 +139,28 @@ class CompanionTests(TestCase):
     )
     @patch("assistance.companion.httpx.Client")
     def test_server_privacy_gate_stops_provider(self, provider):
-        response = self.post(text="Synthetic", synthetic=True)
+        response = self.post(text="Synthetic")
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.data["error"], "privacy_review_required")
+        response = self.post(fixture="greeting")
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data["error"], "synthetic_tests_disabled")
+        response = self.post(text="Synthetic", synthetic=True)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data["error"], "synthetic_fixture_required")
         provider.assert_not_called()
 
     def test_source_must_be_selected_exactly_and_cannot_be_invented(self):
         with patch.dict(os.environ, {"AINGEL_AI_MODE": "mock"}):
             self.assertEqual(
                 self.post(
-                    text="Synthetic", synthetic=True, topic_title="Only title"
+                    text="Synthetic", topic_title="Only title"
                 ).status_code,
                 400,
             )
             with patch("assistance.companion.exact_topic", return_value=None) as lookup:
                 response = self.post(
                     text="Synthetic",
-                    synthetic=True,
                     topic_title="Unlisted topic",
                     topic_lang="es",
                 )
@@ -131,7 +169,6 @@ class CompanionTests(TestCase):
             with patch("assistance.companion.exact_topic", return_value=TOPIC):
                 response = self.post(
                     text="Synthetic",
-                    synthetic=True,
                     topic_title=TOPIC["title"],
                     topic_lang="es",
                 )
@@ -145,7 +182,6 @@ class CompanionTests(TestCase):
             with patch("care.knowledge.index_path", return_value=path):
                 response = self.post(
                     text="Synthetic",
-                    synthetic=True,
                     topic_title=TOPIC["title"],
                     topic_lang="es",
                 )
@@ -164,14 +200,12 @@ class CompanionTests(TestCase):
                 with patch.dict(os.environ, {"AINGEL_AI_MODE": "mock"}):
                     response = self.post(
                         text="Synthetic",
-                        synthetic=True,
                         topic_title=TOPIC["title"],
                         topic_lang="es",
                     )
                     self.assertEqual(response.data["source"]["title"], TOPIC["title"])
                     response = self.post(
                         text="Synthetic",
-                        synthetic=True,
                         topic_title="Synthetic source",
                         topic_lang="es",
                     )
@@ -193,7 +227,6 @@ class CompanionTests(TestCase):
                     )
                     response = self.post(
                         text="Synthetic",
-                        synthetic=True,
                         topic_title=TOPIC["title"],
                         topic_lang="es",
                     )
@@ -203,9 +236,11 @@ class CompanionTests(TestCase):
     def test_per_user_chat_rate_is_bounded(self):
         for _ in range(6):
             self.assertEqual(
-                self.post(text="Synthetic", synthetic=True).status_code, 200
+                self.post(text="Synthetic").status_code, 200
             )
-        self.assertEqual(self.post(text="Synthetic", synthetic=True).status_code, 429)
+        self.assertEqual(self.post(text="Synthetic").status_code, 429)
+        # Fixtures share the same per-user bound.
+        self.assertEqual(self.post(fixture="greeting").status_code, 429)
 
     @patch.dict(
         os.environ,
@@ -213,6 +248,7 @@ class CompanionTests(TestCase):
             "AINGEL_AI_MODE": "meta",
             "MODEL_API_KEY": "synthetic-key",
             "AINGEL_SYNTHETIC_TESTS_ONLY": "1",
+            "AINGEL_REAL_DATA": "1",
         },
     )
     @patch("assistance.companion.httpx.Client")
@@ -220,6 +256,7 @@ class CompanionTests(TestCase):
     def test_meta_payload_uses_only_allowed_settings_and_one_selected_public_source(
         self, _lookup, client
     ):
+        self.authorize_real()
         stream = (
             client.return_value.__enter__.return_value.stream.return_value.__enter__.return_value
         )
@@ -240,7 +277,6 @@ class CompanionTests(TestCase):
         ]
         response = self.post(
             text="Synthetic question",
-            synthetic=True,
             topic_title=TOPIC["title"],
             topic_lang="es",
         )
@@ -258,6 +294,60 @@ class CompanionTests(TestCase):
         self.assertIn(
             "Synthetic example only", payload["input"][0]["content"][0]["text"]
         )
+        sent = json.loads(payload["input"][0]["content"][0]["text"])
+        self.assertEqual(sent["question"], "Synthetic question")
+        self.assertNotIn("synthetic_question", sent)
+        for marker in [
+            "PRIVATE_PROFILE_MARKER",
+            "PRIVATE_ALLERGY_MARKER",
+            "PRIVATE_NOTES_MARKER",
+            "PRIVATE_NAME_MARKER",
+            "PRIVATE_COMMUNICATION_MARKER",
+        ]:
+            self.assertNotIn(marker, json.dumps(payload))
+        event = AuditEvent.objects.get(action="companion.chat")
+        self.assertNotIn("Synthetic question", str(event.__dict__))
+        self.assertNotIn("Synthetic response", str(event.__dict__))
+
+    @patch.dict(
+        os.environ,
+        {
+            "AINGEL_AI_MODE": "meta",
+            "MODEL_API_KEY": "synthetic-key",
+            "AINGEL_SYNTHETIC_TESTS_ONLY": "1",
+        },
+    )
+    @patch("assistance.companion.httpx.Client")
+    @patch("assistance.companion.exact_topic", return_value=TOPIC)
+    def test_fixture_payload_is_server_written_and_never_reads_the_profile(self, lookup, client):
+        stream = (
+            client.return_value.__enter__.return_value.stream.return_value.__enter__.return_value
+        )
+        stream.iter_bytes.return_value = [
+            json.dumps(
+                {
+                    "status": "completed",
+                    "output": [
+                        {"type": "message", "content": [{"type": "output_text", "text": "Synthetic response."}]}
+                    ],
+                }
+            ).encode()
+        ]
+        response = self.post(fixture="hydration", locale="en-US")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["mode"], "meta")
+        self.assertEqual(response.data["synthetic_fixture"], "hydration")
+        self.assertIsNone(response.data["source"])
+        lookup.assert_not_called()
+        payload = client.return_value.__enter__.return_value.stream.call_args.kwargs["json"]
+        sent = json.loads(payload["input"][0]["content"][0]["text"])
+        self.assertEqual(sent, {"synthetic_question": synthetic.QUESTIONS["hydration"]["en-US"]})
+        self.assertIn("synthetic test", payload["instructions"])
+        self.assertIn("Respond in English", payload["instructions"])
+        # The fictitious profile's style, not this person's (their pace is slow and address formal).
+        self.assertIn(json.dumps(synthetic.FICTIONAL_PREFERENCES, ensure_ascii=True), payload["instructions"])
+        self.assertNotIn('"pace": "slow"', payload["instructions"])
+        self.assertNotIn('"addressing": "formal"', payload["instructions"])
         for marker in [
             "PRIVATE_PROFILE_MARKER",
             "PRIVATE_ALLERGY_MARKER",
@@ -267,7 +357,6 @@ class CompanionTests(TestCase):
         ]:
             self.assertNotIn(marker, json.dumps(payload))
         event = AuditEvent.objects.get(action="companion.synthetic_chat")
-        self.assertNotIn("Synthetic question", str(event.__dict__))
         self.assertNotIn("Synthetic response", str(event.__dict__))
 
     @patch.dict(
@@ -283,7 +372,7 @@ class CompanionTests(TestCase):
         client.return_value.__enter__.return_value.stream.side_effect = (
             httpx.ConnectError("PRIVATE_PROVIDER_RESPONSE")
         )
-        response = self.post(text="Synthetic", synthetic=True)
+        response = self.post(fixture="greeting")
         self.assertEqual(response.status_code, 503)
         self.assertEqual(response.data, {"error": "companion_unavailable"})
         self.assertNotIn("PRIVATE_PROVIDER_RESPONSE", str(response.data))
@@ -321,7 +410,8 @@ class CompanionTests(TestCase):
         ]
         for body, error in bodies:
             stream.iter_bytes.return_value = [json.dumps(body).encode()]
-            response = self.post(text="Synthetic", synthetic=True)
+            cache.clear()
+            response = self.post(fixture="greeting")
             self.assertEqual(response.status_code, 503)
             self.assertEqual(response.data["error"], error)
 
@@ -343,8 +433,20 @@ class WebSearchReplyTests(TestCase):
             {"type": "message", "content": [{"type": "output_text", "text": "Abre de 10:00 a 17:30.",
                                               "annotations": [cite, cite, {"type": "url_citation", "url": "javascript:alert(1)", "title": "x"}]}]},
         ]}).encode()]
-        result = call_spark("rules", "{}", web_search=True)
+        result = call_spark("rules", "{}", web_search=True, basis=synthetic.REAL)
         self.assertEqual(result["text"], "Abre de 10:00 a 17:30.")
         self.assertEqual(result["citations"], [{"url": "https://alabado.org/home/", "title": "Museo Casa del Alabado"}])
         self.assertEqual(result["web_searches"], 1)
         self.assertEqual(client.return_value.__enter__.return_value.stream.call_args.kwargs["json"]["tools"], [{"type": "web_search"}])
+
+    @patch.dict(os.environ, {"MODEL_API_KEY": "synthetic-key"})
+    @patch("assistance.companion.httpx.Client")
+    def test_a_call_without_a_decided_basis_sends_nothing(self, client):
+        from .companion import CompanionUnavailable, call_spark
+
+        for basis in (None, True, False, "synthetic"):
+            with self.assertRaisesMessage(CompanionUnavailable, "privacy_review_required"):
+                call_spark("rules", "{}", basis=basis)
+        with self.assertRaisesMessage(CompanionUnavailable, "privacy_review_required"):
+            call_spark("rules", "{}")
+        client.assert_not_called()

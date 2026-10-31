@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { analyserLevel, configureAnalyser } from "./useAudioLevel";
 import type { LevelSource } from "./orb.types";
+import { speakLocally } from "./browserSpeech";
 
 /**
  * Level of audio AINGEL plays through an <audio> element (e.g. a TTS provider's file or stream):
@@ -58,9 +59,8 @@ export function useSpeechSynthesisLevel(lang: string, rate = 1) {
     const done = () => { pulse.current = { at: 0, strength: 0 }; setSpeaking(false); onEnd?.(); };
     utterance.onend = done;
     utterance.onerror = done;
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(utterance);
-    return true;
+    // Local voices only: a network voice would send the text being read to its provider (browserSpeech.ts).
+    return speakLocally(utterance);
   }, [lang, rate, supported]);
   useEffect(() => () => { if (supported) window.speechSynthesis.cancel(); }, [supported]);
   return { speak, stop, speaking, supported, level };

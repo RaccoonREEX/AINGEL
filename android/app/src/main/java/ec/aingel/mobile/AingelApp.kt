@@ -512,14 +512,20 @@ private val YES_NO = listOf("yes" to R.string.cp_yes, "no" to R.string.cp_no)
 }
 @Composable private fun SeeScreen(model: AingelViewModel, s: MobileState) {
     var objectName by remember { mutableStateOf("") }
-    // Real photos use the sign-up authorization; only the included shapes image is a synthetic test.
+    // Real photos need the person's own grants; the shapes preview stands for the server's synthetic fixture.
     val shapes = remember { syntheticPhoto() }
     val fixture = s.image?.contentEquals(shapes) == true
     Text(stringResource(if (s.privateTestProfileId != null) R.string.private_test_active else R.string.synthetic_only)); PhotoInput(model, s)
     Action(R.string.fixture, !s.busy) { model.setImage(shapes) }
     Action(R.string.describe, !s.busy && s.image != null) { model.analyze(fixture) }
-    Input(R.string.object_prompt, objectName, { objectName = it })
-    Action(R.string.locate, !s.busy && s.image != null && objectName.isNotBlank()) { model.analyze(fixture, objectName) }
+    if (fixture) {
+        // The synthetic test only offers the server's objects: nothing typed is sent.
+        Action(R.string.locate_red_circle, !s.busy) { model.analyze(true, "red_circle") }
+        Action(R.string.locate_blue_square, !s.busy) { model.analyze(true, "blue_square") }
+    } else {
+        Input(R.string.object_prompt, objectName, { objectName = it })
+        Action(R.string.locate, !s.busy && s.image != null && objectName.isNotBlank()) { model.analyze(false, objectName) }
+    }
     s.result?.let { result ->
         val description = result.optString("text")
         if (description.isNotBlank()) { Text(description); Action(R.string.read) { model.speak(description) } }

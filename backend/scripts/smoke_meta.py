@@ -1,11 +1,10 @@
-"""Opt-in live Meta smoke check using an original, synthetic image only.
+"""Opt-in live Meta smoke check with the server's own synthetic fixture (assistance.synthetic): no uploaded image.
 
 The key is read from a local file into process memory, never printed or saved.
 Run from backend/: python scripts/smoke_meta.py --key-file <local-file>
 """
 
 import argparse
-import io
 import json
 import os
 from pathlib import Path
@@ -40,33 +39,18 @@ def main():
 
         django.setup()
         from django.contrib.auth import get_user_model
-        from django.core.files.uploadedfile import SimpleUploadedFile
-        from PIL import Image, ImageDraw
         from rest_framework.test import APIClient
 
-        image = Image.new("RGB", (640, 480), "white")
-        draw = ImageDraw.Draw(image)
-        draw.rectangle((60, 150, 220, 310), fill="blue")
-        draw.ellipse((380, 150, 540, 310), fill="red")
-        buffer = io.BytesIO()
-        image.save(buffer, format="PNG")
         client = APIClient()
         # Exercise the real Django endpoint without creating a persistent user/session.
         client.force_authenticate(get_user_model()(pk=1, username="synthetic-smoke"))
         response = client.post(
             "/api/v1/locate/" if args.locate else "/api/v1/scene/",
-            {
-                "image": SimpleUploadedFile(
-                    "synthetic-shapes.png", buffer.getvalue(), "image/png"
-                ),
-                "locale": "es-EC",
-                "synthetic": "true",
-                **({"object_name": "red circle"} if args.locate else {}),
-            },
+            {"locale": "es-EC", "fixture": "red_circle" if args.locate else "shapes"},
             format="multipart",
         )
         result = {
-            "fixture": "original 640x480 white canvas, blue square left, red circle right",
+            "fixture": "server fixture: 640x480 light canvas, blue square left, red circle right",
             "transport": "Django APIClient -> scene endpoint -> actual Meta HTTPS API",
             "http_status": response.status_code,
             "result": (

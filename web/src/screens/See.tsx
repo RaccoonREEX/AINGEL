@@ -1,3 +1,4 @@
+import { localVoice } from "../components/aingel/browserSpeech";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import Field from "../components/Field";
@@ -32,8 +33,9 @@ export default function See({ profile, t, locale, busy, run }: WithProfile) {
     setPreview(url);
     return () => URL.revokeObjectURL(url);
   }, [file]);
-  // The fixture this page drew itself: the only image sent as synthetic (a chosen file never is, whatever its name).
+  // A preview of the server's synthetic fixture «shapes»: choosing it sends only the fixture id, never this file.
   const bundled = useRef<File | null>(null);
+  const [fixtureObject, setFixtureObject] = useState("red_circle");
   useEffect(() => { setLocated(null); setPrivateTest(false); }, [file, profile.id]);
   useEffect(() => () => window.speechSynthesis?.cancel(), []);
   const fixture = () => {
@@ -41,13 +43,14 @@ export default function See({ profile, t, locale, busy, run }: WithProfile) {
     canvas.width = 640;
     canvas.height = 480;
     const ctx = canvas.getContext("2d")!;
-    ctx.fillStyle = "white";
+    // Same drawing as the server fixture (assistance.synthetic.shapes_image).
+    ctx.fillStyle = "rgb(236,236,232)";
     ctx.fillRect(0, 0, 640, 480);
-    ctx.fillStyle = "blue";
-    ctx.fillRect(60, 150, 160, 160);
-    ctx.fillStyle = "red";
+    ctx.fillStyle = "rgb(30,80,200)";
+    ctx.fillRect(90, 170, 141, 141);
+    ctx.fillStyle = "rgb(210,40,40)";
     ctx.beginPath();
-    ctx.arc(460, 230, 80, 0, Math.PI * 2);
+    ctx.arc(480, 240, 70, 0, Math.PI * 2);
     ctx.fill();
     canvas.toBlob((blob) => {
       if (blob) {
@@ -64,10 +67,8 @@ export default function See({ profile, t, locale, busy, run }: WithProfile) {
       setVoiceMessage(t("noVoice"));
       return;
     }
-    const voices = synth.getVoices();
-    const voice = voices.find((x) =>
-      x.lang.toLowerCase().startsWith(profile.locale.slice(0, 2)),
-    );
+    // Local voices only: a network voice would send the description to its provider.
+    const voice = localVoice(profile.locale);
     if (!voice) {
       setVoiceMessage(t("noVoice"));
       return;
@@ -91,11 +92,14 @@ export default function See({ profile, t, locale, busy, run }: WithProfile) {
             e.preventDefault();
             if (!file) return;
             const form = new FormData();
-            form.set("image", file);
             form.set("locale", profile.locale);
-            // Real images use the sign-up authorization; only the shapes image drawn by the app itself is a synthetic test.
-            form.set("profile", profile.id);
-            for (const [key, value] of Object.entries(imageTestFields(profile, privateTest, file === bundled.current))) form.set(key, String(value));
+            if (file === bundled.current) form.set("fixture", "shapes");
+            else {
+              // A real image: only under the person's own grants (camera + photos to Meta).
+              form.set("image", file);
+              form.set("profile", profile.id);
+              for (const [key, value] of Object.entries(imageTestFields(profile, privateTest))) form.set(key, String(value));
+            }
             setPrivateTest(false);
             void run(async () => {
               setResult(null);
@@ -149,13 +153,15 @@ export default function See({ profile, t, locale, busy, run }: WithProfile) {
             e.preventDefault();
             if (!file) return;
             const form = new FormData();
-            form.set("image", file);
             form.set("locale", profile.locale);
-            // Real images use the sign-up authorization; only the shapes image drawn by the app itself is a synthetic test.
-            form.set("profile", profile.id);
-            for (const [key, value] of Object.entries(imageTestFields(profile, privateTest, file === bundled.current))) form.set(key, String(value));
+            if (file === bundled.current) form.set("fixture", fixtureObject);
+            else {
+              form.set("image", file);
+              form.set("profile", profile.id);
+              for (const [key, value] of Object.entries(imageTestFields(profile, privateTest))) form.set(key, String(value));
+              form.set("object_name", objectName);
+            }
             setPrivateTest(false);
-            form.set("object_name", objectName);
             void run(async () => {
               setLocated(null);
               setLocated(await api<Located>("locate/", "POST", form));
@@ -164,17 +170,25 @@ export default function See({ profile, t, locale, busy, run }: WithProfile) {
         >
           <h2>{t("locate")}</h2>
           <Field label={t("objectPrompt")}>
-            <input
-              required
-              maxLength={80}
-              value={objectName}
-              onChange={(e) => setObjectName(e.target.value)}
-            />
+            {file && file === bundled.current ? (
+              // The synthetic test only offers the server's objects: nothing typed is sent.
+              <select value={fixtureObject} onChange={(e) => setFixtureObject(e.target.value)}>
+                <option value="red_circle">{locale === "es-EC" ? "Círculo rojo" : "Red circle"}</option>
+                <option value="blue_square">{locale === "es-EC" ? "Cuadrado azul" : "Blue square"}</option>
+              </select>
+            ) : (
+              <input
+                required
+                maxLength={80}
+                value={objectName}
+                onChange={(e) => setObjectName(e.target.value)}
+              />
+            )}
           </Field>
           <p className="hint">{t("objectPromptHint")}</p>
           <button
             className="primary"
-            disabled={busy || !file || !objectName.trim()}
+            disabled={busy || !file || (file !== bundled.current && !objectName.trim())}
           >
             {t("locate")}
           </button>

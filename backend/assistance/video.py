@@ -8,7 +8,8 @@ What it is not: Meta's API takes complete clips per request (no bidirectional vi
 length + upload + inference. Nothing is stored: the clip is read in memory (MemoryClipHandler), sent inline by default
 (no file left at Meta); the optional Files API transport (AINGEL_VIDEO_TRANSPORT=files) uploads with an expiry and
 deletes the file right after. Real clips of people also need AINGEL_VIDEO_REAL=1 (default 0) on top of the person's
-«meta_video» grant, while Meta's free-credit content terms remain unreconciled; synthetic test clips work without it.
+«meta_video» grant, while Meta's free-credit content terms remain unreconciled. Synthetic tests name a server fixture
+(assistance.synthetic): the server generates the clip and no uploaded clip is sent.
 """
 
 import base64
@@ -26,9 +27,10 @@ from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
-from care.consent import meta_account_denial, meta_allowed, still_current, synthetic_allowed
+from care.consent import meta_account_denial, meta_allowed, still_current
 from care.permissions import access, audit
 
+from . import synthetic
 from .meta_quota import MetaQuotaError, reserve_meta_call
 from .persona import VISION_RULES, instructions as persona_instructions, profile_preferences, vision_guard
 
@@ -161,8 +163,10 @@ CHANGE_TOOL = {
 }
 
 
-def describe_changes(clip, locale, previous, preferences, transport="inline"):
-    """Calls Muse Spark with the clip. Returns (events, say, timings)."""
+def describe_changes(clip, locale, previous, preferences, transport="inline", basis=None):
+    """Calls Muse Spark with the clip. Returns (events, say, timings). [basis]: what the view decided."""
+    if not synthetic.require_basis(basis):
+        raise VideoUnavailable("privacy_review_required")
     key = os.environ.get("MODEL_API_KEY", "").strip()
     if not key:
         raise VideoUnavailable("meta_not_configured")
@@ -240,10 +244,11 @@ class VideoUnavailable(Exception):
 
 
 class ClipRequest(serializers.Serializer):
-    clip = serializers.FileField()
+    # A real clip, or the id of a server synthetic fixture (assistance.synthetic); never both.
+    clip = serializers.FileField(required=False)
+    fixture = serializers.CharField(required=False, max_length=40)
     locale = serializers.ChoiceField(choices=["en-US", "es-EC"])
     profile = serializers.UUIDField(required=False)
-    synthetic = serializers.BooleanField(default=False)
     session = serializers.RegexField(r"^[A-Za-z0-9-]{8,64}$")
     seq = serializers.IntegerField(min_value=0, max_value=10**9)
 
@@ -264,10 +269,22 @@ class ClipView(APIView):
         serializer.is_valid(raise_exception=True)
         values = serializer.validated_data
         received = time.monotonic()
-        upload = values["clip"]
-        if upload.size > MAX_CLIP_BYTES:
-            return Response({"error": "clip_too_large"}, status=400)
-        clip = upload.read(MAX_CLIP_BYTES + 1)
+        # Decided before the clip is read: a server fixture, or the person's own grant with real video switched on.
+        profile = access(request.user, values["profile"]) if "profile" in values else None
+        real = (profile is not None and meta_allowed(profile, "video")
+                and os.environ.get("AINGEL_VIDEO_REAL", "0") == "1")
+        path, fixture = synthetic.route(request.data, "clip", real, ("clip", "profile"))
+        if path is None:
+            return Response({"error": fixture}, status=400)
+        if path == "fixture":
+            clip = synthetic.clip(fixture)
+        else:
+            if "clip" not in values:
+                return Response({"error": "clip_invalid"}, status=400)
+            upload = values["clip"]
+            if upload.size > MAX_CLIP_BYTES:
+                return Response({"error": "clip_too_large"}, status=400)
+            clip = upload.read(MAX_CLIP_BYTES + 1)
         info = mp4_info(clip)
         if info is None or not info["video"]:
             return Response({"error": "clip_invalid"}, status=400)
@@ -278,14 +295,10 @@ class ClipView(APIView):
             # Test server: the clip was validated, nothing leaves AINGEL.
             return Response({"mode": "mock", "stale": False, "events": [], "say": "", "seconds": info["seconds"],
                              "timings": {"server_ms": round((time.monotonic() - received) * 1000)}})
-        profile = access(request.user, values["profile"]) if "profile" in values else None
-        synthetic = synthetic_allowed(values["synthetic"])
-        real = (not synthetic and profile is not None and meta_allowed(profile, "video")
-                and os.environ.get("AINGEL_VIDEO_REAL", "0") == "1")
         if os.environ.get("AINGEL_AI_MODE", "mock") != "meta":
             return Response({"error": "meta_not_configured"}, status=503)
-        if not synthetic and not real:
-            return Response({"error": "privacy_review_required"}, status=400)
+        if path != "real":
+            profile = None  # a fixture never uses the person's profile
 
         # Backpressure: one clip at a time per account; newer clips are dropped by the phone, not queued.
         lease = f"video-busy:{request.user.pk}"
@@ -304,10 +317,12 @@ class ClipView(APIView):
             if values["seq"] <= cache.get(latest_key, -1):
                 return Response({"stale": True, "events": [], "say": ""})
             previous = recent_events(request.user, values["session"])
-            preferences = profile_preferences(profile.communication if profile else {}, bool(profile) and real and meta_allowed(profile, "personalization"))
+            preferences = (profile_preferences(profile.communication, meta_allowed(profile, "personalization"))
+                           if profile is not None else synthetic.FICTIONAL_PREFERENCES)
             try:
                 events, say, timings = describe_changes(clip, values["locale"], previous, preferences,
-                                                         os.environ.get("AINGEL_VIDEO_TRANSPORT", "inline"))
+                                                         os.environ.get("AINGEL_VIDEO_TRANSPORT", "inline"),
+                                                         basis=synthetic.REAL if path == "real" else synthetic.FIXTURE)
             except VideoUnavailable as error:
                 return Response({"error": str(error)}, status=503)
             if values["seq"] <= cache.get(latest_key, -1):

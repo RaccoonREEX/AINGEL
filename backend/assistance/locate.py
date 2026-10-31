@@ -16,6 +16,7 @@ from PIL import Image
 
 from .scene import SceneUnavailable
 from .meta_quota import MetaQuotaError, reserve_meta_call
+from .synthetic import require_basis
 
 log = logging.getLogger(__name__)
 
@@ -73,7 +74,7 @@ def parse_segmentation(text, image_size):
     return results
 
 
-def locate_object(image: bytes, prompt: str, allowed: bool):
+def locate_object(image: bytes, prompt: str, allowed):
     mode = os.environ.get("AINGEL_AI_MODE", "mock")
     if mode == "mock":
         return {
@@ -88,7 +89,7 @@ def locate_object(image: bytes, prompt: str, allowed: bool):
     key = os.environ.get("MODEL_API_KEY", "").strip()
     if not key:
         raise SceneUnavailable("meta_not_configured")
-    if not allowed:
+    if not require_basis(allowed):
         raise SceneUnavailable("privacy_review_required")
     with Image.open(io.BytesIO(image)) as source:
         size = source.size

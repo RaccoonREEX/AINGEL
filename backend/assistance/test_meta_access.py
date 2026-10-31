@@ -44,8 +44,9 @@ class MetaAccessTests(TestCase):
         with patch.dict(os.environ, {**PROD_META, "AINGEL_META_ALLOWED_USER_IDS": f" {self.user.pk}, 9999 "}):
             self.assertTrue(meta_user_allowed(self.user))
             with patch("assistance.conversation.call_spark", return_value={"mode": "meta", "model": "test", "text": "ok"}) as spark:
-                response = self.client.post(f"/api/v1/profiles/{self.profile.pk}/conversation/", {"turns": [{"role": "user", "text": "hello"}], "synthetic": True}, format="json")
+                response = self.client.post(f"/api/v1/profiles/{self.profile.pk}/conversation/", {"fixture": "greeting"}, format="json")
                 self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.data["synthetic_fixture"], "greeting")
                 spark.assert_called_once()
         with patch.dict(os.environ, {**PROD_META, "AINGEL_AI_MODE": "mock", "AINGEL_META_ALLOWED_USER_IDS": ""}):
             response = self.client.post(f"/api/v1/profiles/{self.profile.pk}/conversation/", {"turns": [{"role": "user", "text": "hello"}]}, format="json")
@@ -62,12 +63,18 @@ class MetaAccessTests(TestCase):
             second.is_active = False
             self.assertFalse(meta_user_allowed(second))
             with patch("assistance.conversation.call_spark", return_value={"mode": "meta", "model": "test", "text": "ok"}) as spark:
-                response = self.client.post(f"/api/v1/profiles/{self.profile.pk}/conversation/", {"turns": [{"role": "user", "text": "hello"}], "synthetic": True}, format="json")
+                response = self.client.post(f"/api/v1/profiles/{self.profile.pk}/conversation/", {"fixture": "greeting"}, format="json")
                 self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.data["synthetic_fixture"], "greeting")
                 spark.assert_called_once()
             with patch("assistance.conversation.call_spark") as spark:
                 response = self.client.post(f"/api/v1/profiles/{self.profile.pk}/conversation/", {"turns": [{"role": "user", "text": "hello"}]}, format="json")
                 self.assertEqual(response.data["error"], "privacy_review_required")
+                # The public demo only runs server fixtures: a client's declaration is refused.
+                cache.clear()
+                response = self.client.post(f"/api/v1/profiles/{self.profile.pk}/conversation/", {"turns": [{"role": "user", "text": "hello"}], "synthetic": True}, format="json")
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(response.data["error"], "synthetic_fixture_required")
                 spark.assert_not_called()
         for changed in ({"AINGEL_REAL_DATA": "1"}, {"AINGEL_SYNTHETIC_TESTS_ONLY": "0"}, {"AINGEL_PRIVATE_OWN_MEDIA_TEST": "1"}):
             with patch.dict(os.environ, {**public, **changed}, clear=True):
@@ -89,25 +96,26 @@ class MetaWebsocketAccessTests(TransactionTestCase):
         with patch("assistance.captions.connect", new=AsyncMock()) as connect:
             ws = WebsocketCommunicator(application, "/ws/captions/", headers=[(b"origin", b"http://127.0.0.1:5173"), (b"cookie", self.cookie)])
             self.assertTrue((await ws.connect())[0])
-            await ws.send_json_to({"type": "start", "locale": "es-EC", "synthetic": True})
+            await ws.send_json_to({"type": "start", "locale": "es-EC"})
             self.assertEqual((await ws.receive_json_from())["code"], "meta_access_denied")
             connect.assert_not_called()
             await ws.disconnect()
 
     @patch.dict(os.environ, {**PROD_META, "AINGEL_META_ALLOWED_USER_IDS": "*", "AINGEL_SYNTHETIC_TESTS_ONLY": "1", "AINGEL_REAL_DATA": "0", "AINGEL_PRIVATE_OWN_MEDIA_TEST": "0"})
-    async def test_websocket_public_demo_still_requires_synthetic_declaration(self):
+    async def test_websocket_public_demo_never_opens_captions_on_a_declaration(self):
         with patch("assistance.captions.connect", new=AsyncMock(return_value=FakeMeta())) as connect:
             def socket():
                 return WebsocketCommunicator(application, "/ws/captions/", headers=[(b"origin", b"http://127.0.0.1:5173"), (b"cookie", self.cookie)])
             ws = socket()
             self.assertTrue((await ws.connect())[0])
-            await ws.send_json_to({"type": "start", "locale": "es-EC", "synthetic": False})
+            await ws.send_json_to({"type": "start", "locale": "es-EC"})
             self.assertEqual((await ws.receive_json_from())["code"], "privacy_review_required")
+            await ws.disconnect()
+            # Microphone audio declared synthetic could be anyone's voice: the public demo has no captions.
+            for extra in ({"synthetic": False}, {"synthetic": True}, {"fixture": "greeting"}):
+                ws = socket()
+                self.assertTrue((await ws.connect())[0])
+                await ws.send_json_to({"type": "start", "locale": "es-EC", **extra})
+                self.assertEqual((await ws.receive_json_from())["code"], "synthetic_captions_unavailable", extra)
+                await ws.disconnect()
             connect.assert_not_called()
-            await ws.disconnect()
-            ws = socket()
-            self.assertTrue((await ws.connect())[0])
-            await ws.send_json_to({"type": "start", "locale": "es-EC", "synthetic": True})
-            self.assertEqual((await ws.receive_json_from())["type"], "ready")
-            connect.assert_awaited_once()
-            await ws.disconnect()

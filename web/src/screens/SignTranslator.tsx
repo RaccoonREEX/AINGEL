@@ -7,6 +7,7 @@ import { HandIcon } from "../components/aingel/HandIcon";
 import { BOARD, GLOSS_VOCABULARY, PICTOGRAM, buildSentence, glossSeq, signName, type Built, type SignId } from "../components/aingel/signLexicon";
 import { api } from "../api";
 import { useSpeechInput, type SpeechOutcome } from "../components/aingel/useSpeechInput";
+import BrowserSpeechConsent, { BrowserSpeechRevoke, micPrivacyLine } from "../components/BrowserSpeechConsent";
 import { useSpeechSynthesisLevel } from "../components/aingel/useOutputAudioLevel";
 import { useCamera } from "../components/aingel/useCamera";
 import { useCommunication } from "../Communication";
@@ -44,6 +45,7 @@ export default function SignTranslator({ profile, locale, onBack }: WithProfile 
   const mobile = useMediaQuery("(max-width: 760px)");
   const { value: communication } = useCommunication(profile.id);
   const speech = useSpeechInput(profile.locale);
+  const [askSpeech, setAskSpeech] = useState(false);
   const tts = useSpeechSynthesisLevel(profile.locale, communication?.pace === "slow" ? 0.8 : 1);
   const camera = useCamera();
   const [mode, setMode] = useState<Mode>("voice-to-sign");
@@ -113,6 +115,7 @@ export default function SignTranslator({ profile, locale, onBack }: WithProfile 
     if (speech.listening) { speech.finish(); return; }
     latest.current = ""; setSeq([]); setBuilt([]); setByMeaning(false); setResult(""); setHeard(""); tts.stop();
     const started = await speech.start(onHeard);
+    if (started === "consent") { setAskSpeech(true); return; }
     if (started) setOrb("listening");
     else if (started === false) { setResult("unavailable"); settle("retrying", 2000); }
   };
@@ -206,7 +209,9 @@ export default function SignTranslator({ profile, locale, onBack }: WithProfile 
           <button type="button" className="mic-btn mic-btn--lg" onClick={() => void listen()} aria-label={speech.listening ? L("Toca para terminar", "Tap to finish") : L("Toca para hablar", "Tap to talk")}>
             {speech.listening ? <span className="mic-stop" /> : <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0" /><path d="M12 17.5V21" /></svg>}
           </button>
-          {speech.listening && <span className="mic-privacy">{L("Micrófono activo. El audio no se guarda.", "Microphone on. Audio is not stored.")}</span>}
+          {speech.listening && <span className="mic-privacy">{micPrivacyLine(es, speech.place)}</span>}
+          {askSpeech && <BrowserSpeechConsent es={es} onAccept={() => { speech.accept(true); setAskSpeech(false); void listen(); }} onDecline={() => setAskSpeech(false)} />}
+          {speech.accepted && speech.place === "browser_service" && !speech.listening && <BrowserSpeechRevoke es={es} onRevoke={() => speech.accept(false)} />}
           {heard && <p className="heard"><span className="chip">{L("Escuché", "I heard")}</span> {heard}</p>}
         </section>
       )}
