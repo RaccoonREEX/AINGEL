@@ -15,6 +15,7 @@ from meta_sam_parser import (
 from PIL import Image
 
 from .scene import SceneUnavailable
+from . import usage
 from .meta_quota import MetaQuotaError, reserve_meta_call
 from .synthetic import require_basis
 
@@ -113,8 +114,9 @@ def locate_object(image: bytes, prompt: str, allowed):
     }
     started = time.monotonic()
     try:
+        usage.admit()
         reserve_meta_call()
-    except MetaQuotaError as error:
+    except (MetaQuotaError, usage.BudgetExhausted) as error:
         raise SceneUnavailable(str(error)) from None
     try:
         with httpx.Client(timeout=60, follow_redirects=False) as client:
@@ -131,6 +133,8 @@ def locate_object(image: bytes, prompt: str, allowed):
                     if len(raw) > 4 * 1024 * 1024:
                         raise SceneUnavailable("sam_output_too_large")
         data = json.loads(raw)
+        usage.record("locate", "sam-3.1", "", data.get("usage"), round((time.monotonic() - started) * 1000), allowed,
+                     data.get("status"))
         if data.get("status") != "completed":
             raise SceneUnavailable("sam_incomplete")
         text = "\n".join(

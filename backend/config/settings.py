@@ -171,6 +171,7 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {
         "user": "120/min",
         "scene": "20/min",  # continuous watching sends up to 15 a minute, plus «qué ves»
+        "vision": "12/min",  # deep vision and its follow-ups (up to three Meta calls each)
         "face": "6/min",
         "mfa": "6/min",
         "sign": "30/min",

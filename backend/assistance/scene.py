@@ -10,6 +10,7 @@ import httpx
 
 from .persona import VISION_RULES, instructions as persona_instructions, profile_preferences, vision_guard
 from PIL import Image, ImageOps, UnidentifiedImageError
+from . import usage
 from .meta_quota import MetaQuotaError, reserve_meta_call
 from .synthetic import require_basis
 
@@ -21,7 +22,7 @@ class SceneUnavailable(Exception):
     pass
 
 
-def normalize_image(upload) -> bytes:
+def normalize_image(upload, side=1600) -> bytes:
     if upload.size > MAX_BYTES:
         raise ValueError("image_too_large")
     raw = upload.read(MAX_BYTES + 1)
@@ -37,7 +38,7 @@ def normalize_image(upload) -> bytes:
                     raise ValueError("image_too_large")
                 image.load()
                 clean = ImageOps.exif_transpose(image).convert("RGB")
-                clean.thumbnail((1600, 1600))
+                clean.thumbnail((side, side))
                 output = io.BytesIO()
                 clean.save(output, format="JPEG", quality=85)
                 return output.getvalue()
@@ -97,8 +98,9 @@ def describe_scene(image: bytes, locale: str, allowed, known_person: bool = Fals
     }
     started = time.monotonic()
     try:
+        usage.admit()
         reserve_meta_call()
-    except MetaQuotaError as error:
+    except (MetaQuotaError, usage.BudgetExhausted) as error:
         raise SceneUnavailable(str(error)) from None
     try:
         # Fixed destination: no user-provided URLs and no forwarding redirects with credentials.
@@ -110,6 +112,8 @@ def describe_scene(image: bytes, locale: str, allowed, known_person: bool = Fals
             )
         response.raise_for_status()
         data = response.json()
+        usage.record("scene", "muse-spark-1.3", "minimal", data.get("usage"), round((time.monotonic() - started) * 1000),
+                     allowed, data.get("status"))
         if data.get("status") != "completed":
             raise SceneUnavailable("meta_incomplete")
         text = "\n".join(

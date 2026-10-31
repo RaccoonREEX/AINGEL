@@ -60,6 +60,9 @@ internal fun resolveSavedBackend(saved: String?, migrated: Boolean, debug: Boole
 /** Parse only bounded error codes; raw server text is never shown directly. */
 fun safeApiError(result: Any): String = apiErrorCode(result) ?: NetworkError.REQUEST_INVALID
 
+/** Deep vision answers can take about a minute (three model calls); other requests keep the defaults below. */
+internal const val SLOW_READ_SECONDS = 180L
+
 internal fun defaultHttpClientBuilder(): OkHttpClient.Builder = OkHttpClient.Builder()
     .connectTimeout(15, TimeUnit.SECONDS).readTimeout(65, TimeUnit.SECONDS).callTimeout(75, TimeUnit.SECONDS)
 
@@ -164,6 +167,10 @@ class ApiClient(context: Context) {
     suspend fun uploadClip(path: String, clip: ByteArray, values: Map<String, String>): JSONObject = transport.uploadClip(path, clip, values)
     /** A multipart form without files: synthetic tests name a server fixture instead of sending media. */
     suspend fun uploadForm(path: String, values: Map<String, String>): JSONObject = transport.uploadForm(path, values)
+    /** Deep vision (`vision/`): a new picture, or a follow-up about the session's picture when [image] is null. Its
+     * deepest level makes three model calls, so it waits longer than other requests. */
+    suspend fun vision(image: ByteArray?, values: Map<String, String>): JSONObject =
+        if (image != null) transport.uploadImages(VISION_PATH, listOf(image), values, slow = true) else transport.uploadForm(VISION_PATH, values, slow = true)
     suspend fun signClip(profileId: String, clipId: String): ByteArray = transport.signClip(profileId, clipId)
 }
 
@@ -219,21 +226,21 @@ internal class ApiTransport(
         }
     }
 
-    suspend fun uploadForm(path: String, values: Map<String, String>): JSONObject {
+    suspend fun uploadForm(path: String, values: Map<String, String>, slow: Boolean = false): JSONObject {
         val body = MultipartBody.Builder().setType(MultipartBody.FORM).apply { values.forEach { (key, value) -> addFormDataPart(key, value) } }.build()
-        val result = send(unsafe = true) { session ->
+        val result = send(unsafe = true, slow = slow) { session ->
             Request.Builder().url(session.base + "api/v1/" + path).csrfHeaders(session).post(body).build()
         }
         return result as? JSONObject ?: throw ApiFailure(NetworkError.RESPONSE_INVALID)
     }
 
-    suspend fun uploadImages(path: String, images: List<ByteArray>, values: Map<String, String>, limit: Int = 3): JSONObject {
+    suspend fun uploadImages(path: String, images: List<ByteArray>, values: Map<String, String>, limit: Int = 3, slow: Boolean = false): JSONObject {
         if (images.isEmpty() || images.size > limit || images.sumOf { it.size.toLong() } > 5 * 1024 * 1024) throw ApiFailure("image_too_large")
         val body = MultipartBody.Builder().setType(MultipartBody.FORM).apply {
             images.forEachIndexed { index, image -> addFormDataPart("image", "capture-$index.jpg", image.toRequestBody("image/jpeg".toMediaType())) }
             values.forEach { (key, value) -> addFormDataPart(key, value) }
         }.build()
-        val result = send(unsafe = true) { session ->
+        val result = send(unsafe = true, slow = slow) { session ->
             Request.Builder().url(session.base + "api/v1/" + path).csrfHeaders(session).post(body).build()
         }
         return result as? JSONObject ?: throw ApiFailure(NetworkError.RESPONSE_INVALID)
@@ -258,18 +265,21 @@ internal class ApiTransport(
         execute(session, Request.Builder().url(session.base + "api/v1/auth/session/").get().build())
     }
 
-    private suspend fun send(unsafe: Boolean, build: (SessionSnapshot) -> Request): Any {
-        if (!unsafe) return snapshot().let { execute(it, build(it)) }
+    private suspend fun send(unsafe: Boolean, slow: Boolean = false, build: (SessionSnapshot) -> Request): Any {
+        // Same cookies and connections, longer waits: only the read and whole-call timeouts change.
+        fun SessionSnapshot.timed() = if (!slow) this else copy(client = client.newBuilder()
+            .readTimeout(SLOW_READ_SECONDS, TimeUnit.SECONDS).callTimeout(SLOW_READ_SECONDS + 15, TimeUnit.SECONDS).build())
+        if (!unsafe) return snapshot().timed().let { execute(it, build(it)) }
         if (csrf.isBlank()) refreshCsrf()
         val first = snapshot()
         return try {
-            execute(first, build(first))
+            execute(first.timed(), build(first))
         } catch (failure: ApiFailure) {
             if (failure.code != NetworkError.CSRF_FAILED) throw failure
             refreshCsrf()
             val retry = snapshot()
             if (retry.generation != first.generation) throw ApiFailure("session_changed")
-            execute(retry, build(retry))
+            execute(retry.timed(), build(retry))
         }
     }
 

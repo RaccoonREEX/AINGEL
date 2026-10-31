@@ -181,4 +181,8 @@
     <string name="ui_signs_recognize_none">I didn\'t recognize any AINGEL sign. Sign more slowly with your hands in view, or tap it on the board.</string>
     <string name="ui_signs_recognize_mock">Test mode: this server does not analyse images.</string>
     <string name="ui_signs_recognize_failed">I couldn\'t recognize the signs right now. Try again or tap them on the board.</string>
+    <string name="ui_src_vision_session">Meta %1$s · the picture is kept encrypted for up to 15 minutes for your questions, then deleted</string>
+    <string name="ui_vision_more">More detail</string>
+    <string name="ui_vision_deep">Explore in depth</string>
+    <string name="ui_vision_session_expired">I no longer have that picture. Take another one to keep asking.</string>
 </resources>

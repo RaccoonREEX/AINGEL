@@ -11,7 +11,8 @@
     "test:synthetic-conversation": "node scripts/test-synthetic-conversation.mjs",
     "export:android-hands": "vite build --ssr scripts/export-hands3d.ts --outDir .export-hands3d --emptyOutDir && node .export-hands3d/export-hands3d.js",
     "test:browser-speech": "node scripts/test-browser-speech.mjs",
-    "test:revocation": "node scripts/test-revocation.mjs"
+    "test:revocation": "node scripts/test-revocation.mjs",
+    "test:vision": "node scripts/test-vision.mjs"
   },
   "dependencies": {
     "react": "^19.3.1",

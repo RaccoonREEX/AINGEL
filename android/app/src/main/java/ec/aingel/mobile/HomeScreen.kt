@@ -69,6 +69,8 @@ private data class Answer(
     val web: List<Pair<String, String>> = emptyList(),
     /** App feature the model asked this phone to run (name, arguments) instead of answering in words. */
     val action: Pair<String, JSONObject>? = null,
+    /** A deep-vision answer whose picture the server keeps for follow-up questions (backend assistance.vision). */
+    val followUp: Boolean = false,
 )
 /** App features offered to the model as tools (backend assistance.conversation.APP_ACTIONS). */
 private val APP_ACTIONS = listOf("describe_surroundings", "find_object", "start_continuous_watch", "stop_continuous_watch", "listen_and_sign", "open_sign_translator")
@@ -154,6 +156,7 @@ private const val MAX_MODEL_PAIRS = 5
     var signGuard by remember { mutableStateOf<Job?>(null) }  // reopens listening if the hands never report the end
     var visionJob by remember { mutableStateOf<Job?>(null) }  // a look in flight, cancelled if the camera grant goes
     var visionPending by remember { mutableStateOf<Long?>(null) }  // its question, answered with why it stopped
+    var visionSession by remember { mutableStateOf<Pair<String, Long>?>(null) }  // follow-ups about the last picture: (token, ends at)
     var speechAsk by remember { mutableStateOf<(() -> Unit)?>(null) }  // listening that waits for this account's decision
     val watch by WatchState.status.collectAsState()
     val str = { id: Int -> context.getString(id) }
@@ -264,6 +267,7 @@ private const val MAX_MODEL_PAIRS = 5
 
     var listenAgain: () -> Unit = {}  // set below, once startListening exists
     var runAction: (String, JSONObject, String) -> Unit = { _, _, _ -> }  // set below, once the modes exist
+    var followVision: (String) -> Unit = {}  // set below, once looking exists
     fun reply(id: Long, answer: Answer?) {
         val index = thread.indexOfFirst { it.id == id }
         if (index >= 0) thread[index] = thread[index].copy(answer = answer)
@@ -286,6 +290,8 @@ private const val MAX_MODEL_PAIRS = 5
             CameraCommand.WATCH_STOP -> { runAction("stop_continuous_watch", JSONObject(), text); return }
             null -> {}
         }
+        val session = visionSession
+        if (session != null && System.currentTimeMillis() < session.second && thread.lastOrNull()?.answer?.followUp == true) { followVision(text); return }
         val id = nextId++
         val history = thread.toList()
         thread.add(Exchange(id, text, null)); notice = null; phase = AingelOrbState.THINKING
@@ -347,6 +353,31 @@ private const val MAX_MODEL_PAIRS = 5
         e is ApiFailure && e.code == "privacy_review_required" -> R.string.ui_vision_need_consent
         else -> R.string.ui_vision_failed
     }
+    /** A deep-vision answer: the caution about moving only for scenes, not for drawings, pages or screens. */
+    fun visionAnswer(result: JSONObject): Answer {
+        val mock = result.optString("mode") == "mock"
+        val text = result.optString("text")
+        val caution = if (result.optString("task", "general") == "general") " " + str(R.string.ui_vision_caution) else ""
+        return Answer(text + caution, text, origin = Origin.VISION, followUp = visionSession != null,
+            source = if (mock) str(R.string.ui_src_vision_mock) else context.getString(R.string.ui_src_vision_session, result.optString("model", "Meta")))
+    }
+    /** A question about the picture of the last visual answer, which the server still holds (nothing new is captured). */
+    fun askVision(question: String) {
+        val token = visionSession?.first ?: return
+        val id = nextId++
+        thread.add(Exchange(id, question, null)); notice = null; composerOpen = true; phase = AingelOrbState.THINKING
+        visionJob = scope.launch {
+            val answer = try { visionAnswer(model.describeVision(null, question, token)) }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (e: Exception) {
+                if (e is ApiFailure && endsVisionSession(e.code)) visionSession = null
+                val message = if (e is ApiFailure && e.code == "visual_session_expired") str(R.string.ui_vision_session_expired) else str(visionFailure(e))
+                Answer(message, message, source = str(R.string.ui_src_local), origin = Origin.NOTICE)
+            }
+            reply(id, answer)
+        }
+    }
+    followVision = ::askVision
     fun look(objectName: String?, question: String? = null) {
         val use = capture ?: return
         val id = nextId++
@@ -357,6 +388,12 @@ private const val MAX_MODEL_PAIRS = 5
         visionJob = scope.launch {
             val caution = str(R.string.ui_vision_caution)
             val answer = try {
+                // Describing goes to deep vision (the question sets the detail); finding an object stays on SAM.
+                if (objectName == null) {
+                    val result = model.describeVision(use.jpegFrame(context), question, null)
+                    visionSession = visionSessionOf(result, System.currentTimeMillis())
+                    visionAnswer(result)
+                } else run {
                 val result = model.analyzeFrame(use.jpegFrame(context), objectName)
                 val mock = result.optString("mode") == "mock"
                 val text = if (objectName == null) withKnownPeople(result, result.optString("text")) else if (mock) str(R.string.ui_vision_mock) else {
@@ -367,6 +404,7 @@ private const val MAX_MODEL_PAIRS = 5
                 }
                 Answer("$text $caution", text, origin = Origin.VISION,
                     source = if (mock) str(R.string.ui_src_vision_mock) else context.getString(R.string.ui_src_vision_meta, result.optString("model", "Meta")))
+                }
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (e: Exception) { str(visionFailure(e)).let { Answer(it, it, source = str(R.string.ui_src_local), origin = Origin.NOTICE) } }
             if (visionPending == id) visionPending = null
@@ -607,7 +645,11 @@ private const val MAX_MODEL_PAIRS = 5
             else cameraPermission.launch(Manifest.permission.CAMERA)
         }
     }
-    fun clearConversation() { settleJob?.cancel(); voice.stop(); model.stopSpeech(); continuous = false; silenceUntil = 0L; thread.clear(); notice = null; phase = AingelOrbState.IDLE }
+    fun clearConversation() {
+        settleJob?.cancel(); voice.stop(); model.stopSpeech(); continuous = false; silenceUntil = 0L; thread.clear(); notice = null; phase = AingelOrbState.IDLE
+        // Done with the picture: the server deletes it now instead of at the end of its session.
+        visionSession?.first?.let { token -> scope.launch { model.closeVision(token) } }; visionSession = null
+    }
     /** A short local answer in the conversation (spoken unless the feature speaks for itself). */
     fun localReply(question: String, text: String, speak: Boolean = true) {
         val id = nextId++
@@ -839,7 +881,8 @@ private const val MAX_MODEL_PAIRS = 5
                     T(status, 14, FontWeight.Medium, Ui.Navy)
                 }
                 visionPanel()
-                thread.forEach { ex -> ExchangeView(ex, model, onSpeak = { phase = AingelOrbState.SPEAKING }, onStop = { phase = AingelOrbState.IDLE }, onAsk = { ask(it) }, phaseProvider = { phase }) }
+                thread.forEach { ex -> ExchangeView(ex, model, onSpeak = { phase = AingelOrbState.SPEAKING }, onStop = { phase = AingelOrbState.IDLE }, onAsk = { ask(it) }, phaseProvider = { phase },
+                    latest = ex === thread.last() && !busy) }
                 notice?.let { Spacer(Modifier.height(14.dp)); Notice(it) }
                 if (phase == AingelOrbState.LISTENING) Row(Modifier.fillMaxWidth().padding(top = 16.dp).semantics { liveRegion = LiveRegionMode.Polite },
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -905,7 +948,8 @@ private const val MAX_MODEL_PAIRS = 5
     }
 }
 
-@Composable private fun ExchangeView(ex: Exchange, model: AingelViewModel, onSpeak: () -> Unit, onStop: () -> Unit, onAsk: (String) -> Unit, phaseProvider: () -> AingelOrbState) {
+@Composable private fun ExchangeView(ex: Exchange, model: AingelViewModel, onSpeak: () -> Unit, onStop: () -> Unit, onAsk: (String) -> Unit, phaseProvider: () -> AingelOrbState,
+                                     latest: Boolean = false) {
     val uri = LocalUriHandler.current
     Column(Modifier.fillMaxWidth().padding(top = 18.dp)) {
         if (ex.question.isNotBlank()) Box(Modifier.align(Alignment.End).clip(RoundedCornerShape(16.dp, 16.dp, 4.dp, 16.dp)).background(Ui.Selected).padding(horizontal = 14.dp, vertical = 10.dp)) {
@@ -930,8 +974,14 @@ private const val MAX_MODEL_PAIRS = 5
                     Column { T(c.title, 14, FontWeight.SemiBold, maxLines = 2); if (c.meta.isNotBlank()) T(c.meta, 12, color = Ui.Muted, maxLines = 1) }
                 }
             }
-            if (a.offerLocal) Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(R.string.ui_suggest_today, R.string.ui_suggest_messages).forEach { id ->
+            // Follow-ups about the same picture: the server reads the level from these words (assistance.vision.classify).
+            val suggestions = when {
+                a.offerLocal -> listOf(R.string.ui_suggest_today, R.string.ui_suggest_messages)
+                a.followUp && latest -> listOf(R.string.ui_vision_more, R.string.ui_vision_deep)
+                else -> emptyList()
+            }
+            if (suggestions.isNotEmpty()) Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                suggestions.forEach { id ->
                     val label = stringResource(id)
                     Box(Modifier.clip(RoundedCornerShape(50)).border(1.dp, Ui.Control, RoundedCornerShape(50)).clickable(role = Role.Button) { onAsk(label) }.padding(horizontal = 14.dp, vertical = 9.dp)) { T(label, 12, FontWeight.Medium, Ui.Navy) }
                 }

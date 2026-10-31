@@ -295,6 +295,22 @@ class AingelViewModel(app: Application) : AndroidViewModel(app) {
         if (!cameraResults.accepts(token)) throw ApiFailure("consent_changed")
         return result
     }
+    /**
+     * Deep vision: [image] with the person's question, or a follow-up about [session]'s picture when [image] is null.
+     * Same authorization as describing a photo; the server rechecks it on every follow-up.
+     */
+    suspend fun describeVision(image: ByteArray?, question: String?, session: String?, level: String? = null): JSONObject {
+        val fields = if (session != null && image == null) visionFollowUpFields(appLocale(), session, question, level)
+            else visionFields(imageRequestFields(mutable.value.profile, mutable.value.privateTestProfileId), question, level)
+        val token = cameraResults.open()
+        val result = api.vision(image, fields)
+        if (!cameraResults.accepts(token)) throw ApiFailure("consent_changed")
+        return result
+    }
+    /** Ends a follow-up session early: the server deletes its copy of the picture now. */
+    suspend fun closeVision(session: String) {
+        try { api.request("vision/sessions/$session/", "DELETE") } catch (e: CancellationException) { throw e } catch (_: Exception) {}
+    }
     suspend fun analyzeFrame(image: ByteArray, objectName: String?): JSONObject {
         // The profile lets the server apply its sign-up authorization (camera + Meta).
         val fields = imageRequestFields(mutable.value.profile, mutable.value.privateTestProfileId)

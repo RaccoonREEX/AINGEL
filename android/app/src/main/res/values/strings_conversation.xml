@@ -182,4 +182,8 @@
     <string name="ui_signs_recognize_none">No reconocí ninguna seña de AINGEL. Hazla más despacio, con las manos a la vista, o tócala en el tablero.</string>
     <string name="ui_signs_recognize_mock">Modo de prueba: este servidor no analiza imágenes.</string>
     <string name="ui_signs_recognize_failed">No pude reconocer las señas ahora. Inténtalo de nuevo o tócalas en el tablero.</string>
+    <string name="ui_src_vision_session">Meta %1$s · la imagen se guarda cifrada hasta 15 minutos para tus preguntas y luego se borra</string>
+    <string name="ui_vision_more">Más detalle</string>
+    <string name="ui_vision_deep">Explorar a fondo</string>
+    <string name="ui_vision_session_expired">Ya no tengo esa imagen. Toma otra foto para seguir preguntando.</string>
 </resources>

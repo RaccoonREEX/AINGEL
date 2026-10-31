@@ -26,6 +26,7 @@ from rest_framework.throttling import UserRateThrottle
 from care.consent import meta_account_denial, meta_allowed, private_media_allowed, refused, still_current
 from care.permissions import access, audit
 
+from . import usage
 from .meta_quota import MetaQuotaError, reserve_meta_call
 from .scene import normalize_image
 
@@ -107,21 +108,24 @@ def recognize(frames):
         {"type": "input_image", "image_url": "data:image/jpeg;base64," + base64.b64encode(frame).decode("ascii")} for frame in frames
     ]
     payload = {
-        "model": "muse-spark-1.3", "store": False, "reasoning": {"effort": "minimal"}, "max_output_tokens": 600,
+        "model": "muse-spark-1.3", "store": False, "reasoning": {"effort": "low"}, "max_output_tokens": 2500,
         "instructions": instructions(len(frames)),
         "tools": [REPORT_TOOL],  # Meta supports only tool_choice "auto"
         "input": [{"role": "user", "content": content}],
     }
     started = time.monotonic()
     try:
+        usage.admit()
         reserve_meta_call()
-    except MetaQuotaError as error:
+    except (MetaQuotaError, usage.BudgetExhausted) as error:
         raise Unavailable(str(error)) from None
     try:
         with httpx.Client(timeout=60, follow_redirects=False) as client:
             response = client.post("https://api.meta.ai/v1/responses", headers={"Authorization": f"Bearer {key}"}, json=payload)
         response.raise_for_status()
         data = response.json()
+        usage.record("signs", "muse-spark-1.3", payload["reasoning"]["effort"], data.get("usage"),
+                     round((time.monotonic() - started) * 1000), "authorized_real", data.get("status"))
         if data.get("status") != "completed":
             raise Unavailable("meta_incomplete")
         call = next((item for item in data.get("output", []) if item.get("type") == "function_call" and item.get("name") == "report_signs"), None)

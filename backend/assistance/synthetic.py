@@ -39,7 +39,15 @@ QUESTIONS = {
         "en-US": "Give me one simple idea to organize the morning.",
     },
 }
-IMAGES = {"shapes": {"es-EC": "Figuras: cuadrado azul y círculo rojo", "en-US": "Shapes: blue square and red circle"}}
+IMAGES = {
+    "shapes": {"es-EC": "Figuras: cuadrado azul y círculo rojo", "en-US": "Shapes: blue square and red circle"},
+    # Deep vision (AINGEL 3.0): drawn by the server, no real person, document or artwork.
+    "drawing_dog": {"es-EC": "Dibujo a mano de un perro", "en-US": "Hand drawing of a dog"},
+    "drawing_ambiguous": {"es-EC": "Dibujo de trazos ambiguos", "en-US": "Drawing of ambiguous strokes"},
+    "face_drawn": {"es-EC": "Retrato ilustrado de una persona ficticia", "en-US": "Illustrated portrait of a fictitious person"},
+    "document_page": {"es-EC": "Página de un libro ficticio", "en-US": "Page of a fictitious book"},
+    "chart_bars": {"es-EC": "Gráfico de barras", "en-US": "Bar chart"},
+}
 # Find-object fixtures: the shapes image and an object name fixed here (the segmentation prompt is English).
 OBJECTS = {
     "blue_square": {"es-EC": "Cuadrado azul", "en-US": "Blue square", "prompt": "blue square"},
@@ -126,8 +134,138 @@ def moving_square_clip(seconds=6, fps=10):
         return Path(path).read_bytes()
 
 
+def _jpeg(image):
+    output = io.BytesIO()
+    image.save(output, format="JPEG", quality=90)
+    return output.getvalue()
+
+
+def dog_drawing():
+    """A simple ink drawing of a dog on paper (the recognizable-drawing test): body, head with floppy ears, legs,
+    tail, collar and a ground line."""
+    from PIL import Image, ImageDraw
+
+    image = Image.new("RGB", (800, 600), (250, 248, 240))
+    draw = ImageDraw.Draw(image)
+    ink, brown = (35, 35, 35), (150, 95, 50)
+    draw.line((60, 520, 740, 520), fill=(120, 160, 80), width=4)
+    draw.ellipse((230, 280, 560, 430), fill=(205, 160, 105), outline=ink, width=6)
+    for x in (280, 340, 450, 510):
+        draw.rectangle((x, 400, x + 34, 515), fill=(205, 160, 105), outline=ink, width=5)
+        draw.ellipse((x - 8, 500, x + 44, 525), fill=(205, 160, 105), outline=ink, width=5)
+    draw.line((235, 330, 190, 280, 170, 220), fill=ink, width=8, joint="curve")
+    draw.ellipse((470, 130, 650, 300), fill=(205, 160, 105), outline=ink, width=6)
+    draw.ellipse((440, 140, 500, 290), fill=brown, outline=ink, width=5)
+    draw.ellipse((620, 140, 680, 290), fill=brown, outline=ink, width=5)
+    draw.ellipse((515, 185, 535, 205), fill=ink)
+    draw.ellipse((585, 185, 605, 205), fill=ink)
+    draw.ellipse((535, 225, 585, 255), fill=(240, 220, 190), outline=ink, width=4)
+    draw.ellipse((548, 222, 572, 240), fill=ink)
+    draw.arc((530, 240, 590, 280), 20, 160, fill=ink, width=4)
+    draw.ellipse((552, 266, 570, 290), fill=(230, 110, 120), outline=ink, width=3)
+    draw.arc((480, 255, 640, 330), 30, 150, fill=(200, 40, 40), width=10)
+    return _jpeg(image)
+
+
+def ambiguous_drawing():
+    """Overlapping loops and scribbles that do not clearly represent anything (the ambiguous-drawing test)."""
+    import math
+    import random
+
+    from PIL import Image, ImageDraw
+
+    generator = random.Random(20261031)
+    image = Image.new("RGB", (800, 600), (250, 248, 240))
+    draw = ImageDraw.Draw(image)
+    for stroke in range(7):
+        cx, cy = generator.randint(200, 600), generator.randint(160, 440)
+        radius, turns = generator.randint(40, 140), generator.uniform(1.2, 2.6)
+        points = [
+            (cx + radius * math.cos(t / 20) * (1 + 0.3 * math.sin(t / 7)), cy + radius * 0.7 * math.sin(t / 20 * 1.3))
+            for t in range(int(turns * 126))
+        ]
+        color = ((40, 40, 40), (60, 90, 170), (170, 70, 50))[stroke % 3]
+        draw.line(points, fill=color, width=generator.randint(2, 7), joint="curve")
+    return _jpeg(image)
+
+
+def drawn_face():
+    """A flat illustration of a fictitious adult's face (the face-description test without a real person)."""
+    from PIL import Image, ImageDraw
+
+    image = Image.new("RGB", (600, 700), (225, 232, 240))
+    draw = ImageDraw.Draw(image)
+    skin, ink, hair = (214, 168, 130), (45, 35, 30), (70, 50, 40)
+    draw.rectangle((200, 560, 400, 700), fill=skin)
+    draw.rounded_rectangle((90, 600, 510, 760), radius=80, fill=(40, 90, 140))
+    draw.ellipse((150, 120, 450, 540), fill=skin, outline=ink, width=3)
+    draw.chord((140, 70, 460, 330), 180, 360, fill=hair)
+    draw.ellipse((130, 280, 170, 360), fill=skin, outline=ink, width=3)
+    draw.ellipse((430, 280, 470, 360), fill=skin, outline=ink, width=3)
+    for x in (215, 335):
+        draw.arc((x, 255, x + 60, 285), 200, 340, fill=hair, width=9)
+        draw.ellipse((x + 8, 290, x + 52, 320), fill=(255, 255, 255), outline=ink, width=2)
+        draw.ellipse((x + 20, 293, x + 42, 317), fill=(110, 70, 40))
+        draw.ellipse((x + 27, 300, x + 35, 310), fill=ink)
+        draw.rounded_rectangle((x - 5, 280, x + 65, 330), radius=12, outline=(30, 30, 30), width=4)
+    draw.line((285, 305, 315, 305), fill=(30, 30, 30), width=4)
+    draw.line((300, 320, 290, 390, 312, 395), fill=ink, width=3)
+    draw.arc((240, 400, 360, 470), 15, 165, fill=(150, 60, 60), width=7)
+    draw.arc((175, 330, 425, 560), 30, 150, fill=(95, 75, 65), width=2)
+    return _jpeg(image)
+
+
+def document_page():
+    """A page of a fictitious book: chapter title, two paragraphs and a page number."""
+    from PIL import Image, ImageDraw, ImageFont
+
+    image = Image.new("RGB", (900, 1200), (252, 251, 246))
+    draw = ImageDraw.Draw(image)
+    title, body = ImageFont.load_default(size=44), ImageFont.load_default(size=30)
+    # Only unaccented words: Pillow's built-in font has no accented glyphs, and a missing glyph would read as noise.
+    draw.text((90, 90), "Parte 3. La casa de Rosa", font=title, fill=(20, 20, 20))
+    lines = [
+        "La casa de Rosa estaba al final de la calle,",
+        "junto a un parque con dos limoneros grandes.",
+        "Antes de ir al mercado, Rosa regaba las plantas",
+        "y saludaba a los vecinos de la esquina.",
+        "",
+        "En el centro del patio estaba una fuente redonda.",
+        "Los vecinos contaban que el agua sonaba como",
+        "lluvia y que por eso los gorriones llegaban temprano.",
+    ]
+    for row, line in enumerate(lines):
+        draw.text((90, 200 + row * 52), line, font=body, fill=(30, 30, 30))
+    draw.text((430, 1110), "42", font=body, fill=(60, 60, 60))
+    return _jpeg(image)
+
+
+def bar_chart():
+    """A bar chart with a title, labelled axes and five values (S1 4, S2 6, S3 5, S4 8, S5 7), unaccented text."""
+    from PIL import Image, ImageDraw, ImageFont
+
+    image = Image.new("RGB", (900, 650), (255, 255, 255))
+    draw = ImageDraw.Draw(image)
+    font, small = ImageFont.load_default(size=32), ImageFont.load_default(size=24)
+    draw.text((180, 30), "Vasos de agua en cinco semanas", font=font, fill=(20, 20, 20))
+    draw.line((120, 560, 840, 560), fill=(30, 30, 30), width=3)
+    draw.line((120, 100, 120, 560), fill=(30, 30, 30), width=3)
+    for value in range(0, 11, 2):
+        y = 560 - value * 42
+        draw.text((80, y - 12), str(value), font=small, fill=(30, 30, 30))
+        draw.line((115, y, 840, y), fill=(225, 225, 225), width=1)
+    for index, (day, value) in enumerate((("S1", 4), ("S2", 6), ("S3", 5), ("S4", 8), ("S5", 7))):
+        x = 160 + index * 135
+        draw.rectangle((x, 560 - value * 42, x + 80, 559), fill=(40, 110, 190))
+        draw.text((x + 22, 575), day, font=small, fill=(30, 30, 30))
+    return _jpeg(image)
+
+
 def image(fixture):
-    return {"shapes": shapes_image}[fixture]()
+    return {
+        "shapes": shapes_image, "drawing_dog": dog_drawing, "drawing_ambiguous": ambiguous_drawing,
+        "face_drawn": drawn_face, "document_page": document_page, "chart_bars": bar_chart,
+    }[fixture]()
 
 
 def clip(fixture):
