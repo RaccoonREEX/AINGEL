@@ -35,6 +35,37 @@ ISOLATED = bool(REDIS_URL) and os.environ.get("AINGEL_TEST_REDIS_ISOLATED") == "
 META = {"AINGEL_AI_MODE": "meta", "MODEL_API_KEY": "synthetic-key", "AINGEL_SYNTHETIC_TESTS_ONLY": "1", "AINGEL_REAL_DATA": "0"}
 
 
+def assert_per_account_limit(test):
+    """The configured per-account rate of the conversation endpoint (DRF scope «conversation», read from settings,
+    not changed by the test): one account goes past it and is refused; another account is not affected.
+
+    (The first version patched ConversationRate.rate, which DRF throttles do not define as a class attribute: the test
+    raised AttributeError before any request. That was the failure Astra saw on real Redis.)"""
+    limit = ConversationRate().num_requests
+    users = get_user_model().objects
+    first = adult(users.create_user(username="quota-first"))
+    second = adult(users.create_user(username="quota-second"))
+    profiles = {user: Profile.objects.create(owner=user, display_name="Ficticio") for user in (first, second)}
+    statuses = []
+    with patch.dict(os.environ, {"AINGEL_AI_MODE": "mock", "AINGEL_SYNTHETIC_TESTS_ONLY": "1"}):
+        for user in [first] * (limit + 1) + [second]:
+            client = APIClient()
+            client.force_authenticate(user)
+            statuses.append(client.post(f"/api/v1/profiles/{profiles[user].pk}/conversation/", {"fixture": "greeting"},
+                                        format="json").status_code)
+    test.assertEqual(statuses, [200] * limit + [429, 200])
+
+
+class PerAccountLimitTests(TestCase):
+    """The same per-account check on the default cache (always runs); RealRedisTests repeats it on Redis."""
+
+    def setUp(self):
+        caches["default"].clear()
+
+    def test_per_account_limits_are_per_account(self):
+        assert_per_account_limit(self)
+
+
 def redis_caches(location, prefix):
     options = {"socket_connect_timeout": 1, "socket_timeout": 1}
     return {
@@ -153,17 +184,7 @@ class RealRedisTests(TestCase):
         self.assertEqual(self.reserve_all(2), ["ok", "ok"])
 
     def test_per_account_limits_are_per_account(self):
-        users = get_user_model().objects
-        first = adult(users.create_user(username="quota-first"))
-        second = adult(users.create_user(username="quota-second"))
-        profiles = [Profile.objects.create(owner=u, display_name="Ficticio") for u in (first, second)]
-        with patch.object(ConversationRate, "rate", "2/minute"), patch.dict(os.environ, {"AINGEL_AI_MODE": "mock"}):
-            statuses = []
-            for user, profile in ((first, profiles[0]),) * 3 + ((second, profiles[1]),):
-                client = APIClient()
-                client.force_authenticate(user)
-                statuses.append(client.post(f"/api/v1/profiles/{profile.pk}/conversation/", {"fixture": "greeting"}, format="json").status_code)
-        self.assertEqual(statuses, [200, 200, 429, 200])
+        assert_per_account_limit(self)
 
     def test_losing_redis_mid_run_keeps_failing_closed(self):
         self.assertEqual(self.reserve_all(1), ["ok"])
