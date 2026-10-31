@@ -115,16 +115,25 @@ class VideoClipTests(TestCase):
         self.assertEqual(call.call_args.kwargs["basis"], synthetic.FIXTURE)
 
     def test_changes_are_announced_once_and_old_clips_are_dropped(self):
-        first, call = self.post(seq=1)
+        # The temporal context belongs to the person's real watching session only.
+        first, call = self.real(seq=1)
         self.assertEqual(first.status_code, 200, first.data)
-        self.assertEqual(call.call_args.kwargs["basis"], synthetic.FIXTURE)
+        self.assertEqual(call.call_args.kwargs["basis"], synthetic.REAL)
         self.assertEqual((first.data["events"], first.data["say"], first.data["ai_generated"]), (DOOR, "Se abrió la puerta.", True))
-        again, call = self.post(seq=2)  # the model reports the same door: not repeated
+        again, call = self.real(seq=2)  # the model reports the same door: not repeated
         self.assertEqual((again.data["events"], again.data["say"]), ([], ""))
         self.assertEqual(call.call_args.args[2][0]["what"], "la puerta")  # recent context went with the clip
-        stale, call = self.post(seq=1)
+        stale, call = self.real(seq=1)
         self.assertEqual(stale.data, {"stale": True, "events": [], "say": ""})
         call.assert_not_called()
+
+    def test_fixtures_have_no_temporal_context(self):
+        self.real(seq=1)
+        for seq in (1, 2):  # nothing real, and nothing from the previous fixture either
+            response, call = self.post(seq=seq)
+            self.assertEqual(response.status_code, 200, response.data)
+            self.assertEqual(call.call_args.args[2], [])
+            self.assertEqual(call.call_args.kwargs["basis"], synthetic.FIXTURE)
 
     def test_backpressure_and_quota(self):
         cache.add(f"video-busy:{self.owner.pk}", True, 90)

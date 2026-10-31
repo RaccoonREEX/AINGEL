@@ -102,21 +102,31 @@ def mp4_info(data):
     return {"seconds": round(seconds, 2), "video": video}
 
 
-# --- Short temporal context (per account and watching session, expiring) ----------------------------------------
+# --- Short temporal context (real watching only, expiring) ---------------------------------------------------------
+# Only real, authorized clips have a context, keyed by account, profile and the person's consent epoch: a revocation
+# (the epoch moves), another person or another account can never read it. The client's session id only separates
+# that person's own watching sessions; it is not what isolates them. Synthetic fixtures have no context at all, so
+# nothing real can reach a fixture payload.
 
-def _key(user, session):
-    return f"video-context:{user.pk}:{session}"
+def context_key(user, profile, session):
+    return f"video-context:real:{user.pk}:{profile.pk}:{profile.consent_epoch}:{session}"
 
 
-def recent_events(user, session):
+def sequence_key(user, profile, session):
+    if profile is None:
+        return f"video-seq:fixture:{user.pk}:{session}"
+    return f"video-seq:real:{user.pk}:{profile.pk}:{profile.consent_epoch}:{session}"
+
+
+def recent_events(key):
     now = time.time()
-    return [e for e in cache.get(_key(user, session), []) if now - e["at"] < EVENT_TTL]
+    return [e for e in cache.get(key, []) if now - e["at"] < EVENT_TTL]
 
 
-def remember(user, session, events, seq):
+def remember(key, events, seq):
     now = time.time()
-    kept = recent_events(user, session) + [{**e, "at": now, "seq": seq} for e in events]
-    cache.set(_key(user, session), kept[-CONTEXT_EVENTS:], EVENT_TTL)
+    kept = recent_events(key) + [{**e, "at": now, "seq": seq} for e in events]
+    cache.set(key, kept[-CONTEXT_EVENTS:], EVENT_TTL)
 
 
 def new_events(events, previous):
@@ -313,10 +323,12 @@ class ClipView(APIView):
         epoch = profile.consent_epoch if profile is not None else None
         try:
             # Results for a clip older than one already answered are stale: dropped, not announced.
-            latest_key = f"video-seq:{request.user.pk}:{values['session']}"
+            latest_key = sequence_key(request.user, profile, values["session"])
             if values["seq"] <= cache.get(latest_key, -1):
                 return Response({"stale": True, "events": [], "say": ""})
-            previous = recent_events(request.user, values["session"])
+            # The private history is read only on the real path, after its authorization was checked above.
+            history = context_key(request.user, profile, values["session"]) if path == "real" else None
+            previous = recent_events(history) if history else []
             preferences = (profile_preferences(profile.communication, meta_allowed(profile, "personalization"))
                            if profile is not None else synthetic.FICTIONAL_PREFERENCES)
             try:
@@ -331,7 +343,8 @@ class ClipView(APIView):
             if profile is not None and real and not still_current(profile, epoch):
                 return Response({"error": "consent_changed"}, status=409)
             fresh = new_events(events, previous)
-            remember(request.user, values["session"], fresh, values["seq"])
+            if history:
+                remember(history, fresh, values["seq"])
             say = say if fresh else ""
             say, adjusted = vision_guard(say, values["locale"]) if say else ("", False)
         finally:
@@ -343,3 +356,22 @@ class ClipView(APIView):
             "mode": "meta", "model": "muse-spark-1.3", "ai_generated": True, "stale": False, "seconds": info["seconds"],
             "events": fresh, "say": say, "safety_adjusted": adjusted, "timings": timings,
         })
+
+
+class ClipSessionEndView(APIView):
+    """Ends a real watching session: its temporal context and sequence are discarded at once (not left to expire)."""
+
+    def post(self, request):
+        serializer = ClipSessionEnd(data=request.data)
+        if not serializer.is_valid():
+            return Response({"error": "clip_session_invalid"}, status=400)
+        values = serializer.validated_data
+        profile = access(request.user, values["profile"])
+        cache.delete_many([context_key(request.user, profile, values["session"]),
+                           sequence_key(request.user, profile, values["session"])])
+        return Response(status=204)
+
+
+class ClipSessionEnd(serializers.Serializer):
+    profile = serializers.UUIDField()
+    session = serializers.RegexField(r"^[A-Za-z0-9-]{8,64}$")
