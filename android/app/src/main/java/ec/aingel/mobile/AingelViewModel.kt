@@ -283,6 +283,18 @@ class AingelViewModel(app: Application) : AndroidViewModel(app) {
     }
     private fun appLocale() = if (getApplication<Application>().resources.configuration.locales[0].language == "es") "es-EC" else "en-US"
     /** One captured frame to scene description or object search; the image is not stored. */
+    /**
+     * Experimental: consecutive frames of a person signing, compared by Meta with AINGEL's own sign set (no model
+     * validated by Deaf LSEC signers exists; it can be wrong). Same authorization as describing a photo.
+     */
+    suspend fun recognizeSigns(frames: List<ByteArray>): JSONObject {
+        val id = mutable.value.profile?.optString("id")?.takeIf { it.isNotBlank() } ?: throw ApiFailure("profile_required")
+        val fields = imageRequestFields(mutable.value.profile, mutable.value.privateTestProfileId)
+        val token = cameraResults.open()
+        val result = api.uploadFrames("profiles/$id/signs/recognize/", frames, fields)
+        if (!cameraResults.accepts(token)) throw ApiFailure("consent_changed")
+        return result
+    }
     suspend fun analyzeFrame(image: ByteArray, objectName: String?): JSONObject {
         // The profile lets the server apply its sign-up authorization (camera + Meta).
         val fields = imageRequestFields(mutable.value.profile, mutable.value.privateTestProfileId)

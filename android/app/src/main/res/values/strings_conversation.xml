@@ -69,8 +69,8 @@
     <string name="ui_signs_camera_open">Cámara abierta · AINGEL aún no reconoce señas por sí solo</string>
     <string name="ui_signs_open_camera">Abrir cámara para signar</string>
     <string name="ui_signs_close_camera">Cerrar cámara</string>
-    <string name="ui_signs_camera_private">Cámara activa · la imagen no se guarda ni se envía</string>
-    <string name="ui_signs_no_recognizer">AINGEL aún no reconoce señas por la cámara. Toca las señas de tu mensaje.</string>
+    <string name="ui_signs_camera_private">Cámara activa · la imagen no se guarda. Solo se envía a Meta cuando tocas «Reconocer mis señas».</string>
+    <string name="ui_signs_no_recognizer">Reconocimiento experimental: haz las señas de AINGEL frente a la cámara y toca «Reconocer mis señas». Puede equivocarse: no está validado por personas sordas LSEC. También puedes tocar las señas de tu mensaje.</string>
     <string name="ui_signs_heard">Escuché</string>
     <string name="ui_signs_text_label">Texto para la otra persona (puedes corregirlo)</string>
     <string name="ui_signs_show_large">Mostrar en grande</string>
@@ -105,7 +105,7 @@
     <string name="ui_m_readonly">Este recordatorio lo organiza %1$s. Pídele a %2$s que lo cambie si lo necesitas.</string>
     <string name="ui_m_signing">AINGEL lo dice en señas</string>
     <string name="ui_m_make_signs">Haz tus señas.</string>
-    <string name="ui_m_no_recognizer">AINGEL aún no reconoce señas por la cámara. Toca las señas que haces:</string>
+    <string name="ui_m_no_recognizer">Reconocimiento experimental: haz las señas de AINGEL frente a la cámara y toca «Reconocer mis señas». Puede equivocarse: no está validado por personas sordas LSEC. También puedes tocar las señas que haces:</string>
     <string name="ui_m_say">Decir en voz alta</string>
     <string name="ui_m_write_here">Escribe aquí</string>
     <string name="ui_m_to_signs">Traducir a señas</string>
@@ -176,4 +176,10 @@
     <string name="ui_auth_hint">Sin estas autorizaciones AINGEL sigue funcionando con rutinas, mensajes y recuerdos. Se pueden cambiar en la web, en Personalizar.</string>
     <string name="ui_src_synthetic">Prueba sintética · Meta Muse Spark con un perfil ficticio</string>
     <string name="ui_conv_synthetic_pick">En la prueba sintética elige una de las preguntas de ejemplo: lo que escribes o dices no se envía a Meta.</string>
+    <string name="ui_signs_recognize">Reconocer mis señas (experimental)</string>
+    <string name="ui_signs_recognizing">Mirando tus señas…</string>
+    <string name="ui_signs_recognize_done">Posibles señas reconocidas por AINGEL (experimental, puede equivocarse). Corrígelas tocando el tablero.</string>
+    <string name="ui_signs_recognize_none">No reconocí ninguna seña de AINGEL. Hazla más despacio, con las manos a la vista, o tócala en el tablero.</string>
+    <string name="ui_signs_recognize_mock">Modo de prueba: este servidor no analiza imágenes.</string>
+    <string name="ui_signs_recognize_failed">No pude reconocer las señas ahora. Inténtalo de nuevo o tócalas en el tablero.</string>
 </resources>

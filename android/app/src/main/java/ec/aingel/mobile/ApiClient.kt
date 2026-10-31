@@ -159,6 +159,8 @@ class ApiClient(context: Context) {
     suspend fun request(path: String, method: String = "GET", data: JSONObject? = null): Any = transport.request(path, method, data)
     suspend fun upload(path: String, image: ByteArray, values: Map<String, String>): JSONObject = uploadImages(path, listOf(image), values)
     suspend fun uploadImages(path: String, images: List<ByteArray>, values: Map<String, String>): JSONObject = transport.uploadImages(path, images, values)
+    /** A short burst of camera frames (experimental sign recognition): up to six, in order. */
+    suspend fun uploadFrames(path: String, frames: List<ByteArray>, values: Map<String, String>): JSONObject = transport.uploadImages(path, frames, values, limit = 6)
     suspend fun uploadClip(path: String, clip: ByteArray, values: Map<String, String>): JSONObject = transport.uploadClip(path, clip, values)
     /** A multipart form without files: synthetic tests name a server fixture instead of sending media. */
     suspend fun uploadForm(path: String, values: Map<String, String>): JSONObject = transport.uploadForm(path, values)
@@ -225,8 +227,8 @@ internal class ApiTransport(
         return result as? JSONObject ?: throw ApiFailure(NetworkError.RESPONSE_INVALID)
     }
 
-    suspend fun uploadImages(path: String, images: List<ByteArray>, values: Map<String, String>): JSONObject {
-        if (images.isEmpty() || images.size > 3 || images.sumOf { it.size.toLong() } > 5 * 1024 * 1024) throw ApiFailure("image_too_large")
+    suspend fun uploadImages(path: String, images: List<ByteArray>, values: Map<String, String>, limit: Int = 3): JSONObject {
+        if (images.isEmpty() || images.size > limit || images.sumOf { it.size.toLong() } > 5 * 1024 * 1024) throw ApiFailure("image_too_large")
         val body = MultipartBody.Builder().setType(MultipartBody.FORM).apply {
             images.forEachIndexed { index, image -> addFormDataPart("image", "capture-$index.jpg", image.toRequestBody("image/jpeg".toMediaType())) }
             values.forEach { (key, value) -> addFormDataPart(key, value) }

@@ -68,8 +68,8 @@
     <string name="ui_signs_camera_open">Camera open · AINGEL can\'t recognise signs on its own yet</string>
     <string name="ui_signs_open_camera">Open camera to sign</string>
     <string name="ui_signs_close_camera">Close camera</string>
-    <string name="ui_signs_camera_private">Camera on · the image is not stored or sent</string>
-    <string name="ui_signs_no_recognizer">AINGEL can\'t recognise signs from the camera yet. Tap the signs of your message.</string>
+    <string name="ui_signs_camera_private">Camera on · the image is not stored. It is sent to Meta only when you tap «Recognize my signs».</string>
+    <string name="ui_signs_no_recognizer">Experimental recognition: make AINGEL\'s signs in front of the camera and tap «Recognize my signs». It can be wrong: it is not validated by Deaf LSEC signers. You can also tap the signs of your message.</string>
     <string name="ui_signs_heard">I heard</string>
     <string name="ui_signs_text_label">Text for the other person (you can correct it)</string>
     <string name="ui_signs_show_large">Show large</string>
@@ -104,7 +104,7 @@
     <string name="ui_m_readonly">%1$s organizes this reminder. Ask %2$s if you need it changed.</string>
     <string name="ui_m_signing">AINGEL is signing it</string>
     <string name="ui_m_make_signs">Make your signs.</string>
-    <string name="ui_m_no_recognizer">AINGEL can\'t recognise signs from the camera yet. Tap the signs you make:</string>
+    <string name="ui_m_no_recognizer">Experimental recognition: make AINGEL\'s signs in front of the camera and tap «Recognize my signs». It can be wrong: it is not validated by Deaf LSEC signers. You can also tap the signs you make:</string>
     <string name="ui_m_say">Say it aloud</string>
     <string name="ui_m_write_here">Type here</string>
     <string name="ui_m_to_signs">Translate to signs</string>
@@ -175,4 +175,10 @@
     <string name="ui_auth_hint">Without these, AINGEL still works with routines, messages and memories. They can be changed on the web, in Personalize.</string>
     <string name="ui_src_synthetic">Synthetic test · Meta Muse Spark with a fictitious profile</string>
     <string name="ui_conv_synthetic_pick">In the synthetic test pick one of the example questions: what you type or say is not sent to Meta.</string>
+    <string name="ui_signs_recognize">Recognize my signs (experimental)</string>
+    <string name="ui_signs_recognizing">Looking at your signs…</string>
+    <string name="ui_signs_recognize_done">Possible signs recognized by AINGEL (experimental, it can be wrong). Correct them on the board.</string>
+    <string name="ui_signs_recognize_none">I didn\'t recognize any AINGEL sign. Sign more slowly with your hands in view, or tap it on the board.</string>
+    <string name="ui_signs_recognize_mock">Test mode: this server does not analyse images.</string>
+    <string name="ui_signs_recognize_failed">I couldn\'t recognize the signs right now. Try again or tap them on the board.</string>
 </resources>

@@ -4,6 +4,7 @@ from . import auth, consent_views, views, mfa, faces, knowledge, signs
 from assistance.companion import chat
 from assistance.conversation import conversation
 from assistance.gloss import gloss
+from assistance.sign_recognition import recognize_signs
 from assistance.video import ClipSessionEndView, ClipView
 
 urlpatterns = [
@@ -36,6 +37,7 @@ urlpatterns = [
     path("profiles/<uuid:profile_id>/signs/catalog/", signs.catalog),
     path("profiles/<uuid:profile_id>/signs/lookup/", signs.lookup),
     path("profiles/<uuid:profile_id>/signs/gloss/", gloss),
+    path("profiles/<uuid:profile_id>/signs/recognize/", recognize_signs),
     path("profiles/<uuid:profile_id>/signs/clips/<str:clip_id>/", signs.clip_content),
     path("profiles/<uuid:profile_id>/circle/", views.circle),
     path("profiles/<uuid:profile_id>/circle/<uuid:member_id>/", views.membership),

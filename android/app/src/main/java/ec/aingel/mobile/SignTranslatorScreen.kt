@@ -116,6 +116,9 @@ private const val CHEVRON_PATH = "M6 9l6 6 6-6"
     var camera by remember { mutableStateOf(false) }
     val message = remember { mutableStateListOf<String>() }
     var text by remember { mutableStateOf("") }
+    var signCapture by remember { mutableStateOf<androidx.camera.core.ImageCapture?>(null) }
+    var recognizing by remember { mutableStateOf(false) }
+    var recognizedNote by remember { mutableStateOf<String?>(null) }
     var shown by remember { mutableStateOf(false) }
     var moodJob by remember { mutableStateOf<Job?>(null) }
     val str = { id: Int -> context.getString(id) }
@@ -190,6 +193,26 @@ private const val CHEVRON_PATH = "M6 9l6 6 6-6"
     }
     fun say(value: String) { if (value.isNotBlank() && model.speak(value) { orb = AingelOrbState.IDLE }) orb = AingelOrbState.SPEAKING }
     fun add(id: String) { message.add(id); sign(listOf(id)); text = message.joinToString(" ") { label(it) } }
+    /** Experimental: AINGEL tries to recognize the signs made in front of the camera and adds them to the message. */
+    fun recognize() {
+        val use = signCapture ?: return
+        recognizing = true; recognizedNote = null; orb = AingelOrbState.THINKING
+        scope.launch {
+            recognizedNote = try {
+                val result = model.recognizeSigns(use.signFrames(context))
+                val ids = recognizedSigns(result)
+                when {
+                    result.optString("mode") == "mock" -> str(R.string.ui_signs_recognize_mock)
+                    ids.isEmpty() -> str(R.string.ui_signs_recognize_none)
+                    else -> { message.addAll(ids); text = message.joinToString(" ") { label(it) }; str(R.string.ui_signs_recognize_done) }
+                }
+            } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+            catch (e: ApiFailure) {
+                if (stopsCapture(e.code)) { camera = false; str(R.string.capture_camera_stopped) } else str(R.string.ui_signs_recognize_failed)
+            } catch (_: Exception) { str(R.string.ui_signs_recognize_failed) }
+            recognizing = false; orb = AingelOrbState.IDLE
+        }
+    }
 
     val status = when {
         listening -> str(R.string.ui_st_listening)
@@ -223,7 +246,7 @@ private const val CHEVRON_PATH = "M6 9l6 6 6-6"
                 Box(Modifier.offset(x = (stageW - orbSize) / 2, y = cy - orbSize / 2)) {
                     OrbWithCamera(if (listening) AingelOrbState.LISTENING else orb, orbSize, reduced, vision = camera && !mode.signsOut, front = true,
                         level = if (listening) voice::level else if (orb == AingelOrbState.SPEAKING) model::speechLevel else { { 0f } },
-                        onCameraError = { camera = false; result = "camera-denied" })
+                        onCapture = { signCapture = it }, onCameraError = { camera = false; result = "camera-denied" })
                 }
                 if (hands3d) AingelHands3D(stageW, stageH, stageW / 2, cy, r, seq, playKey, speed, reduced, ::onSign) { hands3d = false }
                 else AingelSigner(stageW, stageH, stageW / 2, cy, r, seq, playKey, speed, reduced, ::onSign)
@@ -314,7 +337,12 @@ private const val CHEVRON_PATH = "M6 9l6 6 6-6"
                         else cameraPermission.launch(Manifest.permission.CAMERA)
                     }
                 }
-                if (camera) T(stringResource(R.string.ui_signs_camera_private), 11, color = Ui.Muted, align = TextAlign.Center)
+                if (camera) {
+                    PrimaryButton(stringResource(if (recognizing) R.string.ui_signs_recognizing else R.string.ui_signs_recognize), height = 46.dp,
+                        enabled = signCapture != null && !recognizing) { recognize() }
+                    T(stringResource(R.string.ui_signs_camera_private), 11, color = Ui.Muted, align = TextAlign.Center)
+                }
+                recognizedNote?.let { T(it, 12, color = Ui.Muted, align = TextAlign.Center, lineHeight = 1.4f, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) }
                 T(stringResource(R.string.ui_signs_no_recognizer), 12, color = Ui.Muted, align = TextAlign.Center, lineHeight = 1.45f)
                 SIGN_BOARD.chunked(4).forEach { row ->
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

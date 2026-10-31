@@ -129,6 +129,8 @@ private const val MAX_MODEL_PAIRS = 5
     val resumed = lifecycleState.isAtLeast(Lifecycle.State.RESUMED)
     var vision by remember { mutableStateOf(false) }
     var capture by remember { mutableStateOf<ImageCapture?>(null) }
+    var recognizing by remember { mutableStateOf(false) }
+    var recognizedNote by remember { mutableStateOf<String?>(null) }
     var seeking by remember { mutableStateOf("") }
     var nextId by remember { mutableLongStateOf(1L) }
     // Continuous voice conversation: after each answer AINGEL listens again, until 25 s pass with nobody speaking.
@@ -311,6 +313,28 @@ private const val MAX_MODEL_PAIRS = 5
                 else Answer(text, text, source = str(R.string.ui_src_synthetic), origin = Origin.MODEL)
             } catch (_: Exception) { str(R.string.ui_conv_offline).let { Answer(it, it, source = str(R.string.ui_src_local), origin = Origin.NOTICE) } }
             reply(id, answer)
+        }
+    }
+
+    /** Experimental: AINGEL tries to recognize the signs made in front of the camera and adds them to the message. */
+    fun recognizeSigns() {
+        val use = capture ?: return
+        recognizing = true; recognizedNote = null; phase = AingelOrbState.THINKING
+        visionJob = scope.launch {
+            val note = try {
+                val result = model.recognizeSigns(use.signFrames(context))
+                val ids = recognizedSigns(result)
+                when {
+                    result.optString("mode") == "mock" -> str(R.string.ui_signs_recognize_mock)
+                    ids.isEmpty() -> str(R.string.ui_signs_recognize_none)
+                    else -> { message.addAll(ids); str(R.string.ui_signs_recognize_done) }
+                }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (e: Exception) {
+                // A refusal of the camera grant closes the camera, as when describing.
+                if (e is ApiFailure && stopsCapture(e.code)) { vision = false; capture = null; str(R.string.capture_camera_stopped) } else str(R.string.ui_signs_recognize_failed)
+            }
+            recognizing = false; phase = AingelOrbState.IDLE; recognizedNote = note
         }
     }
 
@@ -720,6 +744,10 @@ private const val MAX_MODEL_PAIRS = 5
             HomeMode.SEE -> {
                 T(stringResource(R.string.ui_m_make_signs), 20, FontWeight.SemiBold, Ui.Navy, align = TextAlign.Center)
                 Spacer(Modifier.height(4.dp)); T(stringResource(R.string.ui_m_no_recognizer), 12, color = Ui.Muted, align = TextAlign.Center, lineHeight = 1.45f)
+                Spacer(Modifier.height(10.dp))
+                PrimaryButton(stringResource(if (recognizing) R.string.ui_signs_recognizing else R.string.ui_signs_recognize), height = 48.dp,
+                    enabled = capture != null && !recognizing) { recognizeSigns() }
+                recognizedNote?.let { Spacer(Modifier.height(6.dp)); T(it, 12, color = Ui.Muted, align = TextAlign.Center, lineHeight = 1.4f, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) }
                 Spacer(Modifier.height(12.dp))
                 SignBoard(spanish) { id -> message.add(id) }
                 val text = message.joinToString(" ") { signName(it, spanish).trim('¿', '?') }.replaceFirstChar { it.uppercase() }
