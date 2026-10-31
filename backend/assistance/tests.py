@@ -9,6 +9,7 @@ from django.test import SimpleTestCase, TestCase
 from PIL import Image
 from rest_framework.test import APIClient
 
+from . import synthetic
 from .scene import SceneUnavailable, describe_scene, normalize_image
 
 
@@ -71,12 +72,16 @@ class MetaBoundaryTests(SimpleTestCase):
     @patch.dict(os.environ, {"AINGEL_AI_MODE": "meta", "MODEL_API_KEY": ""})
     def test_missing_key_fails_closed(self):
         with self.assertRaisesRegex(SceneUnavailable, "meta_not_configured"):
-            describe_scene(b"fixture", "en-US", True)
+            describe_scene(b"fixture", "en-US", synthetic.FIXTURE)
 
     @patch.dict(os.environ, {"AINGEL_AI_MODE": "meta", "MODEL_API_KEY": "test-only"})
-    def test_personal_content_gate(self):
-        with self.assertRaisesRegex(SceneUnavailable, "privacy_review_required"):
-            describe_scene(b"fixture", "en-US", False)
+    @patch("assistance.scene.httpx.Client")
+    def test_personal_content_gate(self, client):
+        # Only a basis decided by a view (FIXTURE or REAL) lets a request be built.
+        for allowed in (False, True, None, "synthetic"):
+            with self.assertRaisesRegex(SceneUnavailable, "privacy_review_required"):
+                describe_scene(b"fixture", "en-US", allowed)
+        client.assert_not_called()
 
     @patch.dict(
         os.environ,
@@ -101,7 +106,7 @@ class MetaBoundaryTests(SimpleTestCase):
                 ],
             },
         )
-        result = describe_scene(b"synthetic", "en-US", True)
+        result = describe_scene(b"synthetic", "en-US", synthetic.FIXTURE)
         call = client.return_value.__enter__.return_value.post.call_args
         self.assertEqual(call.args[0], "https://api.meta.ai/v1/responses")
         self.assertEqual(call.kwargs["json"]["model"], "muse-spark-1.3")
@@ -129,7 +134,7 @@ class MetaBoundaryTests(SimpleTestCase):
             json={"status": "incomplete", "output": []},
         )
         with self.assertRaisesRegex(SceneUnavailable, "^meta_incomplete$"):
-            describe_scene(b"synthetic", "en-US", True)
+            describe_scene(b"synthetic", "en-US", synthetic.FIXTURE)
 
     @patch.dict(
         os.environ,
@@ -145,4 +150,4 @@ class MetaBoundaryTests(SimpleTestCase):
             httpx.ConnectError("sensitive upstream body")
         )
         with self.assertRaisesRegex(SceneUnavailable, "^meta_unavailable$"):
-            describe_scene(b"synthetic", "en-US", True)
+            describe_scene(b"synthetic", "en-US", synthetic.FIXTURE)

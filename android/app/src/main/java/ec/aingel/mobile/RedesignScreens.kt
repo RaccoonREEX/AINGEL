@@ -26,6 +26,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
@@ -77,12 +78,12 @@ private val Gutter = Modifier.padding(horizontal = 22.dp)
     }
 }
 
-@Composable private fun BackChevron(onBack: () -> Unit) {
+@Composable internal fun BackChevron(onBack: () -> Unit) {
     Box(Modifier.offset(x = (-10).dp).size(44.dp).clip(CircleShape).clickable(role = Role.Button, onClickLabel = stringResource(R.string.back), onClick = onBack),
         contentAlignment = Alignment.Center) { T("‹", 26, color = Ui.Navy) }
 }
 
-@Composable private fun ErrorText(s: MobileState) {
+@Composable internal fun ErrorText(s: MobileState) {
     s.error?.let { T(stringResource(errorMessage(it)), 13, color = Color(0xFF8B2630), modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp).semantics { liveRegion = LiveRegionMode.Polite }) }
 }
 
@@ -116,6 +117,7 @@ private val Gutter = Modifier.padding(horizontal = 22.dp)
 @Composable private fun RegisterForm(model: AingelViewModel, s: MobileState, onBack: () -> Unit) {
     var name by rememberSaveable { mutableStateOf("") }; var username by rememberSaveable { mutableStateOf("") }; var password by remember { mutableStateOf("") }
     var who by rememberSaveable { mutableStateOf("other") }
+    var adult by rememberSaveable { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 24.dp, end = 24.dp, top = 14.dp, bottom = 18.dp), verticalArrangement = Arrangement.spacedBy(13.dp)) {
         BackChevron(onBack)
         T(stringResource(R.string.register), 26, FontWeight.SemiBold, Ui.Navy)
@@ -128,9 +130,12 @@ private val Gutter = Modifier.padding(horizontal = 22.dp)
         T(stringResource(R.string.ui_who_for), 13, FontWeight.SemiBold, Ui.Navy, modifier = Modifier.padding(top = 2.dp))
         RadioCard(stringResource(R.string.ui_for_me), who == "me") { who = "me" }
         RadioCard(stringResource(R.string.ui_for_other), who == "other") { who = "other" }
+        // AINGEL uses Meta's AI, whose terms require adults: an explicit, separate self-declaration (no ID asked).
+        Choice((if (adult) "✓  " else "") + stringResource(R.string.adult_statement), adult, Modifier.fillMaxWidth(), start = true) { adult = !adult }
+        T(stringResource(R.string.adult_explain), 11, color = Ui.Muted, lineHeight = 1.45f)
         Spacer(Modifier.weight(1f))
         ErrorText(s)
-        PrimaryButton(if (s.busy) stringResource(R.string.loading) else stringResource(R.string.setup_continue), enabled = !s.busy && username.isNotBlank() && password.length >= 10) {
+        PrimaryButton(if (s.busy) stringResource(R.string.loading) else stringResource(R.string.setup_continue), enabled = !s.busy && adult && username.isNotBlank() && password.length >= 10) {
             model.register(username.trim(), password, who, name); password = ""
         }
     }
@@ -164,6 +169,7 @@ private val PRESET_LABELS = mapOf("visual_assistance" to R.string.ui_p_visual, "
 
 @Composable fun SetupFlow(model: AingelViewModel, s: MobileState) {
     val context = LocalContext.current
+    val resources = LocalResources.current
     val scope = rememberCoroutineScope()
     val (who, ownName) = model.signup
     var step by rememberSaveable { mutableIntStateOf(1) }
@@ -178,10 +184,11 @@ private val PRESET_LABELS = mapOf("visual_assistance" to R.string.ui_p_visual, "
     var signLanguage by rememberSaveable { mutableStateOf("lsec") }
     var reads by rememberSaveable { mutableStateOf("yes") }
     var addressing by rememberSaveable { mutableStateOf("usted") }
-    // Authorizations are given here, once (as on the web); the app never asks per action (backend care.consent).
-    var allowCamera by rememberSaveable { mutableStateOf(false) }
-    var allowMic by rememberSaveable { mutableStateOf(false) }
-    var allowMeta by rememberSaveable { mutableStateOf(false) }
+    // For oneself, the person's own decisions, purpose by purpose (backend care.consent); for another adult, only the
+    // statement that they are 18+: they accept or decline later from their own account.
+    val chosen = remember { mutableStateMapOf<String, Boolean>() }
+    var subjectAdult by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(who) { if (who == "me" && s.purposes == null) model.loadPurposes() }
     var createdId by rememberSaveable { mutableStateOf<String?>(null) }
     var configured by rememberSaveable { mutableStateOf(false) }
     var act by remember { mutableStateOf(AingelOrbState.IDLE) }
@@ -204,7 +211,7 @@ private val PRESET_LABELS = mapOf("visual_assistance" to R.string.ui_p_visual, "
         scope.launch {
             try {
                 val condLines = CONDITIONS.filter { enabled[it.id] == true }.joinToString("; ") {
-                    context.getString(it.title) + ": " + context.resources.getStringArray(it.captions)[levels[it.id] ?: 0]
+                    context.getString(it.title) + ": " + resources.getStringArray(it.captions)[levels[it.id] ?: 0]
                 }
                 val pending = keys.filterNot { it in SUPPORTED_PRESETS }.joinToString("; ") { context.getString(PRESET_LABELS.getValue(it)) + " ($it)" }
                 val notes = listOfNotNull(
@@ -214,7 +221,8 @@ private val PRESET_LABELS = mapOf("visual_assistance" to R.string.ui_p_visual, "
                     context.getString(R.string.ui_not_diagnosis)).joinToString("\n")
                 val profile = JSONObject().put("display_name", name.trim()).put("locale", locale).put("timezone", timezone.trim())
                     .put("support_notes", notes).put("preferences", presetPreferences(answers))
-                    .put("consents", JSONObject().put("camera", allowCamera).put("microphone", allowMic).put("meta_data", allowMeta))
+                    .put("for_self", who == "me").put("subject_adult", who != "me" && subjectAdult)
+                    .put("grants", org.json.JSONArray(if (who == "me") chosen.filterValues { it }.keys.toList() else emptyList<String>()))
                 createdId = model.createConfiguredProfile(profile, answers, preferred, createdId)
                 configured = true
                 delay(2300); act = AingelOrbState.HAPPY
@@ -281,8 +289,8 @@ private val PRESET_LABELS = mapOf("visual_assistance" to R.string.ui_p_visual, "
                                 T(stringResource(c.title), 15, FontWeight.SemiBold, Ui.Navy)
                             }
                             if (on) {
-                                val names = LocalContext.current.resources.getStringArray(c.levels)
-                                val full = LocalContext.current.resources.getStringArray(c.captions)
+                                val names = resources.getStringArray(c.levels)
+                                val full = resources.getStringArray(c.captions)
                                 Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                                     names.forEachIndexed { i, l -> Choice(l, levels[c.id] == i, Modifier.weight(1f), height = 40.dp, size = 11) { levels[c.id] = i } }
                                 }
@@ -320,22 +328,32 @@ private val PRESET_LABELS = mapOf("visual_assistance" to R.string.ui_p_visual, "
                             }
                         }
                     }
-                    Question(stringResource(R.string.ui_auth_title)) {
-                        listOf(Triple(R.string.ui_auth_camera, R.string.ui_auth_camera_d, allowCamera) to { v: Boolean -> allowCamera = v },
-                            Triple(R.string.ui_auth_mic, R.string.ui_auth_mic_d, allowMic) to { v: Boolean -> allowMic = v },
-                            Triple(R.string.ui_auth_meta, R.string.ui_auth_meta_d, allowMeta) to { v: Boolean -> allowMeta = v }).forEach { (row, set) ->
-                            Choice((if (row.third) "✓  " else "") + stringResource(row.first), row.third, Modifier.fillMaxWidth(), start = true) { set(!row.third) }
-                            T(stringResource(row.second), 12, color = Ui.Muted, lineHeight = 1.45f)
+                    if (who == "me") Question(stringResource(R.string.ui_auth_title)) {
+                        s.purposes?.optJSONArray("purposes")?.rows()?.forEach { purpose ->
+                            val id = purpose.optString("id"); val on = chosen[id] == true
+                            Choice((if (on) "✓  " else "") + purpose.optString("title"), on, Modifier.fillMaxWidth(), start = true) { chosen[id] = !on }
+                            T(purpose.optString("detail"), 12, color = Ui.Muted, lineHeight = 1.45f)
+                            LinkButton(stringResource(R.string.consent_listen), size = 12) { model.speak(purpose.optString("title") + ". " + purpose.optString("detail")) }
                         }
+                        s.purposes?.optString("credits_notice")?.let { T(it, 12, color = Ui.Muted, lineHeight = 1.45f) }
                         T(stringResource(R.string.ui_auth_hint), 12, color = Ui.Muted, lineHeight = 1.45f)
+                    } else Question(stringResource(R.string.consent_other_title)) {
+                        Choice((if (subjectAdult) "✓  " else "") + stringResource(R.string.consent_other_adult), subjectAdult, Modifier.fillMaxWidth(), start = true) { subjectAdult = !subjectAdult }
+                        T(stringResource(R.string.consent_other_explain), 12, color = Ui.Muted, lineHeight = 1.45f)
                     }
                     PresetSummary(keys, count)
                 }
             }
         }
         Column(Gutter.padding(top = 10.dp, bottom = 14.dp)) {
-            PrimaryButton(stringResource(if (step == 3) R.string.ui_review_activate else R.string.setup_continue), enabled = !(step == 1 && (name.isBlank() || !validZone))) { step++ }
-            if (step == 1) LinkButton(stringResource(R.string.logout), Modifier.align(Alignment.CenterHorizontally), size = 12, color = Ui.Muted) { model.logout() }
+            PrimaryButton(stringResource(if (step == 3) R.string.ui_review_activate else R.string.setup_continue), enabled = !(step == 1 && (name.isBlank() || !validZone)) && !(step == 3 && who != "me" && !subjectAdult)) { step++ }
+            if (step == 1) {
+                // An adult someone else set up a profile for accepts it here, from their own account.
+                var redeem by rememberSaveable { mutableStateOf(false) }
+                LinkButton(stringResource(R.string.consent_redeem_title), Modifier.align(Alignment.CenterHorizontally), size = 13) { redeem = !redeem }
+                if (redeem) RedeemCode(model, s)
+                LinkButton(stringResource(R.string.logout), Modifier.align(Alignment.CenterHorizontally), size = 12, color = Ui.Muted) { model.logout() }
+            }
         }
     }
 }
@@ -446,6 +464,7 @@ private val PRESET_LABELS = mapOf("visual_assistance" to R.string.ui_p_visual, "
         Spacer(Modifier.height(20.dp)); Overline(stringResource(R.string.account_section)); Spacer(Modifier.height(6.dp))
         MoreRow(stringResource(R.string.settings)) { navigate("settings") }
         MoreRow(stringResource(R.string.ui_s_title), stringResource(R.string.ui_s_more)) { navigate("sound") }
+        MoreRow(stringResource(R.string.consent_title), stringResource(R.string.ui_more_consent)) { navigate("consent") }
         MoreRow(stringResource(R.string.security)) { navigate("security") }
         if (s.profiles.size > 1) MoreRow(stringResource(R.string.switch_profile), s.profile?.optString("display_name")) { navigate("profiles") }
         MoreRow(stringResource(R.string.logout)) { model.logout() }

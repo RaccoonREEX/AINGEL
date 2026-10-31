@@ -14,4 +14,6 @@ COPY backend/care ./care
 COPY backend/assistance ./assistance
 USER 10001:10001
 EXPOSE 8000
-CMD ["daphne", "-b", "0.0.0.0", "-p", "8000", "config.asgi:application"]
+# Verbosity 0 keeps warnings/errors but disables Daphne's stdout access log,
+# which otherwise writes request URIs (including queries) and client addresses.
+CMD ["daphne", "--verbosity", "0", "-b", "0.0.0.0", "-p", "8000", "config.asgi:application"]

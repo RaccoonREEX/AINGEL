@@ -38,8 +38,8 @@ class CompanionContractTest {
             assertEquals("synthetic", sent.getHeader("X-CSRFToken"))
             assertTrue(sent.getHeader("Cookie")!!.contains("sessionid=synthetic"))
             val body = JSONObject(sent.body.readUtf8())
-            assertEquals(setOf("text", "synthetic", "topic_title", "topic_lang"), body.keys().asSequence().toSet())
-            assertEquals("Synthetic question", body.getString("text")); assertTrue(body.getBoolean("synthetic"))
+            assertEquals(setOf("text", "topic_title", "topic_lang"), body.keys().asSequence().toSet())
+            assertEquals("Synthetic question", body.getString("text"))
             api.clear()
         } finally { server.shutdown() }
     }

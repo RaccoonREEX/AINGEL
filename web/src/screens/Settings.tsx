@@ -5,7 +5,7 @@ import type { Context, WithProfile } from "../ui";
 import type { Key } from "../i18n";
 import { activityLabel } from "../i18n";
 import CommunicationSettings from "../Communication";
-import Consents from "../components/Consents";
+import ConsentPanel from "../components/ConsentPanel";
 import type {
   Circle,
   Member,
@@ -26,20 +26,13 @@ const prefKeys = [
   "reduced_motion",
   "simple_instructions",
 ] as const;
-export default function Settings({
-  profile,
-  t,
-  locale,
-  busy,
-  run,
-  refresh,
-}: WithProfile) {
+export default function Settings(props: WithProfile & { focusConsent?: boolean }) {
+  const { profile, t, busy, run, refresh, focusConsent } = props;
   const [draft, setDraft] = useState(profile);
-  const [consents, setConsents] = useState(profile.consents ?? {});
   const editable = profile.permissions.configure;
-  // role is computed by the server for the signed-in user (ProfileSerializer.get_role).
-  const owner = profile.role === "owner";
-  const es = locale !== "en-US";
+  // role is computed by the server for the signed-in user; the person's own decisions come first for them.
+  const consent = <ConsentPanel {...props} autoFocus={focusConsent} />;
+  const subject = profile.role === "subject";
   const field = (
     key:
       | "display_name"
@@ -75,6 +68,7 @@ export default function Settings({
   );
   return (
     <>
+      {subject && consent}
       <section className="panel">
         <p className="hint">{t("privacyLocal")}</p>
         {!editable && <p className="callout">{t("readOnly")}</p>}
@@ -142,18 +136,8 @@ export default function Settings({
           </fieldset>
         </form>
       </section>
-      <section className="panel">
-        {/* Authorizations are the owner's own decision: caregivers see them read-only (the server rejects their changes). */}
-        <form onSubmit={(e) => { e.preventDefault(); if (!owner) return; void run(async () => {
-          await api(`profiles/${profile.id}/`, "PATCH", { consents: { camera: !!consents.camera, microphone: !!consents.microphone, meta_data: !!consents.meta_data } });
-          await refresh();
-        }); }}>
-          <Consents value={consents} onChange={setConsents} es={es} disabled={!owner || busy} />
-          {profile.consents?.granted_at && <p className="hint">{(es ? "Autorizado por " : "Authorized by ") + (profile.consents.granted_by ?? "") + " · " + new Date(profile.consents.granted_at).toLocaleString(locale)}</p>}
-          {owner ? <button className="primary" disabled={busy}>{t("save")}</button>
-            : <p className="callout">{es ? "Solo la persona titular de este AINGEL puede cambiar sus autorizaciones." : "Only the person who owns this AINGEL can change its authorizations."}</p>}
-        </form>
-      </section>
+      {/* Only the person decides, one purpose at a time; others see statuses (backend care.consent). */}
+      {!subject && consent}
       <CommunicationSettings profile={profile} t={t} busy={busy} run={run} />
     </>
   );

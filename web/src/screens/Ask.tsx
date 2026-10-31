@@ -1,3 +1,4 @@
+import { speakLocally } from "../components/aingel/browserSpeech";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import Field from "../components/Field";
@@ -54,8 +55,7 @@ export default function Ask({
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = profile.locale;
     utterance.rate = communication?.pace === "slow" ? 0.8 : 1;
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(utterance);
+    if (!speakLocally(utterance)) setVoiceError(true);
   };
   useEffect(() => () => window.speechSynthesis?.cancel(), []);
   return (

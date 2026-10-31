@@ -73,9 +73,10 @@ fun orientPhoto(bitmap: Bitmap, orientation: Int): Bitmap {
 
 fun syntheticPhoto(): ByteArray {
     val bitmap = Bitmap.createBitmap(640, 480, Bitmap.Config.ARGB_8888)
-    val canvas = Canvas(bitmap); canvas.drawColor(Color.WHITE)
-    val paint = Paint().apply { color = Color.BLUE }; canvas.drawRect(60f, 150f, 230f, 320f, paint)
-    paint.color = Color.RED; canvas.drawCircle(460f, 230f, 80f, paint)
+    // A preview of the server fixture «shapes» (assistance.synthetic.shapes_image): the same drawing, never uploaded.
+    val canvas = Canvas(bitmap); canvas.drawColor(Color.rgb(236, 236, 232))
+    val paint = Paint().apply { color = Color.rgb(30, 80, 200) }; canvas.drawRect(90f, 170f, 231f, 311f, paint)
+    paint.color = Color.rgb(210, 40, 40); canvas.drawCircle(480f, 240f, 70f, paint)
     return jpeg(bitmap).also { bitmap.recycle() }
 }
 

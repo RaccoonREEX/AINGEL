@@ -28,12 +28,18 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
+import org.json.JSONObject
 import java.util.Locale
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -46,8 +52,10 @@ object Backend {
 
 /** What the home screen shows about continuous watching while the service runs. */
 object WatchState {
-    /** [speaking]: AINGEL is saying a description; [looking]: a photo is being described (the outer-screen orb follows both). */
-    data class Status(val running: Boolean = false, val line: String = "", val mock: Boolean = false, val speaking: Boolean = false, val looking: Boolean = false)
+    /** [speaking]: AINGEL is saying a description; [looking]: a photo is being described (the outer-screen orb follows both);
+     * [stopped]: why the last watch ended on its own (a refused authorization), shown once it is over. */
+    data class Status(val running: Boolean = false, val line: String = "", val mock: Boolean = false, val speaking: Boolean = false, val looking: Boolean = false,
+                      val stopped: String = "")
     private val mutable = MutableStateFlow(Status())
     val status = mutable.asStateFlow()
     internal fun set(status: Status) { mutable.value = status }
@@ -76,11 +84,21 @@ class WatchService : LifecycleService() {
         const val LOOK_MS = 300L
         const val TICK_MS = 250L
         const val NAME_AGAIN_MS = 3 * 60_000L
+        /** How often the person's decisions are reread while watching (a revocation from their own phone). */
+        const val CONSENT_EVERY_MS = 15_000L
+        /** Ending a clip session outlives the service that asks for it. */
+        private val endings = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-        fun start(context: Context, profileId: String, locale: String, privateTest: Boolean = false) {
-            val intent = Intent(context, WatchService::class.java).putExtra("profile", profileId).putExtra("locale", locale).putExtra("private_test", privateTest)
+        /** [consent]: the person's decisions just checked by the app; the service starts only if they grant the camera. */
+        fun start(context: Context, profileId: String, locale: String, consent: JSONObject?, privateTest: Boolean = false, spontaneous: String = "normal") {
+            val intent = Intent(context, WatchService::class.java).putExtra("profile", profileId).putExtra("locale", locale).putExtra("video", videoEnabled(context)).putExtra("spontaneous", spontaneous).putExtra("private_test", privateTest)
+                .putExtra("consent", consent?.toString())
             ContextCompat.startForegroundService(context, intent)
         }
+        /** Experimental: watching with short video clips instead of photos (off by default; the server must allow it too). */
+        fun videoEnabled(context: Context) = context.getSharedPreferences("aingel-watch", Context.MODE_PRIVATE).getBoolean("video", false)
+        fun setVideo(context: Context, on: Boolean) { context.getSharedPreferences("aingel-watch", Context.MODE_PRIVATE).edit().putBoolean("video", on).apply() }
+        const val CLIP_SECONDS = 6.0
         /** Only when it runs: starting the service just to stop it would be pointless. */
         fun stop(context: Context) { if (WatchState.status.value.running) context.startService(Intent(context, WatchService::class.java).setAction(ACTION_STOP)) }
         /** Says the last description again (tap on the outer-screen orb). */
@@ -91,6 +109,8 @@ class WatchService : LifecycleService() {
     private var loop: Job? = null
     private var capture: ImageCapture? = null
     private var analysis: ImageAnalysis? = null
+    private var recorder: ClipRecorder? = null  // experimental video mode only
+    private var clipEveryMs = 4_000L
     private var analyzer: ExecutorService? = null
     /** Latest grid of the live view (WatchChange), written by the analyzer thread. */
     @Volatile private var latest: IntArray? = null
@@ -102,6 +122,14 @@ class WatchService : LifecycleService() {
     private var privateTest = false
     private val spanish get() = locale != "en-US"
     private fun text(es: String, en: String) = if (spanish) es else en
+    private var profileId: String? = null
+    private var guard: Job? = null
+    /** Set once watching must end: nothing that arrives afterwards is said or shown. */
+    @Volatile private var stopping = false
+    private val results = ResultGate()
+    /** The experimental clip loop's session, ended on the server (vision/clip/end/) when the loop or the service stops. */
+    private var clipSession: String? = null
+    private var stopLine = ""
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
@@ -112,11 +140,16 @@ class WatchService : LifecycleService() {
         if (profile.isNullOrBlank()) { stopSelf(); return START_NOT_STICKY }
         locale = intent.getStringExtra("locale") ?: "es-EC"
         privateTest = intent.getBooleanExtra("private_test", false)
+        profileId = profile
         val first = text("Te acompaño. Te avisaré de lo que vea.", "I'm with you. I'll tell you what I see.")
         val notification = notification(first)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) startForeground(NOTIFICATION, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA)
+        // The camera foreground-service type exists from API 30.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) startForeground(NOTIFICATION, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA)
         else startForeground(NOTIFICATION, notification)
         WatchState.set(WatchState.Status(running = true, line = first))
+        // The person's own camera grant, as the app just checked it; without it the camera is never opened.
+        val consent = intent.getStringExtra("consent")?.let { try { JSONObject(it) } catch (_: Exception) { null } }
+        if (!mayStart(consent, Capture.CAMERA)) { stopping = true; stopLine = getString(R.string.capture_camera_not_authorized); stopSelf(); return START_NOT_STICKY }
         wake = (getSystemService(POWER_SERVICE) as PowerManager).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "aingel:watch").apply { setReferenceCounted(false); acquire(4 * 60 * 60 * 1000L) }
         // Same voice and output (Ajustes · Voz de AINGEL) as the app.
         voice = AingelVoice(this) { ok -> if (ok) say(text("Vigilancia continua activada. Te avisaré de lo que vea.", "Continuous watching is on. I'll tell you what I see.")) }
@@ -124,13 +157,19 @@ class WatchService : LifecycleService() {
         // Closing the phone (main display off, outer display on) shows AINGEL on the outer screen.
         getSystemService(DisplayManager::class.java).registerDisplayListener(folds, null)
         bindCamera()
-        loop = lifecycleScope.launch { describeLoop(profile) }
+        // «Pocas» descriptions: a clip every 8 s; otherwise every 4 s (6 s clips, so they overlap by 2 s).
+        clipEveryMs = if (intent.getStringExtra("spontaneous") == "few") 8_000L else 4_000L
+        val video = intent.getBooleanExtra("video", false) && !privateTest
+        if (video) recorder = ClipRecorder()
+        loop = lifecycleScope.launch { if (video) clipLoop(profile) else describeLoop(profile) }
+        guard = lifecycleScope.launch { guardConsent(profile, consent) }
         return START_NOT_STICKY
     }
 
     private fun bindCamera() {
         val future = ProcessCameraProvider.getInstance(this)
         future.addListener({
+            if (stopping) return@addListener  // refused before the camera was ready: it is never bound
             try {
                 val provider = future.get()
                 val use = ImageCapture.Builder().setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY).build()
@@ -139,6 +178,8 @@ class WatchService : LifecycleService() {
                 var looked = 0L
                 live.setAnalyzer(executor) { image ->
                     try {
+                        recorder?.feed(image)  // video mode: the same frames go to the H.264 ring
+                        image.planes[0].buffer.rewind()
                         val now = SystemClock.elapsedRealtime()
                         if (now - looked >= LOOK_MS) {
                             looked = now
@@ -171,10 +212,12 @@ class WatchService : LifecycleService() {
             if (use != null && grid != null && now >= speakingUntil && now - sentAt >= MIN_GAP_MS && (seen == null || sceneChanged(seen, grid))) {
                 described = grid; sentAt = now
                 WatchState.change { it.copy(looking = true) }
+                val token = results.open()
                 try {
                     val fields = mutableMapOf("locale" to locale, "profile" to profile)
-                    if (privateTest) { fields["private_test"] = "true"; fields["synthetic"] = "false" } else fields["family"] = "true"
+                    if (privateTest) fields["private_test"] = "true" else fields["family"] = "true"
                     val result = Backend.api(this).upload("scene/", use.jpegFrame(this), fields)
+                    if (stopping || !results.accepts(token)) return  // decided to stop meanwhile: the late answer is dropped
                     val mock = result.optString("mode") == "mock"
                     val clock = System.currentTimeMillis()
                     // Who it is is said when the person appears, not on every capture while they stay.
@@ -186,8 +229,8 @@ class WatchService : LifecycleService() {
                         update(text("Modo de prueba: este servidor no analiza imágenes.", "Test mode: this server does not analyse images."), speak = !saidMock, mock = true); saidMock = true
                     } else update(line, speak = true)
                 } catch (e: ApiFailure) {
-                    if (e.code == "privacy_review_required") {
-                        update(getString(R.string.private_test_server_denied), speak = true); stopSelf(); return
+                    if (stopsCapture(e.code)) {
+                        stopForConsent(getString(if (e.code == "privacy_review_required") R.string.private_test_server_denied else R.string.watch_consent_stopped)); return
                     }
                     update(text("No pude describir ahora. Lo intento de nuevo.", "I couldn't describe right now. Trying again."), speak = false)
                     described = null; sentAt = now + RETRY_MS
@@ -199,6 +242,112 @@ class WatchService : LifecycleService() {
             WatchState.change { it.copy(looking = false) }
             delay(TICK_MS)
         }
+    }
+
+    /**
+     * Experimental: every [clipEveryMs] the latest ~6 s go to vision/clip/ as an MP4; only changes are spoken. One clip
+     * at a time (the loop waits for the answer, so newer clips are taken fresh instead of queued), cancelled with the
+     * service. Anything unavailable falls back to photos. Timings are logged (no content) for latency measurements.
+     */
+    private suspend fun clipLoop(profile: String) {
+        val session = java.util.UUID.randomUUID().toString().also { clipSession = it }
+        var seq = 0
+        var saidMock = false
+        delay(CLIP_SECONDS.toLong() * 1000 + 500)  // the first window
+        while (lifecycleScope.isActive) {
+            val r = recorder
+            if (r == null || r.failed) { fallBackToPhotos(profile, text("La vigilancia con video no funciona en este teléfono; sigo con fotos.", "Video watching does not work on this phone; I continue with photos.")); return }
+            if (SystemClock.elapsedRealtime() >= speakingUntil) {
+                val muxStarted = SystemClock.elapsedRealtime()
+                val clip = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { r.clip(CLIP_SECONDS, 3.0, cacheDir) }
+                val muxMs = SystemClock.elapsedRealtime() - muxStarted
+                if (clip != null) {
+                    seq++
+                    WatchState.change { it.copy(looking = true) }
+                    val token = results.open()
+                    try {
+                        val sent = SystemClock.elapsedRealtime()
+                        val result = Backend.api(this).uploadClip("vision/clip/", clip, mapOf("locale" to locale, "profile" to profile,
+                            "session" to session, "seq" to seq.toString()))
+                        if (stopping || !results.accepts(token)) return
+                        val roundTrip = SystemClock.elapsedRealtime() - sent
+                        android.util.Log.i("AINGEL-video", "seq=$seq bytes=${clip.size} mux_ms=$muxMs roundtrip_ms=$roundTrip server=${result.optJSONObject("timings")}")
+                        when {
+                            result.optString("mode") == "mock" -> { if (!saidMock) update(text("Modo de prueba: este servidor no analiza video.", "Test mode: this server does not analyse video."), speak = true, mock = true); saidMock = true }
+                            result.optBoolean("stale") -> {}
+                            result.optString("say").isNotBlank() -> update(result.optString("say"), speak = true)
+                        }
+                    } catch (e: ApiFailure) {
+                        when (e.code) {
+                            // Without the video grant (meta_video) photos may still be allowed; their own answers decide.
+                            "video_disabled", "privacy_review_required", "clip_invalid", "clip_duration_invalid", "clip_too_large" -> {
+                                fallBackToPhotos(profile, text("La vigilancia con video no está disponible; sigo con fotos.", "Video watching is not available; I continue with photos.")); return
+                            }
+                            "video_busy" -> {}  // dropped: the next clip will be newer
+                            else -> if (stopsCapture(e.code)) { stopForConsent(getString(R.string.watch_consent_stopped)); return } else update(text("Se perdió la conexión; lo intento de nuevo.", "Connection lost; trying again."), speak = false)
+                        }
+                    } finally { WatchState.change { it.copy(looking = false) } }
+                }
+            }
+            delay(clipEveryMs)
+        }
+    }
+
+    private suspend fun fallBackToPhotos(profile: String, line: String) {
+        recorder?.close(); recorder = null
+        endClipSession()
+        update(line, speak = false)
+        describeLoop(profile)
+    }
+
+    /** Notices a decision made elsewhere (e.g. the person revoked from their own phone) while watching. */
+    private suspend fun guardConsent(profile: String, started: JSONObject?) {
+        var previous = started
+        while (lifecycleScope.isActive && !stopping) {
+            delay(CONSENT_EVERY_MS)
+            val current = try { Backend.api(this).request("profiles/$profile/consent/") as JSONObject }
+                catch (e: ApiFailure) { if (stopsCapture(e.code)) { stopForConsent(getString(R.string.watch_consent_stopped)); return }; continue }
+                catch (cancelled: CancellationException) { throw cancelled } catch (_: Exception) { continue }
+            if (mustStop(previous, current, Capture.CAMERA)) { stopForConsent(getString(R.string.watch_consent_stopped)); return }
+            previous = current
+        }
+    }
+
+    /** The person's decision no longer allows watching: the camera closes at once, later answers are dropped, the reason
+     * is said (for at most 8 s) and the service ends, which also ends the clip session. */
+    private fun stopForConsent(line: String) {
+        if (stopping) return
+        stopping = true; results.revoke()
+        loop?.cancel(); guard?.cancel()
+        releaseCamera()
+        stopLine = line
+        update(line, speak = true)
+        lifecycleScope.launch {
+            delay(300)
+            val until = SystemClock.elapsedRealtime() + 8_000
+            while (speakingUntil > SystemClock.elapsedRealtime() && SystemClock.elapsedRealtime() < until) delay(200)
+            stopSelf()
+        }
+    }
+
+    /** Discards the server's temporal context of this watching session (vision/clip/end/). */
+    private fun endClipSession() {
+        val session = clipSession ?: return
+        val profile = profileId ?: return
+        clipSession = null
+        val api = Backend.api(this)
+        endings.launch {
+            withTimeoutOrNull(10_000) {
+                try { api.request("vision/clip/end/", "POST", JSONObject().put("profile", profile).put("session", session)) } catch (_: Exception) {}
+            }
+        }
+    }
+
+    private fun releaseCamera() {
+        try { ProcessCameraProvider.getInstance(this).get().unbind(*listOfNotNull(capture, analysis).toTypedArray()) } catch (_: Exception) {}
+        capture = null; analysis = null
+        analyzer?.shutdown(); analyzer = null
+        recorder?.close(); recorder = null
     }
 
     private var onCover = false
@@ -279,14 +428,15 @@ class WatchService : LifecycleService() {
     }
 
     override fun onDestroy() {
-        loop?.cancel(); loop = null
+        stopping = true; results.revoke()
+        loop?.cancel(); loop = null; guard?.cancel(); guard = null
+        endClipSession()
         try { getSystemService(DisplayManager::class.java).unregisterDisplayListener(folds) } catch (_: Exception) {}
         bubble?.let { try { (getSystemService(WINDOW_SERVICE) as WindowManager).removeView(it) } catch (_: Exception) {} }; bubble = null
-        try { ProcessCameraProvider.getInstance(this).get().unbind(*listOfNotNull(capture, analysis).toTypedArray()) } catch (_: Exception) {}
-        analyzer?.shutdown(); analyzer = null
+        releaseCamera()
         voice?.shutdown(); voice = null
         wake?.let { if (it.isHeld) it.release() }; wake = null
-        WatchState.set(WatchState.Status())
+        WatchState.set(WatchState.Status(stopped = stopLine))
         super.onDestroy()
     }
 }

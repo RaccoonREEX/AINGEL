@@ -50,6 +50,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.runtime.collectAsState
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
@@ -111,7 +112,7 @@ private const val MAX_MODEL_PAIRS = 5
     val zoneId = zone(profile.optString("timezone"))
     val prefs = profile.optJSONObject("preferences")
     val reduced = prefs?.optBoolean("reduced_motion") == true
-    val voice = remember { VoiceInput(context) }
+    val voice = remember { VoiceInput(context) { model.state.value.speechService } }
     var phase by remember { mutableStateOf(AingelOrbState.IDLE) }
     var transcript by remember { mutableStateOf("") }
     val thread = remember { mutableStateListOf<Exchange>() }
@@ -149,8 +150,22 @@ private const val MAX_MODEL_PAIRS = 5
     val message = remember { mutableStateListOf<String>() }
     var modeJob by remember { mutableStateOf<Job?>(null) }
     var signGuard by remember { mutableStateOf<Job?>(null) }  // reopens listening if the hands never report the end
+    var visionJob by remember { mutableStateOf<Job?>(null) }  // a look in flight, cancelled if the camera grant goes
+    var visionPending by remember { mutableStateOf<Long?>(null) }  // its question, answered with why it stopped
+    var speechAsk by remember { mutableStateOf<(() -> Unit)?>(null) }  // listening that waits for this account's decision
     val watch by WatchState.status.collectAsState()
     val str = { id: Int -> context.getString(id) }
+    /** The person's own grant (care.consent), checked fresh before opening anything; Android's permission comes after. */
+    fun withConsent(capture: Capture, denied: (() -> Unit)? = null, start: () -> Unit) {
+        scope.launch {
+            if (model.captureAllowed(capture)) start()
+            else if (denied != null) denied()
+            else notice = str(if (capture == Capture.CAMERA) R.string.capture_camera_not_authorized else R.string.capture_microphone_not_authorized)
+        }
+    }
+    /** The phone's speech service needs this account's acceptance first (unless it recognizes on the device). */
+    fun withSpeech(start: () -> Unit) { if (voice.needsAcceptance()) speechAsk = start else start() }
+    fun micBlocked() = !mayStart(model.state.value.consent, Capture.MICROPHONE) || voice.needsAcceptance()
     val spanish = profile.optString("locale", "es-EC") != "en-US"
     LaunchedEffect(spanish) { AudioRoute.spanish = spanish }
     DisposableEffect(Unit) { onDispose { voice.stop(); model.stopSpeech(); onFocus(false) } }
@@ -236,8 +251,9 @@ private const val MAX_MODEL_PAIRS = 5
             }
         } catch (e: ApiFailure) {
             val message = when {
-                e.status == 429 || e.code == "throttled" -> str(R.string.ui_conv_throttled)
+                e.status == 429 -> str(R.string.ui_conv_throttled)
                 e.code == "privacy_review_required" -> str(R.string.ui_conv_privacy_off)
+                e.code == "synthetic_fixture_required" -> str(R.string.ui_conv_synthetic_pick)
                 else -> str(R.string.ui_conv_offline)
             }
             Answer(message, message, source = str(R.string.ui_src_local), origin = Origin.NOTICE, offerLocal = true)
@@ -282,14 +298,39 @@ private const val MAX_MODEL_PAIRS = 5
         }
     }
 
+    /** Synthetic demo: a question the server wrote, answered with a fictitious profile; nothing typed or said is sent. */
+    fun askFixture(fixture: String, question: String) {
+        settleJob?.cancel(); model.stopSpeech()
+        val id = nextId++
+        thread.add(Exchange(id, question, null)); notice = null; phase = AingelOrbState.THINKING; composerOpen = true
+        scope.launch {
+            val answer = try {
+                val reply = model.converseFixture(fixture)
+                val text = reply.optString("text")
+                if (reply.optString("mode") == "mock") Answer(text, text, source = str(R.string.ui_src_mock), origin = Origin.MOCK)
+                else Answer(text, text, source = str(R.string.ui_src_synthetic), origin = Origin.MODEL)
+            } catch (_: Exception) { str(R.string.ui_conv_offline).let { Answer(it, it, source = str(R.string.ui_src_local), origin = Origin.NOTICE) } }
+            reply(id, answer)
+        }
+    }
+
     /** One-off capture of the full frame; sent only with the image consent and never stored. */
+    /** Message for a failed look; a refusal of the person's camera grant also closes the camera (a new grant reopens it). */
+    fun visionFailure(e: Exception): Int = when {
+        e is ApiFailure && e.code in setOf("camera_consent_revoked", "consent_changed") -> {
+            vision = false; capture = null; scope.launch { model.refreshConsent() }; R.string.capture_camera_stopped
+        }
+        e is ApiFailure && e.code == "privacy_review_required" -> R.string.ui_vision_need_consent
+        else -> R.string.ui_vision_failed
+    }
     fun look(objectName: String?, question: String? = null) {
         val use = capture ?: return
         val id = nextId++
         thread.add(Exchange(id, question ?: if (objectName == null) str(R.string.ui_vision_describe) else context.getString(R.string.ui_vision_find_q, objectName), null))
         composerOpen = true
         phase = if (objectName == null) AingelOrbState.THINKING else AingelOrbState.SEARCHING
-        scope.launch {
+        visionPending = id
+        visionJob = scope.launch {
             val caution = str(R.string.ui_vision_caution)
             val answer = try {
                 val result = model.analyzeFrame(use.jpegFrame(context), objectName)
@@ -302,9 +343,9 @@ private const val MAX_MODEL_PAIRS = 5
                 }
                 Answer("$text $caution", text, origin = Origin.VISION,
                     source = if (mock) str(R.string.ui_src_vision_mock) else context.getString(R.string.ui_src_vision_meta, result.optString("model", "Meta")))
-            } catch (e: ApiFailure) {
-                str(if (e.code == "privacy_review_required") R.string.ui_vision_need_consent else R.string.ui_vision_failed).let { Answer(it, it, source = str(R.string.ui_src_local), origin = Origin.NOTICE) }
-            } catch (_: Exception) { str(R.string.ui_vision_failed).let { Answer(it, it, source = str(R.string.ui_src_local), origin = Origin.NOTICE) } }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (e: Exception) { str(visionFailure(e)).let { Answer(it, it, source = str(R.string.ui_src_local), origin = Origin.NOTICE) } }
+            if (visionPending == id) visionPending = null
             reply(id, answer)
         }
     }
@@ -316,6 +357,8 @@ private const val MAX_MODEL_PAIRS = 5
      * [retry]: one more try if the recogniser is still busy (right after the wake phrase released it).
      */
     fun startListening(retry: Boolean = false, followUp: Boolean = false) {
+        // Restarts (follow-ups, the wake phrase) recheck the person's microphone grant and this account's acceptance.
+        if (micBlocked()) { continuous = false; silenceUntil = 0L; phase = AingelOrbState.IDLE; return }
         settleJob?.cancel(); model.stopSpeech(); notice = null; transcript = ""
         if (!followUp) continuous = true
         if (silenceUntil == 0L) silenceUntil = System.currentTimeMillis() + 25_000
@@ -342,7 +385,7 @@ private const val MAX_MODEL_PAIRS = 5
     }
     listenAgain = ::listenFollowUp
     val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
-        if (ok) startListening() else { phase = AingelOrbState.IDLE; composerOpen = true; notice = str(R.string.ui_mic_denied) }
+        if (ok) withSpeech { startListening() } else { phase = AingelOrbState.IDLE; composerOpen = true; notice = str(R.string.ui_mic_denied) }
     }
     val cameraPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
         if (ok) vision = true else notice = str(R.string.ui_camera_denied)
@@ -353,9 +396,10 @@ private const val MAX_MODEL_PAIRS = 5
             AingelOrbState.LISTENING -> if (voice.recognitionAvailable) { continuous = false; silenceUntil = 0L; voice.finish() } else {
                 voice.stop(); phase = AingelOrbState.IDLE; composerOpen = true; notice = str(R.string.ui_voice_failed)
             }
-            AingelOrbState.IDLE, AingelOrbState.HAPPY, AingelOrbState.CONFUSED ->
-                if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) startListening()
+            AingelOrbState.IDLE, AingelOrbState.HAPPY, AingelOrbState.CONFUSED -> withConsent(Capture.MICROPHONE) {
+                if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) withSpeech { startListening() }
                 else micPermission.launch(Manifest.permission.RECORD_AUDIO)
+            }
             else -> { settleJob?.cancel(); voice.stop(); model.stopSpeech(); continuous = false; silenceUntil = 0L; phase = AingelOrbState.IDLE }
         }
     }
@@ -377,6 +421,7 @@ private const val MAX_MODEL_PAIRS = 5
     /** «Escuchar y traducir»: listens, signs what it heard with the 3D hands, then listens again until «Terminar». */
     fun hearListen(tries: Int = 0) {
         if (mode != HomeMode.HEAR || signing) return
+        if (micBlocked()) { phase = AingelOrbState.IDLE; return }
         phase = AingelOrbState.LISTENING
         val again = { ms: Long -> modeJob?.cancel(); modeJob = scope.launch { delay(ms); hearListen() } }
         voice.start(profile.optString("locale", "es-EC"), onPartial = { heard = it }, onResult = { text ->
@@ -416,23 +461,29 @@ private const val MAX_MODEL_PAIRS = 5
             phase = AingelOrbState.THINKING; said = ""
             val text = try {
                 model.analyzeFrame(use.jpegFrame(context), null).let { withKnownPeople(it, it.optString("text")) }
-            } catch (e: ApiFailure) { str(if (e.code == "privacy_review_required") R.string.ui_vision_need_consent else R.string.ui_vision_failed) }
-            catch (_: Exception) { str(R.string.ui_vision_failed) }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (e: Exception) { str(visionFailure(e)) }
             if (mode != HomeMode.DESCRIBE) return@launch
             said = text
             phase = if (model.speak("$text ${str(R.string.ui_vision_caution)}") { if (phase == AingelOrbState.SPEAKING) phase = AingelOrbState.IDLE }) AingelOrbState.SPEAKING else AingelOrbState.IDLE
         }
     }
-    val modeMic = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok -> if (ok) hearListen() else { phase = AingelOrbState.IDLE; notice = str(R.string.ui_mic_denied) } }
+    val modeMic = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok -> if (ok) withSpeech { hearListen() } else { phase = AingelOrbState.IDLE; notice = str(R.string.ui_mic_denied) } }
     val modeCamera = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok -> if (ok && mode?.camera == true) vision = true else if (!ok) notice = str(R.string.ui_camera_denied) }
     fun startMode(m: HomeMode, voiceOut: Boolean = true) {
         endMode(); mode = m; menuOpen = false; seeSub = false
         when (m) {
-            HomeMode.HEAR -> if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) hearListen() else modeMic.launch(Manifest.permission.RECORD_AUDIO)
+            HomeMode.HEAR -> withConsent(Capture.MICROPHONE) {
+                if (mode != HomeMode.HEAR) return@withConsent
+                if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) withSpeech { hearListen() } else modeMic.launch(Manifest.permission.RECORD_AUDIO)
+            }
             HomeMode.WRITE -> sign(listOf("hola"))
             HomeMode.SEE, HomeMode.DESCRIBE -> {
                 seeVoice = voiceOut
-                if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) vision = true else modeCamera.launch(Manifest.permission.CAMERA)
+                withConsent(Capture.CAMERA) {
+                    if (mode != m) return@withConsent
+                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) vision = true else modeCamera.launch(Manifest.permission.CAMERA)
+                }
             }
             HomeMode.WATCH -> {}
         }
@@ -441,8 +492,11 @@ private const val MAX_MODEL_PAIRS = 5
     LaunchedEffect(capture, mode) { if (mode == HomeMode.DESCRIBE && capture != null && said.isEmpty()) { delay(1200); describe() } }
     fun beginWatch() {
         val privateTest = try { model.privateWatchEnabled() } catch (e: ApiFailure) { model.reportError(e.code); return }
-        WatchService.start(context, profile.getString("id"), profile.optString("locale", "es-EC"), privateTest)
-        endMode(); (context as? Activity)?.moveTaskToBack(true)
+        withConsent(Capture.CAMERA) {
+            WatchService.start(context, profile.getString("id"), profile.optString("locale", "es-EC"), model.state.value.consent, privateTest,
+                s.communication?.optString("spontaneous")?.takeIf { it.isNotBlank() } ?: "normal")
+            endMode(); (context as? Activity)?.moveTaskToBack(true)
+        }
     }
     val watchPermissions = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { granted ->
         when {
@@ -463,7 +517,26 @@ private const val MAX_MODEL_PAIRS = 5
     val wakeOn = remember { VoiceControl.enabled(context) && VoiceControl.trained(context) }
     val wakeWord = remember { VoiceControl.word(context) }
     val wakeIdle = wakeOn && resumed && mode == null && !menuOpen && phase == AingelOrbState.IDLE && thread.isEmpty() && !composerOpen &&
-        ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED &&
+        mayStart(s.consent, Capture.MICROPHONE) && !voice.needsAcceptance()
+    // While the camera or microphone is open the decisions are reread, so a revocation made elsewhere arrives.
+    RefreshConsentWhile(model, vision || phase == AingelOrbState.LISTENING || mode == HomeMode.HEAR || wakeIdle)
+    // Decisions that no longer allow the camera or microphone close them here (the ViewModel stops watching and
+    // captions); opening them again needs a new grant. Withdrawing the speech-service acceptance ends listening too.
+    LaunchedEffect(s.consent, s.speechService) {
+        val camera = !mayStart(s.consent, Capture.CAMERA) && (vision || mode?.camera == true)
+        val microphone = (!mayStart(s.consent, Capture.MICROPHONE) || voice.needsAcceptance()) && (phase == AingelOrbState.LISTENING || mode == HomeMode.HEAR)
+        if (camera) {
+            if (visionJob?.isActive == true) { visionJob?.cancel(); phase = AingelOrbState.IDLE }
+            visionPending?.let { id -> visionPending = null; str(R.string.capture_camera_stopped).let { reply(id, Answer(it, it, source = str(R.string.ui_src_local), origin = Origin.NOTICE)) } }
+            vision = false; capture = null
+        }
+        if (microphone) { voice.stop(); continuous = false; silenceUntil = 0L; if (phase == AingelOrbState.LISTENING) phase = AingelOrbState.IDLE }
+        if ((camera && mode?.camera == true) || (microphone && mode == HomeMode.HEAR)) endMode()
+        if (camera || microphone) notice = str(if (camera) R.string.capture_camera_stopped else R.string.capture_microphone_stopped)
+    }
+    // Watching that ended on its own (a refused authorization) says why here, once.
+    LaunchedEffect(watch.stopped) { if (watch.stopped.isNotBlank() && !watch.running) { notice = watch.stopped; WatchState.change { it.copy(stopped = "") } } }
     LaunchedEffect(resumed) {
         if (resumed) { if (mode == HomeMode.HEAR && !signing && phase != AingelOrbState.LISTENING) hearListen(); return@LaunchedEffect }
         modeJob?.cancel(); voice.stop(); continuous = false; silenceUntil = 0L
@@ -494,8 +567,10 @@ private const val MAX_MODEL_PAIRS = 5
 
     fun toggleVision() {
         if (vision) { vision = false; capture = null; return }
-        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) vision = true
-        else cameraPermission.launch(Manifest.permission.CAMERA)
+        withConsent(Capture.CAMERA) {
+            if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) vision = true
+            else cameraPermission.launch(Manifest.permission.CAMERA)
+        }
     }
     fun clearConversation() { settleJob?.cancel(); voice.stop(); model.stopSpeech(); continuous = false; silenceUntil = 0L; thread.clear(); notice = null; phase = AingelOrbState.IDLE }
     /** A short local answer in the conversation (spoken unless the feature speaks for itself). */
@@ -509,16 +584,18 @@ private const val MAX_MODEL_PAIRS = 5
     fun seeNow(question: String, objectName: String?) {
         // The outer screen faces the person, not the scene: the phone has to be opened to look.
         if (shape == WindowShape.COVER) { localReply(question, str(R.string.ui_cover_open_to_see)); return }
-        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-            cameraPermission.launch(Manifest.permission.CAMERA); localReply(question, str(R.string.ui_cmd_camera_permission)); return
-        }
-        vision = true; composerOpen = true
-        scope.launch {
-            phase = if (objectName == null) AingelOrbState.THINKING else AingelOrbState.SEARCHING
-            var waited = 0
-            while (capture == null && waited < 50) { delay(100); waited++ }
-            if (capture == null) localReply(question, str(R.string.ui_camera_failed))
-            else { delay(700); look(objectName, question) }  // a moment for exposure once the camera opens
+        withConsent(Capture.CAMERA, { localReply(question, str(R.string.capture_camera_not_authorized)) }) {
+            if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+                cameraPermission.launch(Manifest.permission.CAMERA); localReply(question, str(R.string.ui_cmd_camera_permission)); return@withConsent
+            }
+            vision = true; composerOpen = true
+            visionJob = scope.launch {
+                phase = if (objectName == null) AingelOrbState.THINKING else AingelOrbState.SEARCHING
+                var waited = 0
+                while (capture == null && waited < 50) { delay(100); waited++ }
+                if (capture == null) localReply(question, str(R.string.ui_camera_failed))
+                else { delay(700); look(objectName, question) }  // a moment for exposure once the camera opens
+            }
         }
     }
     runAction = { name, args, question ->
@@ -590,6 +667,10 @@ private const val MAX_MODEL_PAIRS = 5
     val controls: @Composable ColumnScope.() -> Unit = {
         when (mode) {
             null -> {
+                if (s.syntheticConversationProfileId == profile.optString("id")) {
+                    Notice(stringResource(R.string.synthetic_conversation_active)); Spacer(Modifier.height(8.dp))
+                    SyntheticQuestions(s.syntheticQuestions, busy) { id, q -> askFixture(id, q) }; Spacer(Modifier.height(10.dp))
+                }
                 T(status, 18, FontWeight.Medium, Ui.Navy, align = TextAlign.Center, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
                 if (!menu) visionPanel()
                 Spacer(Modifier.height(18.dp))
@@ -651,18 +732,33 @@ private const val MAX_MODEL_PAIRS = 5
             }
             HomeMode.WATCH -> {
                 T(stringResource(R.string.ui_m_watch), 20, FontWeight.SemiBold, Ui.Navy, align = TextAlign.Center)
+                // Right under the title: on a small screen a refusal below the button would be out of sight.
+                notice?.let { Spacer(Modifier.height(8.dp)); Notice(it) }
                 Spacer(Modifier.height(6.dp)); T(stringResource(R.string.ui_m_watch_intro), 14, color = Ui.Text, align = TextAlign.Center, lineHeight = 1.5f)
                 Spacer(Modifier.height(6.dp)); T(stringResource(R.string.ui_vision_caution), 12, color = Ui.Muted, align = TextAlign.Center)
                 Spacer(Modifier.height(8.dp)); T(stringResource(R.string.ui_m_watch_output, AudioRoute.outputLabel(context)), 12, color = Ui.Muted, align = TextAlign.Center)
+                // Experimental: short video clips instead of photos (the server must allow it; otherwise it uses photos).
+                var video by remember { mutableStateOf(WatchService.videoEnabled(context)) }
+                Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Switch(video, { video = it; WatchService.setVideo(context, it) }, colors = SwitchDefaults.colors(checkedTrackColor = Ui.Navy),
+                        modifier = Modifier.semantics { contentDescription = context.getString(R.string.watch_video) })
+                    Spacer(Modifier.width(10.dp)); T(stringResource(R.string.watch_video), 13, FontWeight.Medium, Ui.Navy, modifier = Modifier.weight(1f))
+                }
+                if (video) T(stringResource(R.string.watch_video_note), 11, color = Ui.Muted, align = TextAlign.Center)
                 PrimaryButton(stringResource(R.string.ui_m_watch_start), height = 52.dp) { startWatch() }
                 if (!Settings.canDrawOverlays(context)) LinkButton(stringResource(R.string.ui_m_bubble), size = 13) {
                     // The person decides in the system screen; AINGEL never changes that permission itself.
                     try { context.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + context.packageName))) } catch (_: Exception) {}
                 }
-                notice?.let { Spacer(Modifier.height(12.dp)); Notice(it) }
                 Spacer(Modifier.weight(1f).heightIn(min = 16.dp)); LinkButton(stringResource(R.string.ui_m_finish), size = 14) { endMode() }
             }
         }
+    }
+    speechAsk?.let { pending ->
+        SpeechServiceNotice(model, onAccepted = { speechAsk = null; pending() }, onType = {
+            speechAsk = null; phase = AingelOrbState.IDLE
+            if (mode == HomeMode.HEAR) startMode(HomeMode.WRITE) else composerOpen = true
+        })
     }
     // 6a–6c · outer screen: only AINGEL; tapping makes it listen.
     if (shape == WindowShape.COVER) { CoverOrb(phase, reduced, status, level) { onMic() }; return }
@@ -690,6 +786,10 @@ private const val MAX_MODEL_PAIRS = 5
                 HandButton { vision = false; onSigns() }
                 Spacer(Modifier.width(8.dp))
                 EyesButton(vision) { toggleVision() }
+            }
+            if (s.syntheticConversationProfileId == profile.optString("id")) {
+                Notice(stringResource(R.string.synthetic_conversation_active))
+                SyntheticQuestions(s.syntheticQuestions, busy) { id, q -> askFixture(id, q) }
             }
             Column(Modifier.weight(1f).verticalScroll(scroll), horizontalAlignment = Alignment.CenterHorizontally) {
                 orb(170.dp)
@@ -825,6 +925,18 @@ private const val MAX_MODEL_PAIRS = 5
     }
 }
 
+
+/** The server's example questions for the synthetic demo (the only content it sends to Meta). */
+@Composable private fun SyntheticQuestions(questions: List<Pair<String, String>>, busy: Boolean, onPick: (String, String) -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(top = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        questions.forEach { (id, question) ->
+            Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(50)).border(1.dp, Ui.Control, RoundedCornerShape(50))
+                .clickable(enabled = !busy, role = Role.Button) { onPick(id, question) }.padding(horizontal = 14.dp, vertical = 9.dp)) {
+                T(question, 13, FontWeight.Medium, Ui.Navy)
+            }
+        }
+    }
+}
 
 @Composable private fun Notice(text: String) {
     Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Ui.Subtle).border(1.dp, Ui.Border, RoundedCornerShape(12.dp)).padding(horizontal = 14.dp, vertical = 10.dp)

@@ -9,8 +9,11 @@ from django.test import TestCase
 from PIL import Image
 from rest_framework.test import APIClient
 
-from care.consent import private_media_allowed, synthetic_allowed
+from care.consent import private_media_allowed
 from care.models import Membership, Profile
+from care.testing import adult, authorize
+
+from assistance import synthetic
 
 
 PRIVATE = {
@@ -30,13 +33,14 @@ def image():
 class PrivateMediaTests(TestCase):
     def setUp(self):
         cache.clear()
-        self.owner = get_user_model().objects.create_user(username="private-owner")
-        self.caregiver = get_user_model().objects.create_user(username="private-caregiver")
+        self.owner = adult(get_user_model().objects.create_user(username="private-owner"))
+        self.caregiver = adult(get_user_model().objects.create_user(username="private-caregiver"))
         self.profile = Profile.objects.create(
             owner=self.owner, display_name="Owner", consents=CONSENTS,
             support_notes="PRIVATE_CONDITION", allergies="PRIVATE_ALLERGY",
             face_recognition_enabled=True,
         )
+        authorize(self.profile, CONSENTS)
         Membership.objects.create(profile=self.profile, user=self.caregiver, relationship="family")
         self.client = APIClient()
         self.client.force_authenticate(self.owner)
@@ -54,17 +58,23 @@ class PrivateMediaTests(TestCase):
             self.assertFalse(private_media_allowed(self.profile, self.owner, "image", 1))
             self.assertFalse(private_media_allowed(self.profile, self.owner, "conversation", True))
             for key in ("camera", "meta_data"):
-                self.profile.consents = {**CONSENTS, key: False}
+                authorize(self.profile, {**CONSENTS, key: False})
                 self.assertFalse(private_media_allowed(self.profile, self.owner, "image", True))
-            self.profile.consents = {**CONSENTS, "microphone": False}
+            authorize(self.profile, {**CONSENTS, "microphone": False})
             self.assertFalse(private_media_allowed(self.profile, self.owner, "audio", True))
             for key, wrong in (("AINGEL_REAL_DATA", "0"), ("AINGEL_PRIVATE_OWN_MEDIA_TEST", "0"), ("AINGEL_SYNTHETIC_TESTS_ONLY", "1")):
                 with patch.dict(os.environ, {key: wrong}):
                     self.assertFalse(private_media_allowed(self.profile, self.owner, "audio", True))
-            self.assertFalse(synthetic_allowed(True))
+            # The private own-media test is not a synthetic-test server: no fixture runs, and a declaration never counts.
+            self.assertFalse(synthetic.enabled())
+            self.assertEqual(synthetic.route({"fixture": "greeting"}, "question", False, ()), (None, "synthetic_tests_disabled"))
+            self.assertEqual(synthetic.route({"synthetic": True}, "question", True, ()), (None, "synthetic_fixture_required"))
         with patch.dict(os.environ, {"AINGEL_SYNTHETIC_TESTS_ONLY": "1"}):
-            self.assertTrue(synthetic_allowed(True))
-            self.assertFalse(synthetic_allowed(False))
+            self.assertTrue(synthetic.enabled())
+            self.assertEqual(synthetic.route({"fixture": "greeting"}, "question", False, ()), ("fixture", "greeting"))
+            for flag in (True, False):
+                self.assertEqual(synthetic.route({"synthetic": flag}, "question", True, ()), (None, "synthetic_fixture_required"))
+                self.assertEqual(synthetic.route({"synthetic": flag, "fixture": "greeting"}, "question", False, ()), (None, "synthetic_fixture_required"))
 
     def test_scene_and_locate_gate_before_provider_and_disable_family_matching(self):
         with patch.dict(os.environ, PRIVATE), patch("assistance.scene.httpx.Client") as provider:
@@ -80,12 +90,13 @@ class PrivateMediaTests(TestCase):
         with patch.dict(os.environ, PRIVATE), patch("assistance.views.describe_scene", return_value=result) as scene, patch("assistance.views.family_matches") as match:
             response = self.post_image(private_test=True, family=True)
             self.assertEqual(response.status_code, 200)
-            self.assertTrue(scene.call_args.args[2])
+            self.assertEqual(scene.call_args.args[2], synthetic.REAL)
             self.assertFalse(scene.call_args.kwargs["known_person"])
             match.assert_not_called()
         with patch.dict(os.environ, PRIVATE), patch("assistance.views.locate_object", return_value={"matches": []}) as locate:
-            self.post_image("locate", private_test=True, object_name="cup")
-            self.assertTrue(locate.call_args.args[2])
+            response = self.post_image("locate", private_test=True, object_name="cup")
+            self.assertEqual(response.status_code, 200, response.data)
+            self.assertEqual(locate.call_args.args[2], synthetic.REAL)
 
     def test_personal_text_endpoints_blocked_even_with_consent(self):
         with patch.dict(os.environ, PRIVATE), patch("assistance.conversation.call_spark") as converse, patch("assistance.companion.call_spark") as companion, patch("assistance.gloss.call_spark") as gloss:

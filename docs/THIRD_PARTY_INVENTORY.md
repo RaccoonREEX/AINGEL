@@ -1,6 +1,6 @@
 # Inventario de dependencias de terceros
 
-Generado el 2026-10-29 con `backend/scripts/license_inventory.py` a partir de los ficheros de
+Generado el 2026-10-29 con `backend/scripts/license_inventory.py` y **corregido a mano el 2026-10-30** (ver `PUBLICATION_READINESS.md`): se añaden `androidx.lifecycle:lifecycle-service`, `psycopg`, `psycopg-binary` y `redis`; las licencias Android marcadas antes como «verificar» se comprobaron en los POM oficiales (Google Maven / Maven Central). Indica la licencia **declarada** por cada paquete a partir de los ficheros de
 bloqueo y los metadatos instalados. Indica la licencia **declarada** por cada paquete; no es una auditoría
 legal completa. Los avisos y textos de licencia que exigen las licencias deben acompañar a cada distribución
 (ver `THIRD_PARTY_NOTICES.md`).
@@ -21,44 +21,12 @@ legal completa. Los avisos y textos de licencia que exigen las licencias deben a
 | lightningcss-linux-x64-musl | 1.33.0 | MPL-2.0 | desarrollo (no se distribuye) |
 | lightningcss-win32-arm64-msvc | 1.33.0 | MPL-2.0 | desarrollo (no se distribuye) |
 | lightningcss-win32-x64-msvc | 1.33.0 | MPL-2.0 | desarrollo (no se distribuye) |
-| androidx.annotation:annotation | 1.9.1 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
-| androidx.annotation:annotation-experimental | 1.4.1 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
-| androidx.annotation:annotation-jvm | 1.9.1 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
-| androidx.appcompat:appcompat | 1.1.0 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
-| androidx.appcompat:appcompat-resources | 1.1.0 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
-| androidx.arch.core:core-common | 2.2.0 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
-| androidx.arch.core:core-runtime | 2.2.0 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
-| androidx.concurrent:concurrent-futures | 1.1.0 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
-| androidx.concurrent:concurrent-futures-ktx | 1.1.0 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
-| androidx.core:core-viewtree | 1.0.0 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
-| androidx.cursoradapter:cursoradapter | 1.0.0 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
-| androidx.customview:customview | 1.0.0 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
-| androidx.drawerlayout:drawerlayout | 1.0.0 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
-| androidx.exifinterface:exifinterface | 1.3.7 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
-| androidx.fragment:fragment | 1.1.0 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
-| androidx.interpolator:interpolator | 1.0.0 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
-| androidx.loader:loader | 1.0.0 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
-| androidx.profileinstaller:profileinstaller | 1.4.0 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
-| androidx.startup:startup-runtime | 1.1.1 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
-| androidx.tracing:tracing | 1.2.0 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
-| androidx.tracing:tracing-ktx | 1.2.0 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
-| androidx.vectordrawable:vectordrawable | 1.1.0 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
-| androidx.vectordrawable:vectordrawable-animated | 1.1.0 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
-| androidx.versionedparcelable:versionedparcelable | 1.1.1 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
-| androidx.viewpager:viewpager | 1.0.0 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
-| com.google.auto.value:auto-value-annotations | 1.6.3 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
-| com.google.guava:listenablefuture | 1.0 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
-| com.squareup.okhttp3:okhttp | 4.12.0 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
-| com.squareup.okio:okio | 3.6.0 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
-| com.squareup.okio:okio-jvm | 3.6.0 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
-| org.jetbrains:annotations | 23.0.0 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
-| org.jetbrains.kotlin:kotlin-stdlib | 2.2.20 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
-| org.jetbrains.kotlin:kotlin-stdlib-jdk7 | 1.9.10 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
-| org.jetbrains.kotlin:kotlin-stdlib-jdk8 | 1.9.10 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
-| org.jspecify:jspecify | 1.0.0 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
 | certifi | 2026.10.23 | Mozilla Public License 2.0 (MPL 2.0) | servidor (no se distribuye a clientes) |
 | meta-sam-parser | 0.1.0 | SAM License | servidor (no se distribuye a clientes) |
-| qrcode | 8.2 | BSD License, Other/Proprietary License | servidor (no se distribuye a clientes) |
+| androidx.camera:camera-core | 1.4.2 | Apache-2.0 + BSD-3-Clause (libyuv) | se distribuye en el APK: texto BSD incluido en los avisos |
+| com.squareup.okhttp3:okhttp (publicsuffixes.gz) | 4.12.0 | MPL-2.0 (datos) | se distribuye en el APK: aviso y texto MPL incluidos |
+| psycopg / psycopg-binary | 3.2.10 | LGPL-3.0-only | servidor; obligaciones LGPL solo si se publica una imagen del backend |
+| qrcode | 8.2 | BSD-3-Clause AND MIT (fichero LICENSE: Lincoln Loop BSD + parte pyqrnative MIT; el clasificador «Other/Proprietary» no corresponde al texto) | servidor (no se distribuye a clientes) |
 
 ## Web (npm)
 
@@ -149,16 +117,16 @@ legal completa. Los avisos y textos de licencia que exigen las licencias deben a
 | androidx.activity:activity | 1.10.1 | The Apache Software License, Version 2.0 | se distribuye en el APK |
 | androidx.activity:activity-compose | 1.10.1 | The Apache Software License, Version 2.0 | se distribuye en el APK |
 | androidx.activity:activity-ktx | 1.10.1 | The Apache Software License, Version 2.0 | se distribuye en el APK |
-| androidx.annotation:annotation | 1.9.1 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
-| androidx.annotation:annotation-experimental | 1.4.1 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
-| androidx.annotation:annotation-jvm | 1.9.1 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
-| androidx.appcompat:appcompat | 1.1.0 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
-| androidx.appcompat:appcompat-resources | 1.1.0 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
-| androidx.arch.core:core-common | 2.2.0 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
-| androidx.arch.core:core-runtime | 2.2.0 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
+| androidx.annotation:annotation | 1.9.1 | Apache-2.0 (POM oficial de Maven verificado el 2026-10-30) | se distribuye en el APK |
+| androidx.annotation:annotation-experimental | 1.4.1 | Apache-2.0 (POM oficial de Maven verificado el 2026-10-30) | se distribuye en el APK |
+| androidx.annotation:annotation-jvm | 1.9.1 | Apache-2.0 (POM oficial de Maven verificado el 2026-10-30) | se distribuye en el APK |
+| androidx.appcompat:appcompat | 1.1.0 | Apache-2.0 (POM oficial de Maven verificado el 2026-10-30) | se distribuye en el APK |
+| androidx.appcompat:appcompat-resources | 1.1.0 | Apache-2.0 (POM oficial de Maven verificado el 2026-10-30) | se distribuye en el APK |
+| androidx.arch.core:core-common | 2.2.0 | Apache-2.0 (POM oficial de Maven verificado el 2026-10-30) | se distribuye en el APK |
+| androidx.arch.core:core-runtime | 2.2.0 | Apache-2.0 (POM oficial de Maven verificado el 2026-10-30) | se distribuye en el APK |
 | androidx.autofill:autofill | 1.0.0 | The Apache Software License, Version 2.0 | se distribuye en el APK |
 | androidx.camera:camera-camera2 | 1.4.2 | The Apache Software License, Version 2.0 | se distribuye en el APK |
-| androidx.camera:camera-core | 1.4.2 | BSD License, The Apache Software License, Version 2.0 | se distribuye en el APK |
+| androidx.camera:camera-core | 1.4.2 | Apache-2.0 + BSD-3-Clause (libyuv en las bibliotecas nativas) | se distribuye en el APK |
 | androidx.camera:camera-lifecycle | 1.4.2 | The Apache Software License, Version 2.0 | se distribuye en el APK |
 | androidx.camera:camera-video | 1.4.2 | The Apache Software License, Version 2.0 | se distribuye en el APK |
 | androidx.camera:camera-view | 1.4.2 | The Apache Software License, Version 2.0 | se distribuye en el APK |
@@ -199,20 +167,20 @@ legal completa. Los avisos y textos de licencia que exigen las licencias deben a
 | androidx.compose.ui:ui-unit-android | 1.9.2 | The Apache Software License, Version 2.0 | se distribuye en el APK |
 | androidx.compose.ui:ui-util | 1.9.2 | The Apache Software License, Version 2.0 | se distribuye en el APK |
 | androidx.compose.ui:ui-util-android | 1.9.2 | The Apache Software License, Version 2.0 | se distribuye en el APK |
-| androidx.concurrent:concurrent-futures | 1.1.0 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
-| androidx.concurrent:concurrent-futures-ktx | 1.1.0 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
+| androidx.concurrent:concurrent-futures | 1.1.0 | Apache-2.0 (POM oficial de Maven verificado el 2026-10-30) | se distribuye en el APK |
+| androidx.concurrent:concurrent-futures-ktx | 1.1.0 | Apache-2.0 (POM oficial de Maven verificado el 2026-10-30) | se distribuye en el APK |
 | androidx.core:core | 1.15.0 | The Apache Software License, Version 2.0 | se distribuye en el APK |
 | androidx.core:core-ktx | 1.15.0 | The Apache Software License, Version 2.0 | se distribuye en el APK |
-| androidx.core:core-viewtree | 1.0.0 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
-| androidx.cursoradapter:cursoradapter | 1.0.0 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
-| androidx.customview:customview | 1.0.0 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
+| androidx.core:core-viewtree | 1.0.0 | Apache-2.0 (POM oficial de Maven verificado el 2026-10-30) | se distribuye en el APK |
+| androidx.cursoradapter:cursoradapter | 1.0.0 | Apache-2.0 (POM oficial de Maven verificado el 2026-10-30) | se distribuye en el APK |
+| androidx.customview:customview | 1.0.0 | Apache-2.0 (POM oficial de Maven verificado el 2026-10-30) | se distribuye en el APK |
 | androidx.customview:customview-poolingcontainer | 1.0.0 | The Apache Software License, Version 2.0 | se distribuye en el APK |
-| androidx.drawerlayout:drawerlayout | 1.0.0 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
+| androidx.drawerlayout:drawerlayout | 1.0.0 | Apache-2.0 (POM oficial de Maven verificado el 2026-10-30) | se distribuye en el APK |
 | androidx.emoji2:emoji2 | 1.4.0 | The Apache Software License, Version 2.0 | se distribuye en el APK |
-| androidx.exifinterface:exifinterface | 1.3.7 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
-| androidx.fragment:fragment | 1.1.0 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
+| androidx.exifinterface:exifinterface | 1.3.7 | Apache-2.0 (POM oficial de Maven verificado el 2026-10-30) | se distribuye en el APK |
+| androidx.fragment:fragment | 1.1.0 | Apache-2.0 (POM oficial de Maven verificado el 2026-10-30) | se distribuye en el APK |
 | androidx.graphics:graphics-path | 1.0.1 | The Apache Software License, Version 2.0 | se distribuye en el APK |
-| androidx.interpolator:interpolator | 1.0.0 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
+| androidx.interpolator:interpolator | 1.0.0 | Apache-2.0 (POM oficial de Maven verificado el 2026-10-30) | se distribuye en el APK |
 | androidx.lifecycle:lifecycle-common | 2.9.4 | The Apache Software License, Version 2.0 | se distribuye en el APK |
 | androidx.lifecycle:lifecycle-common-java8 | 2.9.4 | The Apache Software License, Version 2.0 | se distribuye en el APK |
 | androidx.lifecycle:lifecycle-common-jvm | 2.9.4 | The Apache Software License, Version 2.0 | se distribuye en el APK |
@@ -221,6 +189,7 @@ legal completa. Los avisos y textos de licencia que exigen las licencias deben a
 | androidx.lifecycle:lifecycle-livedata-core-ktx | 2.9.4 | The Apache Software License, Version 2.0 | se distribuye en el APK |
 | androidx.lifecycle:lifecycle-process | 2.9.4 | The Apache Software License, Version 2.0 | se distribuye en el APK |
 | androidx.lifecycle:lifecycle-runtime | 2.9.4 | The Apache Software License, Version 2.0 | se distribuye en el APK |
+| androidx.lifecycle:lifecycle-service | 2.9.4 | The Apache Software License, Version 2.0 | se distribuye en el APK |
 | androidx.lifecycle:lifecycle-runtime-android | 2.9.4 | The Apache Software License, Version 2.0 | se distribuye en el APK |
 | androidx.lifecycle:lifecycle-runtime-compose | 2.9.4 | The Apache Software License, Version 2.0 | se distribuye en el APK |
 | androidx.lifecycle:lifecycle-runtime-compose-android | 2.9.4 | The Apache Software License, Version 2.0 | se distribuye en el APK |
@@ -233,30 +202,30 @@ legal completa. Los avisos y textos de licencia que exigen las licencias deben a
 | androidx.lifecycle:lifecycle-viewmodel-ktx | 2.9.4 | The Apache Software License, Version 2.0 | se distribuye en el APK |
 | androidx.lifecycle:lifecycle-viewmodel-savedstate | 2.9.4 | The Apache Software License, Version 2.0 | se distribuye en el APK |
 | androidx.lifecycle:lifecycle-viewmodel-savedstate-android | 2.9.4 | The Apache Software License, Version 2.0 | se distribuye en el APK |
-| androidx.loader:loader | 1.0.0 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
-| androidx.profileinstaller:profileinstaller | 1.4.0 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
+| androidx.loader:loader | 1.0.0 | Apache-2.0 (POM oficial de Maven verificado el 2026-10-30) | se distribuye en el APK |
+| androidx.profileinstaller:profileinstaller | 1.4.0 | Apache-2.0 (POM oficial de Maven verificado el 2026-10-30) | se distribuye en el APK |
 | androidx.savedstate:savedstate | 1.3.3 | The Apache Software License, Version 2.0 | se distribuye en el APK |
 | androidx.savedstate:savedstate-android | 1.3.3 | The Apache Software License, Version 2.0 | se distribuye en el APK |
 | androidx.savedstate:savedstate-compose | 1.3.3 | The Apache Software License, Version 2.0 | se distribuye en el APK |
 | androidx.savedstate:savedstate-compose-android | 1.3.3 | The Apache Software License, Version 2.0 | se distribuye en el APK |
 | androidx.savedstate:savedstate-ktx | 1.3.3 | The Apache Software License, Version 2.0 | se distribuye en el APK |
-| androidx.startup:startup-runtime | 1.1.1 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
-| androidx.tracing:tracing | 1.2.0 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
-| androidx.tracing:tracing-ktx | 1.2.0 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
-| androidx.vectordrawable:vectordrawable | 1.1.0 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
-| androidx.vectordrawable:vectordrawable-animated | 1.1.0 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
-| androidx.versionedparcelable:versionedparcelable | 1.1.1 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
-| androidx.viewpager:viewpager | 1.0.0 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
-| com.google.auto.value:auto-value-annotations | 1.6.3 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
-| com.google.guava:listenablefuture | 1.0 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
-| com.squareup.okhttp3:okhttp | 4.12.0 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
-| com.squareup.okio:okio | 3.6.0 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
-| com.squareup.okio:okio-jvm | 3.6.0 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
-| org.jetbrains:annotations | 23.0.0 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
-| org.jetbrains.kotlin:kotlin-stdlib | 2.2.20 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
+| androidx.startup:startup-runtime | 1.1.1 | Apache-2.0 (POM oficial de Maven verificado el 2026-10-30) | se distribuye en el APK |
+| androidx.tracing:tracing | 1.2.0 | Apache-2.0 (POM oficial de Maven verificado el 2026-10-30) | se distribuye en el APK |
+| androidx.tracing:tracing-ktx | 1.2.0 | Apache-2.0 (POM oficial de Maven verificado el 2026-10-30) | se distribuye en el APK |
+| androidx.vectordrawable:vectordrawable | 1.1.0 | Apache-2.0 (POM oficial de Maven verificado el 2026-10-30) | se distribuye en el APK |
+| androidx.vectordrawable:vectordrawable-animated | 1.1.0 | Apache-2.0 (POM oficial de Maven verificado el 2026-10-30) | se distribuye en el APK |
+| androidx.versionedparcelable:versionedparcelable | 1.1.1 | Apache-2.0 (POM oficial de Maven verificado el 2026-10-30) | se distribuye en el APK |
+| androidx.viewpager:viewpager | 1.0.0 | Apache-2.0 (POM oficial de Maven verificado el 2026-10-30) | se distribuye en el APK |
+| com.google.auto.value:auto-value-annotations | 1.6.3 | Apache-2.0 (POM oficial de Maven verificado el 2026-10-30) | se distribuye en el APK |
+| com.google.guava:listenablefuture | 1.0 | Apache-2.0 (POM oficial de Maven verificado el 2026-10-30) | se distribuye en el APK |
+| com.squareup.okhttp3:okhttp | 4.12.0 | Apache-2.0 (POM oficial verificado); incluye datos Public Suffix List bajo MPL-2.0 | se distribuye en el APK |
+| com.squareup.okio:okio | 3.6.0 | Apache-2.0 (POM oficial de Maven verificado el 2026-10-30) | se distribuye en el APK |
+| com.squareup.okio:okio-jvm | 3.6.0 | Apache-2.0 (POM oficial de Maven verificado el 2026-10-30) | se distribuye en el APK |
+| org.jetbrains:annotations | 23.0.0 | Apache-2.0 (POM oficial de Maven verificado el 2026-10-30) | se distribuye en el APK |
+| org.jetbrains.kotlin:kotlin-stdlib | 2.2.20 | Apache-2.0 (POM oficial de Maven verificado el 2026-10-30) | se distribuye en el APK |
 | org.jetbrains.kotlin:kotlin-stdlib-common | 2.2.20 | Apache-2.0 | se distribuye en el APK |
-| org.jetbrains.kotlin:kotlin-stdlib-jdk7 | 1.9.10 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
-| org.jetbrains.kotlin:kotlin-stdlib-jdk8 | 1.9.10 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
+| org.jetbrains.kotlin:kotlin-stdlib-jdk7 | 1.9.10 | Apache-2.0 (POM oficial de Maven verificado el 2026-10-30) | se distribuye en el APK |
+| org.jetbrains.kotlin:kotlin-stdlib-jdk8 | 1.9.10 | Apache-2.0 (POM oficial de Maven verificado el 2026-10-30) | se distribuye en el APK |
 | org.jetbrains.kotlinx:kotlinx-coroutines-android | 1.10.2 | Apache-2.0 | se distribuye en el APK |
 | org.jetbrains.kotlinx:kotlinx-coroutines-bom | 1.10.2 | Apache-2.0 | se distribuye en el APK |
 | org.jetbrains.kotlinx:kotlinx-coroutines-core | 1.10.2 | Apache-2.0 | se distribuye en el APK |
@@ -264,7 +233,7 @@ legal completa. Los avisos y textos de licencia que exigen las licencias deben a
 | org.jetbrains.kotlinx:kotlinx-serialization-bom | 1.7.3 | The Apache Software License, Version 2.0 | se distribuye en el APK |
 | org.jetbrains.kotlinx:kotlinx-serialization-core | 1.7.3 | The Apache Software License, Version 2.0 | se distribuye en el APK |
 | org.jetbrains.kotlinx:kotlinx-serialization-core-jvm | 1.7.3 | The Apache Software License, Version 2.0 | se distribuye en el APK |
-| org.jspecify:jspecify | 1.0.0 | Apache-2.0 (publicada por el proyecto; POM no presente en la caché local, verificar) | se distribuye en el APK |
+| org.jspecify:jspecify | 1.0.0 | Apache-2.0 (POM oficial de Maven verificado el 2026-10-30) | se distribuye en el APK |
 
 ## Servidor (Python)
 
@@ -298,9 +267,12 @@ legal completa. Los avisos y textos de licencia que exigen las licencias deben a
 | packaging | 26.3 | Apache-2.0 OR BSD-2-Clause | servidor (no se distribuye a clientes) |
 | pillow | 12.3.0 | MIT-CMU | servidor (no se distribuye a clientes) |
 | pycparser | 3.12 | BSD-3-Clause | servidor (no se distribuye a clientes) |
+| psycopg | 3.2.10 | LGPL-3.0-only (GNU LGPL v3) | servidor (no se distribuye a clientes; ver nota de imágenes) |
+| psycopg-binary | 3.2.10 | LGPL-3.0-only; la rueda incluye libpq (PostgreSQL License) y bibliotecas nativas (p. ej. OpenSSL) | servidor (no se distribuye a clientes; ver nota de imágenes) |
 | pyOpenSSL | 26.4.0 | Apache Software License | servidor (no se distribuye a clientes) |
 | PyOTP | 2.10.0 | MIT | servidor (no se distribuye a clientes) |
-| qrcode | 8.2 | BSD License, Other/Proprietary License | servidor (no se distribuye a clientes) |
+| qrcode | 8.2 | BSD-3-Clause AND MIT (fichero LICENSE: Lincoln Loop BSD + parte pyqrnative MIT; el clasificador «Other/Proprietary» no corresponde al texto) | servidor (no se distribuye a clientes) |
+| redis | 6.4.0 | MIT | servidor (no se distribuye a clientes) |
 | service-identity | 26.1.0 | MIT | servidor (no se distribuye a clientes) |
 | sqlparse | 0.6.0 | BSD License | servidor (no se distribuye a clientes) |
 | Twisted | 26.4.0 | MIT License | servidor (no se distribuye a clientes) |
@@ -310,3 +282,10 @@ legal completa. Los avisos y textos de licencia que exigen las licencias deben a
 | ujson | 6.0.0 | BSD-3-Clause AND TCL | servidor (no se distribuye a clientes) |
 | websockets | 16.1.1 | BSD-3-Clause | servidor (no se distribuye a clientes) |
 | zope.interface | 8.7 | ZPL-2.1 | servidor (no se distribuye a clientes) |
+
+## Notas de distribución (2026-10-30)
+
+- **Web:** se distribuyen `react`, `react-dom`, `scheduler` y `three` (MIT). El resto de paquetes npm son herramientas de compilación.
+- **Android:** 120 artefactos en `releaseRuntimeClasspath` (`./gradlew :app:dependencies --configuration releaseRuntimeClasspath`), todos Apache-2.0; `camera-core` añade libyuv (BSD-3-Clause) y `okhttp` incluye la Public Suffix List (MPL-2.0). Las dependencias de prueba (`junit` EPL-1.0, `org.json`, `mockwebserver`, `androidx.test`) y `ui-tooling` (solo debug) no van en el APK de release.
+- **Servidor:** los paquetes Python no se entregan a usuarios. Si se publica una imagen Docker del backend (p. ej. en un registro), pasa a ser distribución: deben acompañarla los avisos/licencias de todos los paquetes, el texto LGPL-3.0 (y GPL-3.0 al que remite) para psycopg, MPL-2.0 para certifi y el acuerdo SAM. `black` (MIT) solo está en `requirements-dev.txt`.
+- **Imágenes base de compose:** `postgres:16-alpine` (PostgreSQL License), `redis:7-alpine` (etiqueta flotante: Redis 7.4+ se publica bajo RSALv2/SSPLv1, 7.2 y anteriores BSD-3-Clause; uso interno como caché permitido, no ofrecer Redis como servicio), `python:3.12-slim`, `node:22-bookworm-slim` (solo compilación) y `nginxinc/nginx-unprivileged:1.28-alpine` (nginx BSD-2-Clause). Se descargan, no se redistribuyen.

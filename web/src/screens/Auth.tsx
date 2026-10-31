@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import AingelOrb from "../components/aingel/AingelOrb";
 import type { translator, Locale } from "../i18n";
 
@@ -11,7 +11,7 @@ type Props = {
   error: string;
   mfaRequired: boolean;
   onLogin: (data: Record<string, FormDataEntryValue>) => void;
-  onRegister: (data: Record<string, FormDataEntryValue>, extra: { name: string; who: Who }) => void;
+  onRegister: (data: Record<string, FormDataEntryValue | boolean>, extra: { name: string; who: Who }) => void;
   onMfa: (code: string) => void;
 };
 
@@ -24,6 +24,59 @@ export function Brand({ size = 32 }: { size?: number }) {
   );
 }
 
+/**
+ * The explicit 18+ self-declaration, separate from everything else. Meta's AI terms require adult users; no ID is
+ * asked for (backend care.consent.adult_statement).
+ */
+export function AdultCheck({ checked, onChange, es }: { checked: boolean; onChange: (v: boolean) => void; es: boolean }) {
+  const hint = useId();
+  return (
+    <div className="adult-check">
+      <label className="consent-row">
+        <input type="checkbox" required checked={checked} onChange={(e) => onChange(e.target.checked)} aria-describedby={hint} />
+        <span><b>{es ? "Tengo 18 años o más" : "I am 18 or older"}</b></span>
+      </label>
+      <small id={hint}>{es
+        ? "AINGEL es solo para personas adultas porque usa la IA de Meta. Es tu propia declaración: no pedimos documentos."
+        : "AINGEL is for adults only because it uses Meta's AI. It is your own declaration: no ID is needed."}</small>
+    </div>
+  );
+}
+
+/** Accounts created before the age policy: the declaration comes before anything else. */
+export function AdultDeclaration({ t, locale, setLocale, busy, error, username, onDeclare, onLogout }: Pick<Props, "t" | "locale" | "setLocale" | "busy" | "error"> & {
+  username: string; onDeclare: () => void; onLogout: () => void;
+}) {
+  const es = locale === "es-EC";
+  const [adult, setAdult] = useState(false);
+  const title = useRef<HTMLHeadingElement>(null);
+  useEffect(() => title.current?.focus(), []);
+  return (
+    <main id="main" className="gate">
+      <div className="auth-top">
+        <Brand />
+        <label className="auth-locale">
+          <span className="sr-only">{t("language")}</span>
+          <select value={locale} onChange={(e) => setLocale(e.target.value as Locale)}>
+            <option value="es-EC">Español</option>
+            <option value="en-US">English</option>
+          </select>
+        </label>
+      </div>
+      <form className="auth-form gate-card" onSubmit={(e) => { e.preventDefault(); if (adult) onDeclare(); }}>
+        <div className="auth-heading">
+          <h1 ref={title} tabIndex={-1}>{es ? "Antes de continuar" : "Before you continue"}</h1>
+          <p>{es ? "AINGEL ahora es solo para personas adultas. Confirma tu edad para seguir usando tu cuenta." : "AINGEL is now for adults only. Confirm your age to keep using your account."}</p>
+        </div>
+        <AdultCheck checked={adult} onChange={setAdult} es={es} />
+        {error && <p role="alert" className="form-error">{error}</p>}
+        <button className="btn btn-primary btn-lg" disabled={busy || !adult}>{busy ? t("working") : es ? "Confirmar y continuar" : "Confirm and continue"}</button>
+        <button type="button" className="auth-link" onClick={onLogout}>{t("logout")} · {username}</button>
+      </form>
+    </main>
+  );
+}
+
 /** 2a / 2b on the web, 1e / 2d / 2e on phones. */
 export default function Auth(props: Props) {
   const { t, locale, busy, error, mfaRequired } = props;
@@ -32,13 +85,15 @@ export default function Auth(props: Props) {
   const [who, setWho] = useState<Who>("other");
   const [show, setShow] = useState(false);
   const [forgot, setForgot] = useState(false);
+  const [adult, setAdult] = useState(false);
   const register = mode === "register";
   const submit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const data = Object.fromEntries(new FormData(e.currentTarget));
     if (register) {
+      if (!adult) return;
       const { name, ...rest } = data;
-      props.onRegister(rest, { name: String(name || "").trim(), who });
+      props.onRegister({ ...rest, adult: true }, { name: String(name || "").trim(), who });
     } else props.onLogin(data);
   };
   const disclaimer = <p className="auth-disclaimer">{t("prototype")}</p>;
@@ -108,6 +163,7 @@ export default function Auth(props: Props) {
                   {whoCard("me", es ? "Para mí" : "For me", es ? "Yo usaré AINGEL" : "I will use AINGEL")}
                   {whoCard("other", es ? "Para alguien a quien cuido" : "For someone I care for", es ? "Seré su familiar o cuidador" : "I am their family or caregiver")}
                 </div>
+                <AdultCheck checked={adult} onChange={setAdult} es={es} />
               </>
             ) : (
               <>
@@ -116,7 +172,7 @@ export default function Auth(props: Props) {
               </>
             )}
             {error && <p role="alert" className="form-error">{error}</p>}
-            <button className="btn btn-primary btn-lg" disabled={busy}>
+            <button className="btn btn-primary btn-lg" disabled={busy || (register && !adult)}>
               {busy ? t("working") : register ? (es ? "Crear cuenta y configurar AINGEL" : "Create account and set up AINGEL") : (es ? "Entrar" : "Sign in")}
             </button>
             {register ? (

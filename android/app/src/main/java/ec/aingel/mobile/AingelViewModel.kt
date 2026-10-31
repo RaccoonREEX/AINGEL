@@ -25,7 +25,15 @@ data class MobileState(
     val mfaEnabled: Boolean = false, val circle: JSONObject? = null, val inviteCode: String? = null, val faces: JSONObject? = null,
     val captions: List<CaptionTurn> = emptyList(), val recording: Boolean = false, val captionStatus: String = "idle",
     val signStatus: String = "waiting", val signText: String? = null, val signMetadata: JSONObject? = null, val signVideo: ByteArray? = null,
-    val privateTestProfileId: String? = null
+    val privateTestProfileId: String? = null, val syntheticConversationProfileId: String? = null,
+    // The server's synthetic example questions (id to text in the app language), shown while the demo is on.
+    val syntheticQuestions: List<Pair<String, String>> = emptyList(),
+    // Age and consent policy (backend care.consent): the account's 18+ declaration, the current terms, and the
+    // person's decisions for the selected profile.
+    val adultDeclared: Boolean = true, val termsVersion: String = "", val consent: JSONObject? = null,
+    val consentCode: JSONObject? = null, val purposes: JSONObject? = null, val openConsent: Boolean = false,
+    // This account's own acceptance that the phone's speech service may receive its voice (only from the session payload).
+    val speechService: Boolean = false, val speechServiceVersion: String = "",
 )
 
 class AingelViewModel(app: Application) : AndroidViewModel(app) {
@@ -63,8 +71,17 @@ class AingelViewModel(app: Application) : AndroidViewModel(app) {
             }
         },
         onStatus = { status -> mutable.update { it.copy(recording = status == "recording", captionStatus = status) } },
-        onError = { code -> mutable.update { it.copy(error = code, recording = false, captionStatus = "idle") } })
+        onError = { code ->
+            val refused = stopsCapture(code)
+            mutable.update { it.copy(error = if (code == "consent_changed") "microphone_consent_stopped" else code, recording = false, captionStatus = "idle") }
+            // The client already closed the microphone; a refusal also discards the captions and rereads the decisions.
+            if (refused) viewModelScope.launch { stopMicrophone(); refreshConsent() }
+        })
     private var activeOperation: Job? = null
+    /** Results of camera work: a refusal makes those already running stale (ConsentGuard.ResultGate); captions and
+     * their signs already drop late answers by [captionEpoch]. */
+    private val cameraResults = ResultGate()
+    private var cameraJob: Job? = null
     private var operationGeneration = 0L
     /** Who the new account is for and the name typed at sign-up; used to prefill the setup wizard. */
     var signup: Pair<String, String> = "other" to ""
@@ -86,7 +103,7 @@ class AingelViewModel(app: Application) : AndroidViewModel(app) {
             catch (cancelled: CancellationException) { throw cancelled }
             catch (failure: ApiFailure) {
                 if (current == operationGeneration) {
-                    if (failure.status == 403 && failure.code == "authentication_required") mutable.update { MobileState(busy = false, error = "session_expired") }
+                    if (failure.status in setOf(401, 403) && failure.code == "authentication_required") mutable.update { MobileState(busy = false, error = "session_expired") }
                     else mutable.update { it.copy(error = failure.code) }
                 }
             } catch (_: Exception) {
@@ -100,15 +117,22 @@ class AingelViewModel(app: Application) : AndroidViewModel(app) {
     }
     private suspend fun applySession(session: JSONObject) {
         val username = session.optJSONObject("user")?.optString("username")
-        mutable.update { it.copy(username = username, mfaRequired = session.optBoolean("mfa_required")) }
-        if (username != null) refreshProfiles()
+        val adult = session.optJSONObject("user")?.optBoolean("adult_declared", false) ?: true
+        mutable.update { it.copy(username = username, mfaRequired = session.optBoolean("mfa_required"), adultDeclared = adult,
+            termsVersion = session.optString("terms_version").ifBlank { it.termsVersion }, speechService = speechServiceOf(session),
+            speechServiceVersion = session.optString("speech_service_version").ifBlank { it.speechServiceVersion }) }
+        if (username != null && adult) refreshProfiles()
     }
     private suspend fun refreshProfiles() {
         val profiles = (api.request("profiles/") as JSONArray).rows()
         val selected = mutable.value.profile?.optString("id")
         val profile = profiles.find { p -> p.optString("id") == selected } ?: profiles.firstOrNull()
-        mutable.update { it.copy(profiles = profiles, profile = profile, communication = null) }
-        profile?.optString("id")?.takeIf { it.isNotBlank() }?.let { refreshCommunication(it) }
+        mutable.update {
+            val sameProfile = profile?.optString("id") == it.profile?.optString("id")
+            it.copy(profiles = profiles, profile = profile, communication = null, consent = if (sameProfile) it.consent else null,
+                syntheticConversationProfileId = if (sameProfile) it.syntheticConversationProfileId else null)
+        }
+        profile?.optString("id")?.takeIf { it.isNotBlank() }?.let { refreshCommunication(it); refreshConsent() }
     }
     private suspend fun refreshCommunication(profileId: String) {
         val value = api.request("profiles/$profileId/communication/") as JSONObject
@@ -117,9 +141,100 @@ class AingelViewModel(app: Application) : AndroidViewModel(app) {
     fun configureBackend(value: String) = operation { stopCaptions(); WatchService.stop(getApplication()); api.configure(value); api.request("auth/session/"); mutable.update { MobileState(busy = false) } }
     fun register(username: String, password: String, who: String, name: String) { signup = who to name.trim(); login(username, password, true) }
     fun login(username: String, password: String, register: Boolean = false) = operation {
-        val response = api.request("auth/${if (register) "register" else "login"}/", "POST", JSONObject().put("username", username).put("password", password)) as JSONObject
+        val body = JSONObject().put("username", username).put("password", password)
+        // Registration carries the explicit 18+ declaration for the current terms; the server checks it.
+        if (register) body.put("adult", true).put("terms_version", termsVersion())
+        val response = api.request("auth/${if (register) "register" else "login"}/", "POST", body) as JSONObject
         applySession(response)
     }
+    private suspend fun termsVersion(): String = mutable.value.termsVersion.ifBlank {
+        (api.request("auth/session/") as JSONObject).optString("terms_version").also { v -> mutable.update { it.copy(termsVersion = v) } }
+    }
+    fun declareAdult() = operation {
+        applySession(api.request("auth/adult/", "POST", JSONObject().put("adult", true).put("terms_version", termsVersion())) as JSONObject)
+    }
+    private fun localeQuery() = "?locale=" + (mutable.value.profile?.optString("locale")?.takeIf { it.isNotBlank() } ?: if (java.util.Locale.getDefault().language == "es") "es-EC" else "en-US")
+    fun loadPurposes() = operation { val p = api.request("consent/purposes/" + localeQuery()) as JSONObject; mutable.update { it.copy(purposes = p) } }
+    fun loadConsent() = operation { fetchConsent(profileId()) }
+    /** Only the person decides; the server refuses anyone else (consent_subject_only). Refusing stops what depends on
+     * it at once, before the server answers: the person's intent does not wait for the network. */
+    fun decideConsent(purpose: String, decision: String) = operation {
+        val id = profileId()
+        if (decision != "grant") capturesFor(purpose).forEach { stopCapture(it) }
+        val c = api.request("profiles/$id/consent/" + localeQuery(), "POST", JSONObject().put("purpose", purpose).put("decision", decision)) as JSONObject
+        applyConsent(id, c)
+    }
+    private fun profileId(): String = mutable.value.profile?.optString("id")?.takeIf { it.isNotBlank() } ?: throw ApiFailure("profile_required")
+    private suspend fun fetchConsent(id: String): JSONObject =
+        (api.request("profiles/$id/consent/" + localeQuery()) as JSONObject).also { applyConsent(id, it) }
+    /** Keeps the selected person's decisions current and stops whatever they no longer allow (ConsentGuard.mustStop). */
+    private fun applyConsent(id: String, current: JSONObject) {
+        val before = mutable.value
+        if (before.profile?.optString("id") != id) return
+        mutable.update { if (it.profile?.optString("id") == id) it.copy(consent = current) else it }
+        Capture.entries.filter { mustStop(before.consent, current, it) }.forEach { stopCapture(it) }
+    }
+    /** Rereads the decisions (screens with an open camera or microphone, every ~15 s); failures keep the last copy. */
+    suspend fun refreshConsent() {
+        val id = mutable.value.profile?.optString("id")?.takeIf { it.isNotBlank() } ?: return
+        try { fetchConsent(id) } catch (cancelled: CancellationException) { throw cancelled } catch (_: Exception) {}
+    }
+    /**
+     * Before opening the camera or the microphone: the person's current decision, fresh from the server (the copy
+     * already loaded only when it cannot be reached). Android's own permission is a separate layer the screens ask for.
+     */
+    suspend fun captureAllowed(capture: Capture): Boolean {
+        val id = mutable.value.profile?.optString("id")?.takeIf { it.isNotBlank() } ?: return false
+        val consent = try { fetchConsent(id) } catch (cancelled: CancellationException) { throw cancelled } catch (_: Exception) { null }
+        val current = mutable.value
+        return current.profile?.optString("id") == id && mayStart(consent ?: current.consent, capture)
+    }
+    private fun stopCapture(capture: Capture) = if (capture == Capture.CAMERA) stopCamera() else stopMicrophone()
+    /** Watching (the service ends its clip session), photo analyses in flight and their late answers. */
+    private fun stopCamera() {
+        cameraResults.revoke(); WatchService.stop(getApplication())
+        if (cameraJob?.isActive == true) { cameraJob?.cancel(); mutable.update { it.copy(error = "camera_consent_stopped") } }
+        cameraJob = null
+    }
+    /** Captions; the screens stop their own speech recognition when they see the new decisions. */
+    private fun stopMicrophone() { if (captionsActive.get()) stopCaptions() }
+    fun createConsentCode() = operation { val code = api.request(path("consent/invite/"), "POST") as JSONObject; mutable.update { it.copy(consentCode = code) } }
+    /** Profiles from before the policy: the owner says whose data this is (never inferred). */
+    fun confirmSubject(forSelf: Boolean) = operation {
+        val body = if (forSelf) JSONObject().put("for_self", true) else JSONObject().put("for_self", false).put("subject_adult", true)
+        val c = api.request(path("consent/confirm-subject/"), "POST", body) as JSONObject
+        applyConsent(profileId(), c); refreshProfiles()
+    }
+    fun requestLegalReview() = operation { val c = api.request(path("consent/legal-review/"), "POST") as JSONObject; applyConsent(profileId(), c); refreshProfiles() }
+    fun redeemConsentCode(code: String) = operation {
+        val linked = api.request("consent/redeem/", "POST", JSONObject().put("code", code)) as JSONObject
+        refreshProfiles()
+        val profile = mutable.value.profiles.find { it.optString("id") == linked.optString("profile") }
+        mutable.update { it.copy(profile = profile ?: it.profile, consent = null, openConsent = true) }
+    }
+    fun consentOpened() { mutable.update { it.copy(openConsent = false) } }
+    /** Saves communication preferences and keeps the app's copy current (watching reads «spontaneous» from it). */
+    suspend fun saveCommunication(patch: JSONObject): JSONObject {
+        val id = mutable.value.profile?.optString("id") ?: throw ApiFailure("profile_required")
+        val saved = api.request("profiles/$id/communication/", "PATCH", patch) as JSONObject
+        mutable.update { if (it.profile?.optString("id") == id) it.copy(communication = saved) else it }
+        return saved
+    }
+    /**
+     * Records or withdraws, for the signed-in account only, that the phone's speech service may receive its voice.
+     * Returns what the server recorded for this account; the app never assumes it nor keeps another account's answer.
+     */
+    suspend fun decideSpeechService(accept: Boolean): Boolean {
+        val username = mutable.value.username ?: return false
+        val version = mutable.value.speechServiceVersion.ifBlank { (api.request("auth/session/") as JSONObject).optString("speech_service_version") }
+        val body = if (accept) JSONObject().put("accept", true).put("version", version) else JSONObject().put("accept", false)
+        val session = api.request("auth/speech-service/", "POST", body) as JSONObject
+        if (session.optJSONObject("user")?.optString("username") != username || mutable.value.username != username) return false
+        val accepted = speechServiceOf(session)
+        mutable.update { it.copy(speechService = accepted, speechServiceVersion = session.optString("speech_service_version").ifBlank { it.speechServiceVersion }) }
+        return accepted
+    }
+    fun withdrawSpeechService() = operation { decideSpeechService(false) }
     fun verifyMfa(code: String) = operation { applySession(api.request("auth/mfa/verify/", "POST", JSONObject().put("code", code)) as JSONObject) }
     fun logout() = operation {
         stopCaptions(); WatchService.stop(getApplication()); voice.stop()
@@ -130,8 +245,9 @@ class AingelViewModel(app: Application) : AndroidViewModel(app) {
     private fun cancelOperation() { operationGeneration++; activeOperation?.cancel(); activeOperation = null }
     fun select(profile: JSONObject) {
         cancelOperation(); stopCaptions(); WatchService.stop(getApplication())
-        mutable.update { it.copy(busy = false, profile = profile, privateTestProfileId = null, communication = null, rows = emptyList(), knowledge = null, result = null, companion = null, image = null, enrollmentPhotos = emptyList(), faces = null, circle = null) }
-        operation { refreshCommunication(profile.getString("id")) }
+        cameraResults.revoke()
+        mutable.update { it.copy(busy = false, profile = profile, privateTestProfileId = null, syntheticConversationProfileId = null, communication = null, consent = null, rows = emptyList(), knowledge = null, result = null, companion = null, image = null, enrollmentPhotos = emptyList(), faces = null, circle = null) }
+        operation { refreshCommunication(profile.getString("id")); refreshConsent() }
     }
     fun resetScreen() { cancelOperation(); stopCaptions(); voice.stop(); mutable.update { it.copy(busy = false, rows = emptyList(), knowledge = null, result = null, companion = null, image = null, enrollmentPhotos = emptyList(), error = null, mfaSetup = null, recovery = emptyList(), inviteCode = null) } }
     fun clearError() { mutable.update { it.copy(error = null) } }
@@ -153,16 +269,30 @@ class AingelViewModel(app: Application) : AndroidViewModel(app) {
     /** General conversation under the authorization given at sign-up (the server checks it, care.consent). */
     /** [actions]: app features the model may ask this phone to run (camera, watching, signs). */
     suspend fun converse(turns: JSONArray, actions: List<String> = emptyList()): JSONObject {
-        if (mutable.value.privateTestProfileId != null) throw ApiFailure("privacy_review_required")
-        return api.request(path("conversation/"), "POST", JSONObject().put("turns", turns).put("actions", JSONArray(actions))) as JSONObject
+        val state = mutable.value
+        if (state.privateTestProfileId != null) throw ApiFailure("privacy_review_required")
+        val id = state.profile?.optString("id")?.takeIf { it.isNotBlank() } ?: throw ApiFailure("profile_required")
+        // The synthetic demo never sends what was typed or said: only the server's questions (converseFixture).
+        if (state.syntheticConversationProfileId == id) throw ApiFailure("synthetic_fixture_required")
+        return api.request("profiles/$id/conversation/", "POST", conversationPayload(turns, actions)) as JSONObject
     }
+    /** Synthetic demo: the server writes the question and answers it with a fictitious profile. */
+    suspend fun converseFixture(fixture: String): JSONObject {
+        val id = mutable.value.profile?.optString("id")?.takeIf { it.isNotBlank() } ?: throw ApiFailure("profile_required")
+        return api.request("profiles/$id/conversation/", "POST", fixtureConversationPayload(fixture, appLocale())) as JSONObject
+    }
+    private fun appLocale() = if (getApplication<Application>().resources.configuration.locales[0].language == "es") "es-EC" else "en-US"
     /** One captured frame to scene description or object search; the image is not stored. */
     suspend fun analyzeFrame(image: ByteArray, objectName: String?): JSONObject {
         // The profile lets the server apply its sign-up authorization (camera + Meta).
-        val fields = imageRequestFields(mutable.value.profile, mutable.value.privateTestProfileId, false)
+        val fields = imageRequestFields(mutable.value.profile, mutable.value.privateTestProfileId)
         // Describing also says which enrolled family members are in front (matched on our server, not by Meta).
         if (objectName != null) fields["object_name"] = objectName else if (mutable.value.privateTestProfileId == null) fields["family"] = "true"
-        return api.upload(if (objectName == null) "scene/" else "locate/", image, fields)
+        val token = cameraResults.open()
+        val result = api.upload(if (objectName == null) "scene/" else "locate/", image, fields)
+        // Refused while it was being described: the answer is dropped, as the server does (consent_changed).
+        if (!cameraResults.accepts(token)) throw ApiFailure("consent_changed")
+        return result
     }
     private val glossCache = object : LinkedHashMap<String, List<String>>(32, .75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, List<String>>?) = size > 64
@@ -243,7 +373,24 @@ class AingelViewModel(app: Application) : AndroidViewModel(app) {
         val id = profile?.optString("id").orEmpty()
         if (enabled && !(privateMediaAllowed(profile, id, "camera") || privateMediaAllowed(profile, id, "microphone"))) {
             mutable.update { it.copy(privateTestProfileId = null, error = "private_test_consent_required") }
-        } else mutable.update { it.copy(privateTestProfileId = if (enabled) id else null, error = null) }
+        } else mutable.update { it.copy(privateTestProfileId = if (enabled) id else null,
+            syntheticConversationProfileId = if (enabled) null else it.syntheticConversationProfileId, error = null) }
+    }
+    /** Session-only explicit declaration; it never classifies or filters the content. */
+    fun setSyntheticConversation(enabled: Boolean) {
+        if (enabled) { stopCaptions(); WatchService.stop(getApplication()) }
+        val id = mutable.value.profile?.optString("id")?.takeIf { it.isNotBlank() }
+        mutable.update { it.copy(syntheticConversationProfileId = if (enabled) id else null,
+            privateTestProfileId = if (enabled) null else it.privateTestProfileId) }
+        if (enabled) viewModelScope.launch {
+            val language = appLocale()
+            val questions = try {
+                val catalog = api.request("synthetic/") as JSONObject
+                if (!catalog.optBoolean("enabled")) emptyList()
+                else (catalog.optJSONArray("questions") ?: JSONArray()).rows().map { it.getString("id") to it.optString(language) }
+            } catch (_: Exception) { emptyList() }
+            mutable.update { if (it.syntheticConversationProfileId == id) it.copy(syntheticQuestions = questions) else it }
+        }
     }
     fun privateWatchEnabled(): Boolean {
         val current = mutable.value
@@ -264,15 +411,22 @@ class AingelViewModel(app: Application) : AndroidViewModel(app) {
         mutable.update { it.copy(circle = circle) }
     }
     fun setImage(image: ByteArray) { mutable.update { it.copy(image = image, result = null) } }
-    /** [synthetic]: the included shapes image (test); real photos use the sign-up authorization of the profile. */
-    fun analyze(synthetic: Boolean, objectName: String? = null) = operation {
-        val image = mutable.value.image ?: throw ApiFailure("image_required")
-        val fields = imageRequestFields(mutable.value.profile, mutable.value.privateTestProfileId, synthetic)
-        if (objectName != null) fields["object_name"] = objectName
-        val result = api.upload(if (objectName == null) "scene/" else "locate/", image, fields)
+    /** [synthetic]: the shapes preview stands for the server fixture, so only fixture ids are sent ([objectName] is then
+     * "red_circle" or "blue_square"); real photos need the person's own grants, which the server checks. */
+    fun analyze(synthetic: Boolean, objectName: String? = null) { cameraJob = operation {
+        val token = cameraResults.open()
+        val result = if (synthetic) {
+            api.uploadForm(if (objectName == null) "scene/" else "locate/", fixtureImageFields(appLocale(), objectName ?: "shapes"))
+        } else {
+            val image = mutable.value.image ?: throw ApiFailure("image_required")
+            val fields = imageRequestFields(mutable.value.profile, mutable.value.privateTestProfileId)
+            if (objectName != null) fields["object_name"] = objectName
+            api.upload(if (objectName == null) "scene/" else "locate/", image, fields)
+        }
+        if (!synthetic && !cameraResults.accepts(token)) throw ApiFailure("consent_changed")
         mutable.update { it.copy(result = result) }
         if (result.has("text") && mutable.value.profile?.optJSONObject("preferences")?.optBoolean("voice_output") == true) speak(result.getString("text"))
-    }
+    } }
     fun loadFaces() = operation { val faces = api.request(path("faces/")) as JSONObject; mutable.update { it.copy(faces = faces) } }
     fun faceConsent(enabled: Boolean, password: String = "") = operation {
         api.request(path("faces/consent/"), "POST", JSONObject().put("enabled", enabled).put("consent", enabled).put("password", password))
@@ -350,10 +504,20 @@ class AingelViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
     }
+    /** Captions open the microphone only with the person's microphone grant, checked first ([captureAllowed]). */
     fun startCaptions() {
+        val epoch = captionEpoch.get()
+        mutable.update { it.copy(captionStatus = "connecting", error = null) }
+        viewModelScope.launch {
+            val allowed = captureAllowed(Capture.MICROPHONE)
+            if (captionEpoch.get() != epoch) return@launch  // stopped (screen left, profile changed) while checking
+            if (allowed) beginCaptions() else mutable.update { it.copy(captionStatus = "idle", error = "microphone_consent_missing") }
+        }
+    }
+    private fun beginCaptions() {
         val state = mutable.value
         val privateTest = state.privateTestProfileId != null
-        if (privateTest && !privateMediaAllowed(state.profile, state.privateTestProfileId, "microphone")) { reportError("private_test_consent_required"); return }
+        if (privateTest && !privateMediaAllowed(state.profile, state.privateTestProfileId, "microphone")) { mutable.update { it.copy(captionStatus = "idle", error = "private_test_consent_required") }; return }
         captionEpoch.incrementAndGet(); captionsActive.set(true); retiredSpeechTurns.clear(); activeSpeechTurn = null; lastSignPhrase = null
         invalidateSigns(if (supportsSignCatalog(mutable.value.communication?.optString("sign_language"))) "waiting" else "unsupported")
         mutable.update { it.copy(captions = emptyList(), error = null) }

@@ -27,6 +27,7 @@ class ProductionSettingsTests(SimpleTestCase):
             "AINGEL_DB_HOST": "database.example.test",
             "AINGEL_DB_SSLROOTCERT": "/run/secrets/db-ca.pem",
             "AINGEL_REDIS_URL": "rediss://cache.example.test:6379/0",
+            "AINGEL_META_REDIS_URL": "rediss://quota.example.test:6379/0",
             "AINGEL_REDIS_CA_CERT": str(Path.cwd().anchor or "/") + "ca.pem",
             "AINGEL_PRIVATE_MEDIA_ROOT": str(Path.cwd().anchor or "/") + "aingel-private",
         })
@@ -45,6 +46,8 @@ class ProductionSettingsTests(SimpleTestCase):
                 "assert s.CACHES['default']['OPTIONS']['ssl_cert_reqs'] == 'required'; "
                 "assert s.CACHES['default']['OPTIONS']['ssl_check_hostname'] is True; "
                 "assert s.CACHES['default']['OPTIONS']['ssl_ca_certs'] == s.os.environ['AINGEL_REDIS_CA_CERT']; "
+                "assert s.CACHES['meta_quota']['OPTIONS']['ssl_check_hostname'] is True; "
+                "assert s.CACHES['meta_quota']['LOCATION'] == s.os.environ['AINGEL_META_REDIS_URL']; "
                 "assert s.WEBSOCKET_ALLOWED_ORIGINS == ['https://example.test']"
             )], cwd=Path(__file__).resolve().parents[1], env=env, capture_output=True, text=True,
         )
@@ -84,7 +87,7 @@ class ProductionSettingsTests(SimpleTestCase):
         for name in ("DJANGO_SECRET_KEY", "AINGEL_ENCRYPTION_KEY", "AINGEL_ALLOWED_HOSTS",
                      "AINGEL_CSRF_TRUSTED_ORIGINS", "AINGEL_WEBSOCKET_ORIGINS",
                      "AINGEL_TRUSTED_PROXY_NETWORKS", "AINGEL_DB_PASSWORD", "AINGEL_DB_SSLROOTCERT",
-                     "AINGEL_REDIS_URL", "AINGEL_REDIS_CA_CERT", "AINGEL_PRIVATE_MEDIA_ROOT"):
+                     "AINGEL_REDIS_URL", "AINGEL_META_REDIS_URL", "AINGEL_REDIS_CA_CERT", "AINGEL_PRIVATE_MEDIA_ROOT"):
             with self.subTest(name=name):
                 env = self.environment()
                 env.pop(name)
@@ -94,6 +97,12 @@ class ProductionSettingsTests(SimpleTestCase):
         env = self.environment()
         env["AINGEL_REDIS_URL"] = "rediss://cache.example.test:6379/0?ssl_cert_reqs=none"
         self.assertNotEqual(self.import_settings(env).returncode, 0)
+        env = self.environment()
+        env["AINGEL_META_REDIS_URL"] = "rediss://quota.example.test:6379/0?ssl_cert_reqs=none"
+        self.assertNotEqual(self.import_settings(env).returncode, 0)
+        env = self.environment()
+        env["AINGEL_META_REDIS_URL"] = env["AINGEL_REDIS_URL"]
+        self.assertNotEqual(self.import_settings(env).returncode, 0)
 
     def test_unsafe_settings_rejected(self):
         cases = {
@@ -102,6 +111,7 @@ class ProductionSettingsTests(SimpleTestCase):
             "AINGEL_WEBSOCKET_ORIGINS": "https://elsewhere.test", "AINGEL_TRUSTED_PROXY_NETWORKS": "0.0.0.0/0",
             "AINGEL_REDIS_URL": "redis://cache.example.test:6379/0", "AINGEL_REDIS_CA_CERT": "relative", "AINGEL_AI_MODE": "meta",
             "AINGEL_REAL_DATA": "1", "AINGEL_HSTS_SECONDS": "-1", "AINGEL_PRIVATE_MEDIA_ROOT": "relative",
+            "AINGEL_META_LIMIT_PER_DAY": "-1", "AINGEL_META_LIMIT_PER_MINUTE": "not-a-number",
         }
         for name, value in cases.items():
             with self.subTest(name=name):

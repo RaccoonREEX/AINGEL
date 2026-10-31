@@ -14,8 +14,9 @@ Project source license selection and a complete transitive inventory must be fin
 
 ## Revisión del 28 de octubre de 2026 (conversación, visión y señas)
 
-Inventario de licencias declaradas de npm (69 paquetes; solo `react`, `react-dom` y `scheduler`, MIT, se
-distribuyen en la web), Android (119 artefactos del classpath de release, Apache-2.0) y Python (40):
+Inventario de licencias declaradas de npm (solo `react`, `react-dom`, `scheduler` y `three`, MIT, se
+distribuyen en la web; corregido el 30-10), Android (120 artefactos del classpath de release, Apache-2.0, tras
+añadir `lifecycle-service`) y Python (43, con `psycopg`, `psycopg-binary` y `redis`):
 [`THIRD_PARTY_INVENTORY.md`](THIRD_PARTY_INVENTORY.md), generado con `backend/scripts/license_inventory.py`.
 
 Componentes y material revisados:
@@ -27,7 +28,8 @@ Componentes y material revisados:
 - **Meta SAM parser** (SAM License): `licenses/meta_sam_parser.txt`; solo en el servidor.
 - **YuNet** (MIT) y **SFace** (Apache-2.0): `licenses/face_detection_yunet.txt`, `licenses/face_recognition_sface.txt`;
   solo en el servidor. Sin cambios en el reconocimiento facial.
-- **Corpus LSEC** (CC BY 4.0): ningún clip en uso; los dos que se probaron se retiraron de la app y del repositorio.
+- **Corpus LSEC** (CC BY 4.0): ningún clip en uso. Los dos clips de investigación (`LSEC_RESEARCH_SAMPLES.json`)
+  nunca se versionaron en Git (verificado en todo el historial el 30-10); siguen solo en `.local/datasets/`, ignorado.
 - **Manos de AINGEL** (paquete *AINGEL Manos y Señas* v1.0.0, propio del proyecto): el motor 3D (`sign-language/engine`, v0.1.1) está en `web/src/components/aingel/hands3d/` con dos cambios marcados «AINGEL» (escala por mano y biblioteca en memoria) y se usa en web; Android lo reimplementa en OpenGL nativo (`Hands3D.kt`) con las mismas señas exportadas (`assets/hands3d/signs3d.json`). Las señas se convierten en ejecución desde el catálogo 2D (`aingel-signer.js` → `signData.ts`). El motor 2D portado (`AingelSigner.tsx` / `AingelSigner.kt`) queda como respaldo sin WebGL. Geometría generada en código, sin modelos 3D externos.
 - **three.js 0.184.0** (MIT, © three.js authors): instalado desde npm con versión fija e incluido en la web (no se carga de unpkg); la app Android no lo incluye. Aviso completo en `THIRD_PARTY_NOTICES.md`; la cabecera `@license` se conserva en los bundles.
   Personas identificables: revisar derechos de imagen para cada uso concreto.
@@ -38,11 +40,13 @@ Componentes y material revisados:
 
 Pendiente o a revisar antes de publicar:
 
-- Pantalla de licencias en el APK con el texto Apache-2.0 y los ficheros NOTICE de AndroidX, CameraX y OkHttp
-  (p. ej. con el plugin `oss-licenses`); hoy el APK incluye solo los avisos de Thinking Orbs y Montserrat.
-- `qrcode` declara un clasificador «Other/Proprietary License» además de BSD: confirmar su licencia efectiva.
-- Varios POM de AndroidX/Kotlin/OkHttp no estaban en la caché local: su licencia Apache-2.0 es la publicada por
-  cada proyecto y debe confirmarse con una descarga completa de metadatos.
+- Pantalla de licencias visible en el APK. *Actualizado 30-10:* el aviso del APK
+  (`assets/licenses/THIRD_PARTY_NOTICES.md`) ya incluye Apache-2.0, libyuv (BSD-3-Clause) y la Public Suffix List
+  (MPL-2.0) con sus textos completos; falta mostrarlo desde la app (cambio de código pendiente).
+- ~~`qrcode` «Other/Proprietary License»~~ *Resuelto 30-10:* su LICENSE es BSD-3-Clause (Lincoln Loop) más MIT
+  (parte pyqrnative); el clasificador no corresponde al texto. Solo servidor.
+- ~~POM de AndroidX/Kotlin/OkHttp ausentes~~ *Resuelto 30-10:* los 35 POM se leyeron en Google Maven / Maven
+  Central: todos Apache-2.0.
 - Condiciones de uso de Meta para datos reales (texto, imágenes, audio) y aviso del uso de créditos gratuitos.
 - **VoiceStudio / clonación de voz: no integrado.** No se ha identificado el proyecto exacto ni verificado
   las licencias de la aplicación, los modelos y su uso comercial; no se ha descargado nada.
@@ -50,3 +54,28 @@ Pendiente o a revisar antes de publicar:
   el artículo LACCEI con vocales LSEC (CC BY-NC-SA) queda fuera del producto.
 
 Esta revisión no constituye una auditoría legal completa.
+
+## Revisión del 30 de octubre de 2026 (preparación para publicar)
+
+Detalle completo en [`PUBLICATION_READINESS.md`](PUBLICATION_READINESS.md). Cambios respecto a la revisión anterior:
+
+| Componente | Licencia (SPDX) | ¿Se distribuye? | Obligación | Estado del aviso |
+|---|---|---|---|---|
+| React, ReactDOM, scheduler 19.3.1 / 0.28.0 | MIT | Sí, bundle web | Copyright + permiso | **Faltaba**; añadido en `THIRD_PARTY_NOTICES.md` y `licenses/React_MIT.txt`. Copiar a `web/public/THIRD_PARTY_NOTICES.txt` |
+| three.js 0.184.0 | MIT | Sí, bundle web | Copyright + permiso | Correcto; texto también en `licenses/three.js_MIT.txt` |
+| Thinking Orbs (yogesharc/thinking-orbs) | MIT, © 2026 Yogesh (verificado en el LICENSE del repositorio) | Sí (web y APK, como inspiración/adaptación del orb) | Copyright + permiso | Correcto; `licenses/Thinking_Orbs_MIT.txt`. El grado de copia no está verificado: el código se declara portado del paquete AINGEL UI v1.1.1 |
+| AndroidX / Compose / CameraX / Kotlin / OkHttp / Okio | Apache-2.0 | Sí, APK | Copia de la licencia; NOTICE si existe (no hay) | Texto completo en `licenses/Apache-2.0.txt` y en el aviso del APK |
+| libyuv (en `camera-core`) | BSD-3-Clause | Sí, APK (código nativo) | Reproducir copyright y condiciones | **Faltaba**; añadido (`licenses/libyuv_BSD-3-Clause.txt`) |
+| Public Suffix List (en OkHttp) | MPL-2.0 | Sí, APK (datos) | Informar de la licencia y del acceso a la fuente | **Faltaba**; añadido (`licenses/MPL-2.0.txt`) |
+| Montserrat | OFL-1.1 (sin nombre reservado) | Sí, APK; web vía Google Fonts | Licencia con la fuente; no vender la fuente sola | Correcto |
+| YuNet / SFace (OpenCV Zoo `48b10fa5`) | MIT / Apache-2.0 | No: se descargan en el servidor, ni en Git ni en imágenes | Conservar licencias si se redistribuyen | Correcto |
+| meta-sam-parser 0.1.0 | SAM License (no OSI) | No (servidor) | Incluir el acuerdo al redistribuir; restricciones de uso y de control de exportaciones | Correcto |
+| psycopg / psycopg-binary 3.2.10 | LGPL-3.0-only | No (servidor) | Solo si se publica imagen del backend | Añadido al inventario |
+| redis-py 6.4.0 | MIT | No (servidor) | — | Añadido al inventario |
+| Corpus LSEC (Zenodo 10.5281/zenodo.21627229) | CC-BY-4.0 + derechos de imagen de los signantes | No | Atribución; revisar derechos de personalidad antes de cualquier uso | Correcto |
+| VizWiz VQA (anotaciones) | CC-BY-4.0 | No (30 anotaciones locales ignoradas) | Atribución | Correcto |
+| MedlinePlus | Dominio público (EE. UU.) para resúmenes | Índice local del servidor; extractos mostrados en la app | Atribución pedida por NLM | Correcto |
+| Logotipo / isotipo AINGEL | Propio (sin licencia declarada) | Sí, web y APK | — | El SVG contiene un manifiesto C2PA de Anthropic/Claude: confirmar autoría y derechos del diseño |
+| Señas 2D/3D (*AINGEL Manos y Señas* v1.0.0, catálogo v1.5.0) y paquete AINGEL UI v1.1.1 | Propio (declarado) | Sí, web y APK | — | Confirmar autor y fecha de creación (posible trabajo previo al evento) |
+
+No se usa MediaPipe (solo se sigue su convención de 21 puntos en `landmarksToPose.js`).

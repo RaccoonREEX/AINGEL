@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Preferencias de comunicación: apoyo prioritario, explicaciones, descripciones espontáneas y repetir lo importante. -->
+<resources>
+    <string name="cp_title">Cómo quiere comunicarse</string>
+    <string name="cp_intro">Configura estas preferencias junto con la persona. Son individuales y no se deducen de una enfermedad.</string>
+    <string name="cp_priority">Apoyo prioritario</string>
+    <string name="cp_priority_help">El tipo de apoyo que AINGEL debe atender primero.</string>
+    <string name="cp_priority_meta">Solo se envía a Meta si la persona autoriza «Personalizar con tu perfil».</string>
+    <string name="cp_prio_visual">Visual</string>
+    <string name="cp_prio_auditory">Auditivo</string>
+    <string name="cp_prio_cognitive">Cognitivo</string>
+    <string name="cp_prio_communication">Comunicación</string>
+    <string name="cp_prio_none">Ninguno</string>
+    <string name="cp_detail">Explicaciones</string>
+    <string name="cp_detail_help">Cuánto explica AINGEL en cada respuesta.</string>
+    <string name="cp_detail_brief">Breves</string>
+    <string name="cp_detail_detailed">Detalladas</string>
+    <string name="cp_spontaneous">Descripciones espontáneas del entorno (vigilancia continua)</string>
+    <string name="cp_spontaneous_help">Cuántas veces AINGEL describe lo que ve, sin que se lo pidan, mientras vigila.</string>
+    <string name="cp_spont_few">Pocas</string>
+    <string name="cp_spont_normal">Normales</string>
+    <string name="cp_spont_many">Muchas</string>
+    <string name="cp_repeat">Repetir lo importante al final</string>
+    <string name="cp_repeat_help">AINGEL termina cada respuesta repitiendo lo más importante.</string>
+    <string name="cp_yes">Sí</string>
+    <string name="cp_no">No</string>
+    <string name="cp_legend_title">Qué se queda en AINGEL y qué puede ir a Meta</string>
+    <string name="cp_legend_style">Acompañan las solicitudes a Meta, como categorías: trato, longitud de frase, ritmo, un paso a la vez, explicaciones, repetir lo importante, descripciones espontáneas y qué hacer si pide apoyo. Sin nombres ni notas.</string>
+    <string name="cp_legend_priority">Solo con autorización: el apoyo prioritario, si la persona autoriza «Personalizar con tu perfil».</string>
+    <string name="cp_legend_local">Se quedan en AINGEL: el nombre preferido y las notas libres.</string>
+    <string name="cp_save">Guardar preferencias de comunicación</string>
+    <string name="cp_saved">Preferencias de comunicación guardadas.</string>
+    <string name="cp_read_only">Solo quien puede configurar este perfil puede cambiar estas preferencias.</string>
+</resources>

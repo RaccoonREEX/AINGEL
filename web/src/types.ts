@@ -1,7 +1,11 @@
-export type User = { id: number; username: string };
+/** adult_declared: the account's own 18+ self-declaration (backend care.consent); Meta stays closed without it. */
+/** speech_service: this account accepted that the browser's recognition may send its voice to the vendor. */
+export type User = { id: number; username: string; adult_declared?: boolean; speech_service?: boolean };
 export type Session = {
   user: User | null;
   csrf: string;
+  terms_version?: string;
+  speech_service_version?: string;
   mfa_required?: boolean;
 };
 export type Profile = {
@@ -13,7 +17,9 @@ export type Profile = {
   support_notes: string;
   emergency_contact: string;
   preferences: Record<string, boolean>;
-  role: "owner" | "caregiver";
+  /** subject: the signed-in account is the person this profile describes (linked with a code). */
+  role: "owner" | "caregiver" | "subject";
+  subject_status?: SubjectStatus;
   permissions: {
     configure: boolean;
     memories: boolean;
@@ -23,8 +29,24 @@ export type Profile = {
   ready: boolean;
   consents?: Consents;
 };
-/** Authorizations given at sign-up (backend care.consent). */
+/** Legacy coarse flags, read-only: they no longer authorize anything (decisions are per purpose). */
 export type Consents = { camera?: boolean; microphone?: boolean; meta_data?: boolean; version?: string; granted_at?: string; granted_by?: string };
+export type SubjectStatus = "pending_confirmation" | "self" | "pending_consent" | "subject_linked" | "requires_legal_review";
+export type Purpose = { id: string; to: "local" | "meta" | "aingel"; title: string; detail: string };
+export type PurposeStatus = "granted" | "declined" | "revoked" | "pending";
+export type Purposes = { version: string; terms_version: string; credits_notice: string; purposes: Purpose[] };
+/** GET profiles/<id>/consent/: only the person (is_subject) decides, purpose by purpose. */
+export type ConsentState = {
+  version: string;
+  subject_status: SubjectStatus;
+  is_subject: boolean;
+  subject_adult: boolean;
+  purposes: (Purpose & { status: PurposeStatus })[];
+  credits_notice: string;
+  can_confirm?: boolean;
+  /** Moves on every decline or revocation (care.consent): open captures compare it and stop. */
+  epoch?: number;
+};
 export type Routine = {
   id: string;
   category: string;

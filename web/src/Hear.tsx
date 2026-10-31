@@ -6,6 +6,7 @@ import SignClips from "./SignClips";
 import AingelOrb from "./components/aingel/AingelOrb";
 import { analyserLevel } from "./components/aingel/useAudioLevel";
 import PrivateMediaConsent, { audioTestFields } from "./components/PrivateMediaConsent";
+import { stopsCapture, useConsentWatch } from "./consentWatch";
 
 export default function Hear({
   profile,
@@ -16,9 +17,8 @@ export default function Hear({
 }) {
   const { value: communication } = useCommunication(profile.id);
   const [privateTest, setPrivateTest] = useState(false);
-  const [syntheticTest, setSyntheticTest] = useState(false);
   const es = profile.locale.toLowerCase().startsWith("es");
-  useEffect(() => { setPrivateTest(false); setSyntheticTest(false); }, [profile.id]);
+  useEffect(() => { setPrivateTest(false); }, [profile.id]);
   const [status, setStatus] = useState<
       "idle" | "connecting" | "recording" | "finishing"
     >("idle"),
@@ -53,10 +53,26 @@ export default function Hear({
     },
     [],
   );
+  // A revocation (or two consent checks that cannot be made) ends captions at once: microphone tracks, audio
+  // processing and the socket are released, and nothing more is shown.
+  const revoke = (message: string) => {
+    generation.current++;
+    cleanup();
+    socket.current?.close();
+    setStatus("idle");
+    setError(message);
+  };
+  const revokedText = es ? "Se retiró una autorización: los subtítulos se detuvieron y el micrófono se apagó." : "An authorization was withdrawn: captions stopped and the microphone was turned off.";
+  const consent = useConsentWatch(profile.id, status !== "idle", (change) => {
+    if ((change.microphone || change.epoch || change.unverified) && status !== "idle") revoke(revokedText);
+  });
   const start = async () => {
-    const testFields = audioTestFields(profile, privateTest, syntheticTest);
+    if (!(await consent.allowed("microphone"))) {
+      setError(es ? "La persona no ha autorizado el uso del micrófono en este perfil. Puede hacerlo en Autorizaciones." : "The person has not authorized using the microphone for this profile. They can do it in Authorizations.");
+      return;
+    }
+    const testFields = audioTestFields(profile, privateTest);
     setPrivateTest(false);
-    setSyntheticTest(false);
     const current = ++generation.current;
     setError("");
     setTurns([]);
@@ -170,6 +186,8 @@ export default function Hear({
           });
         }
         if (message.type === "error") {
+          // The server ended captions because an authorization changed: say so, and keep the microphone off.
+          if (stopsCapture(String(message.code ?? ""))) { revoke(revokedText); return; }
           setError(t("hearError"));
           cleanup();
         }
@@ -241,12 +259,9 @@ export default function Hear({
         />
       </section>
       <section className="panel">
-        <PrivateMediaConsent profile={profile} kind="audio" checked={privateTest} disabled={status !== "idle"} onChange={(checked) => { setPrivateTest(checked); if (checked) setSyntheticTest(false); }} />
-        <label className="consent-row">
-          <input type="checkbox" checked={syntheticTest} disabled={status !== "idle"} onChange={(e) => { setSyntheticTest(e.target.checked); if (e.target.checked) setPrivateTest(false); }} />
-          <span>{es ? "Prueba sintética: confirmo que reproduciré solo voz sintética, sin información personal o de salud, y autorizo su envío a Meta." : "Synthetic test: I confirm I will play only synthetic speech without personal or health information and authorize sending it to Meta."}</span>
-        </label>
-        <p className="hint">{es ? "La declaración no verifica el contenido automáticamente y se usa solo para esta sesión." : "This declaration does not automatically verify the content and applies only to this session."}</p>
+        <PrivateMediaConsent profile={profile} kind="audio" checked={privateTest} disabled={status !== "idle"} onChange={setPrivateTest} />
+        {/* There is no synthetic captions test: live microphone audio could be anyone's (assistance.synthetic). */}
+        <p className="hint">{es ? "Los subtítulos en vivo envían el audio del micrófono a Meta solo con la autorización «Enviar voz a Meta» de la persona." : "Live captions send microphone audio to Meta only with the person's «Send voice to Meta» authorization."}</p>
         <div className="hear-orb"><AingelOrb state={status === "recording" ? "listening" : status === "connecting" || status === "finishing" ? "thinking" : error ? "retrying" : "idle"} audioLevel={micLevel} reducedMotion={profile.preferences.reduced_motion} size={200} /></div>
         <div className="actions">
           <button

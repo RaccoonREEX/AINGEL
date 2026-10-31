@@ -7,6 +7,8 @@ import { HandIcon } from "../components/aingel/HandIcon";
 import { BOARD, GLOSS_VOCABULARY, PICTOGRAM, buildSentence, glossSeq, signName, type Built, type SignId } from "../components/aingel/signLexicon";
 import { api } from "../api";
 import { useSpeechInput, type SpeechOutcome } from "../components/aingel/useSpeechInput";
+import BrowserSpeechConsent, { BrowserSpeechRevoke, micPrivacyLine } from "../components/BrowserSpeechConsent";
+import { useConsentWatch } from "../consentWatch";
 import { useSpeechSynthesisLevel } from "../components/aingel/useOutputAudioLevel";
 import { useCamera } from "../components/aingel/useCamera";
 import { useCommunication } from "../Communication";
@@ -35,7 +37,7 @@ const EXAMPLES = ["Mañana quiero ir al parque con mi hija", "¿Tienes hambre?",
  * rest is fingerspelled and articles are dropped. Signs → voice / text: no automatic recognition exists yet,
  * so the signer builds the message on a pictogram board and AINGEL says it or shows it.
  */
-export default function SignTranslator({ profile, locale, onBack }: WithProfile & { onBack: () => void }) {
+export default function SignTranslator({ profile, locale, speech: speechConsent, onBack }: WithProfile & { onBack: () => void }) {
   const es = locale === "es-EC";
   const L = (a: string, b: string) => (es ? a : b);
   const name = (id: SignId) => signName(id, es);
@@ -43,9 +45,22 @@ export default function SignTranslator({ profile, locale, onBack }: WithProfile 
   const label = (id: SignId) => { const n = name(id).replace(/[¿?]/g, ""); return n.charAt(0).toUpperCase() + n.slice(1); };
   const mobile = useMediaQuery("(max-width: 760px)");
   const { value: communication } = useCommunication(profile.id);
-  const speech = useSpeechInput(profile.locale);
+  const speech = useSpeechInput(profile.locale, speechConsent);
+  const [askSpeech, setAskSpeech] = useState(false);
   const tts = useSpeechSynthesisLevel(profile.locale, communication?.pace === "slow" ? 0.8 : 1);
   const camera = useCamera();
+  const [consentNote, setConsentNote] = useState("");
+  // The person's consent: checked fresh before opening, re-read while open; a revocation stops what it covers.
+  const consent = useConsentWatch(profile.id, camera.active || speech.listening, (change) => {
+    if (change.camera || change.unverified) camera.stop();
+    if (change.microphone || change.unverified) speech.cancel();
+    setConsentNote(L("Se retiró una autorización: AINGEL detuvo la cámara o el micrófono.", "An authorization was withdrawn: AINGEL stopped the camera or microphone."));
+  });
+  const openCamera = async () => {
+    setConsentNote("");
+    if (!(await consent.allowed("camera"))) { setConsentNote(L("La persona no ha autorizado el uso de la cámara en este perfil.", "The person has not authorized using the camera for this profile.")); return; }
+    await camera.start("user");
+  };
   const [mode, setMode] = useState<Mode>("voice-to-sign");
   const [menu, setMenu] = useState(false);
   const [seq, setSeq] = useState<SignId[]>([]);
@@ -112,7 +127,10 @@ export default function SignTranslator({ profile, locale, onBack }: WithProfile 
   const listen = async () => {
     if (speech.listening) { speech.finish(); return; }
     latest.current = ""; setSeq([]); setBuilt([]); setByMeaning(false); setResult(""); setHeard(""); tts.stop();
+    setConsentNote("");
+    if (!(await consent.allowed("microphone"))) { setConsentNote(L("La persona no ha autorizado el uso del micrófono en este perfil.", "The person has not authorized using the microphone for this profile.")); return; }
     const started = await speech.start(onHeard);
+    if (started === "consent") { setAskSpeech(true); return; }
     if (started) setOrb("listening");
     else if (started === false) { setResult("unavailable"); settle("retrying", 2000); }
   };
@@ -156,6 +174,7 @@ export default function SignTranslator({ profile, locale, onBack }: WithProfile 
         <h1><span className="signs-hand"><HandIcon size={26} color="#092E66" /></span>{L("Traductor de señas", "Sign translator")}</h1>
       </header>
 
+      {consentNote && <p className="home-notice" role="alert">{consentNote}</p>}
       <section className="signs-stage" aria-live="polite">
         <div className="sign-avatar" style={{ width: W, height: H }}>
           <div className={`orb-window${seeing ? " is-vision" : ""}`} style={{ width: S, height: S, left: (W - S) / 2, top: cy - S / 2 }}>
@@ -206,7 +225,9 @@ export default function SignTranslator({ profile, locale, onBack }: WithProfile 
           <button type="button" className="mic-btn mic-btn--lg" onClick={() => void listen()} aria-label={speech.listening ? L("Toca para terminar", "Tap to finish") : L("Toca para hablar", "Tap to talk")}>
             {speech.listening ? <span className="mic-stop" /> : <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0" /><path d="M12 17.5V21" /></svg>}
           </button>
-          {speech.listening && <span className="mic-privacy">{L("Micrófono activo. El audio no se guarda.", "Microphone on. Audio is not stored.")}</span>}
+          {speech.listening && <span className="mic-privacy">{micPrivacyLine(es, speech.place)}</span>}
+          {askSpeech && <BrowserSpeechConsent es={es} onAccept={() => void speech.accept(true).then((ok) => { setAskSpeech(false); if (ok) void listen(); })} onDecline={() => setAskSpeech(false)} />}
+          {speech.accepted && speech.place === "browser_service" && !speech.listening && <BrowserSpeechRevoke es={es} onRevoke={() => void speech.accept(false)} />}
           {heard && <p className="heard"><span className="chip">{L("Escuché", "I heard")}</span> {heard}</p>}
         </section>
       )}
@@ -235,7 +256,7 @@ export default function SignTranslator({ profile, locale, onBack }: WithProfile 
 
       {!signsOut && (
         <section className="signs-panel signs-panel--board">
-          <button type="button" className={`btn btn-pill ${camera.active ? "btn-primary" : "btn-outline"}`} aria-pressed={camera.active} onClick={() => void (camera.active ? camera.stop() : camera.start("user"))}>
+          <button type="button" className={`btn btn-pill ${camera.active ? "btn-primary" : "btn-outline"}`} aria-pressed={camera.active} onClick={() => void (camera.active ? camera.stop() : openCamera())}>
             {camera.active ? L("Cerrar cámara", "Close camera") : L("Abrir cámara para signar", "Open camera to sign")}
           </button>
           {camera.active && <span className="mic-privacy">{L("Cámara activa · la imagen no se guarda ni se envía", "Camera on · the image is not stored or sent")}</span>}

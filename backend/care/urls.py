@@ -1,15 +1,18 @@
 from django.urls import path
 
-from . import auth, views, mfa, faces, knowledge, signs
+from . import auth, consent_views, views, mfa, faces, knowledge, signs
 from assistance.companion import chat
 from assistance.conversation import conversation
 from assistance.gloss import gloss
+from assistance.video import ClipSessionEndView, ClipView
 
 urlpatterns = [
     path("auth/session/", auth.session),
     path("auth/login/", auth.authenticate_user),
     path("auth/register/", auth.authenticate_user, {"register": True}),
     path("auth/logout/", auth.sign_out),
+    path("auth/adult/", auth.declare),
+    path("auth/speech-service/", auth.speech_service),
     path("auth/mfa/verify/", mfa.verify_challenge),
     path("auth/mfa/status/", mfa.mfa_status),
     path("auth/mfa/setup/", mfa.mfa_setup),
@@ -22,6 +25,14 @@ urlpatterns = [
     path("profiles/<uuid:profile_id>/resources/search/", knowledge.resources),
     path("profiles/<uuid:profile_id>/companion/chat/", chat),
     path("profiles/<uuid:profile_id>/conversation/", conversation),
+    path("profiles/<uuid:profile_id>/consent/", consent_views.consent),
+    path("profiles/<uuid:profile_id>/consent/invite/", consent_views.invite),
+    path("profiles/<uuid:profile_id>/consent/legal-review/", consent_views.legal_review),
+    path("profiles/<uuid:profile_id>/consent/confirm-subject/", consent_views.confirm),
+    path("consent/redeem/", consent_views.redeem),
+    path("vision/clip/", ClipView.as_view()),
+    path("vision/clip/end/", ClipSessionEndView.as_view()),
+    path("consent/purposes/", consent_views.purposes),
     path("profiles/<uuid:profile_id>/signs/catalog/", signs.catalog),
     path("profiles/<uuid:profile_id>/signs/lookup/", signs.lookup),
     path("profiles/<uuid:profile_id>/signs/gloss/", gloss),

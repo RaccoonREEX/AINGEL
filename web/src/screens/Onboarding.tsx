@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import Consents from "../components/Consents";
-import type { Consents as ConsentValues } from "../types";
+import { RedeemCode, SubjectCode } from "../components/ConsentPanel";
+import type { Purposes } from "../types";
 import { api } from "../api";
 import Field from "../components/Field";
 import AingelOrb, { type OrbState } from "../components/aingel/AingelOrb";
@@ -86,11 +87,17 @@ function presets(c: Conds, signs: Signs, signLang: SignLang, reads: Reads, es: b
 }
 
 /** 2c (web) and 2e-2h (phone): person, conditions with level, communication, activation. */
-export default function Onboarding(props: Context & { onCreated: (id: string) => Promise<void>; who: Who; ownName: string; username?: string; onLogout: () => void }) {
+export default function Onboarding(props: Context & { onCreated: (id: string) => Promise<void>; onRedeemed: (id: string) => Promise<void>; who: Who; ownName: string; username?: string; onLogout: () => void }) {
   const { busy, run, onCreated } = props;
   const es = props.locale === "es-EC";
   const L = (a: string, b: string) => (es ? a : b);
   const [step, setStep] = useState(1);
+  // «Para mí» / «para otra persona» decides who may consent: only the person, never whoever sets it up.
+  const [who, setWho] = useState<Who>(props.who);
+  const [subjectAdult, setSubjectAdult] = useState(false);
+  const [purposes, setPurposes] = useState<Purposes | null>(); // undefined while loading, null if it failed
+  const [grants, setGrants] = useState<string[]>([]);
+  const [showCode, setShowCode] = useState(false);
   const [name, setName] = useState(props.who === "me" ? props.ownName : "");
   const [preferred, setPreferred] = useState(props.who === "me" ? props.ownName.split(" ")[0] || "" : "");
   const [relationship, setRelationship] = useState("");
@@ -105,11 +112,25 @@ export default function Onboarding(props: Context & { onCreated: (id: string) =>
   const [created, setCreated] = useState<string | null>(null);
   const [act, setAct] = useState<OrbState>("idle");
   const [showInvite, setShowInvite] = useState(false);
-  // Authorizations are given here, once; the apps do not ask again per action.
-  const [consents, setConsents] = useState<ConsentValues>({ camera: false, microphone: false, meta_data: false });
   const timers = useRef<number[]>([]);
   const savedId = useRef<string | null>(null);
+  const main = useRef<HTMLElement>(null), shownStep = useRef("");
   useEffect(() => () => timers.current.forEach(clearTimeout), []);
+  // Purpose texts in the person's language (same wording the server keeps); a failure leaves nothing granted.
+  useEffect(() => {
+    if (who !== "me") return;
+    api<Purposes>(`consent/purposes/?locale=${profileLocale}`).then(setPurposes, () => setPurposes(null));
+  }, [who, profileLocale]);
+  // Screen readers land on the new step's title.
+  useEffect(() => {
+    const key = `${step}:${created}`;
+    if (shownStep.current && shownStep.current !== key) {
+      const h = main.current?.querySelector("h2");
+      h?.setAttribute("tabindex", "-1");
+      h?.focus();
+    }
+    shownStep.current = key;
+  }, [step, created]);
   const reduced = conds.autism.on;
   const mobile = useMediaQuery("(max-width: 760px)");
   const shown = preferred.trim() || name.trim().split(" ")[0] || L("la persona", "them");
@@ -119,6 +140,7 @@ export default function Onboarding(props: Context & { onCreated: (id: string) =>
   const goto = (n: number) => {
     if (n > 1 && !name.trim()) { setStep(1); setStepError(L("Escribe el nombre de la persona.", "Enter the person's name.")); return; }
     if (n > 1 && !timezoneOk()) { setStep(1); setStepError(L("Ingresa una zona horaria válida, por ejemplo America/Guayaquil.", "Enter a valid time zone, such as America/Guayaquil.")); return; }
+    if (n > 1 && who === "other" && !subjectAdult) { setStep(1); setStepError(L("Confirma que la persona tiene 18 años o más. AINGEL no admite perfiles de menores.", "Confirm that the person is 18 or older. AINGEL does not support profiles for minors.")); return; }
     setStepError("");
     setStep(Math.max(1, Math.min(4, n)));
   };
@@ -135,13 +157,15 @@ export default function Onboarding(props: Context & { onCreated: (id: string) =>
     const pending = list.filter((x) => !SUPPORTED.has(x.k)).map((x) => `${x.t} (${x.k})`);
     const notes = [
       condLines.length ? `${L("Apoyos indicados", "Support needs")}: ${condLines.join("; ")}.` : "",
-      props.who === "other" && relationship.trim() ? `${L("Relación de quien configura", "Relationship of the person setting up")}: ${relationship.trim()}.` : "",
+      who === "other" && relationship.trim() ? `${L("Relación de quien configura", "Relationship of the person setting up")}: ${relationship.trim()}.` : "",
       signs === "yes" ? `${L("Lectura", "Reading")}: ${reads === "yes" ? L("lee bien", "reads well") : reads === "difficulty" ? L("con dificultad", "with difficulty") : L("no sabe leer", "does not read")}.` : "",
       pending.length ? `${L("Configuración predefinida pendiente de soporte", "Preset items not yet supported")}: ${pending.join("; ")}.` : "",
       L("Esta información no es un diagnóstico.", "This information is not a diagnosis."),
     ].filter(Boolean).join("\n");
     // A retry after a failed communication save must not create a second profile.
-    const id = savedId.current ?? (savedId.current = (await api<Profile>("profiles/", "POST", { display_name: name.trim(), locale: profileLocale, timezone: timezone.trim(), support_notes: notes, preferences, consents: { camera: !!consents.camera, microphone: !!consents.microphone, meta_data: !!consents.meta_data } })).id);
+    // Only the person grants: for another adult nothing is granted here; they decide later with a code.
+    const subject = who === "me" ? { for_self: true, grants } : { for_self: false, subject_adult: subjectAdult };
+    const id = savedId.current ?? (savedId.current = (await api<Profile>("profiles/", "POST", { display_name: name.trim(), locale: profileLocale, timezone: timezone.trim(), support_notes: notes, preferences, ...subject })).id);
     const communication = await api<Record<string, unknown>>(`profiles/${id}/communication/`);
     await api(`profiles/${id}/communication/`, "PATCH", {
       ...communication,
@@ -181,18 +205,38 @@ export default function Onboarding(props: Context & { onCreated: (id: string) =>
         <span className="progress"><span style={{ width: `${step * 25}%` }} /></span>
       </div>
       <div className="setup-body">
-        <main id="main" className="setup-main">
+        <main id="main" className="setup-main" ref={main}>
           {step === 1 && (
             <div className="setup-section setup-narrow">
               <div className="setup-head">
-                <span className="overline">{props.who === "me" ? L("TUS DATOS", "YOUR DETAILS") : L("PERSONA A LA QUE CUIDAS", "PERSON YOU CARE FOR")}</span>
-                <h2>{L("¿Para quién es este AINGEL?", "Who is this AINGEL for?")}</h2>
+                <span className="overline">{who === "me" ? L("TUS DATOS", "YOUR DETAILS") : L("PERSONA A LA QUE CUIDAS", "PERSON YOU CARE FOR")}</span>
+                <h2 id="setup-who">{L("¿Para quién es este AINGEL?", "Who is this AINGEL for?")}</h2>
                 <p>{L("Estos datos ayudan a AINGEL a dirigirse a la persona por su nombre y en su idioma.", "These details help AINGEL address the person by name and in their language.")}</p>
               </div>
+              <div className="radio-grid" role="radiogroup" aria-labelledby="setup-who">
+                {([["me", L("Para mí", "For me"), L("Yo usaré AINGEL y decido mis permisos", "I will use AINGEL and decide my permissions")],
+                  ["other", L("Para otra persona", "For someone else"), L("La persona decide sus permisos desde su cuenta", "They decide their permissions from their own account")]] as [Who, string, string][]).map(([value, title, text]) => (
+                  <label key={value} className={`radio-card${who === value ? " is-on" : ""}`}>
+                    <input type="radio" name="setup-who" className="sr-only" checked={who === value} onChange={() => setWho(value)} />
+                    <span className="radio-dot" aria-hidden="true" />
+                    <span className="radio-text"><b>{title}</b><small>{text}</small></span>
+                  </label>
+                ))}
+              </div>
+              {who === "other" && (
+                <div className="subject-adult">
+                  <label className="consent-row">
+                    <input type="checkbox" checked={subjectAdult} onChange={(e) => setSubjectAdult(e.target.checked)} aria-describedby="subject-adult-note" />
+                    <span><b>{L("La persona tiene 18 años o más", "The person is 18 or older")}</b></span>
+                  </label>
+                  <small id="subject-adult-note">{L("AINGEL no admite menores. La persona aceptará o rechazará cada permiso desde su propia cuenta; ayudarle a usar una pantalla no es decidir por ella.",
+                    "AINGEL does not support minors. The person will accept or decline each permission from their own account; helping them use a screen is not deciding for them.")}</small>
+                </div>
+              )}
               <div className="setup-grid">
                 <label className="input-field"><span>{L("Nombre de la persona", "Person's name")}</span><input value={name} onChange={(e) => setName(e.target.value)} maxLength={100} required /></label>
                 <label className="input-field"><span>{L("Nombre preferido", "Preferred name")}</span><input value={preferred} onChange={(e) => setPreferred(e.target.value)} maxLength={100} /></label>
-                {props.who === "other" && <label className="input-field"><span>{L("Relación con la persona", "Relationship to the person")}</span><input value={relationship} onChange={(e) => setRelationship(e.target.value)} maxLength={60} placeholder={L("Hija, hijo, cuidador…", "Daughter, son, carer…")} /></label>}
+                {who === "other" && <label className="input-field"><span>{L("Relación con la persona", "Relationship to the person")}</span><input value={relationship} onChange={(e) => setRelationship(e.target.value)} maxLength={60} placeholder={L("Hija, hijo, cuidador…", "Daughter, son, carer…")} /></label>}
                 <label className="input-field"><span>{L("Idioma preferido de AINGEL", "AINGEL's preferred language")}</span><select value={profileLocale} onChange={(e) => setProfileLocale(e.target.value as typeof profileLocale)}><option value="es-EC">Español (Ecuador)</option><option value="en-US">English (US)</option></select></label>
                 <label className="input-field"><span>{L("Zona horaria", "Time zone")}</span><input value={timezone} onChange={(e) => setTimezone(e.target.value)} maxLength={80} list="aingel-zones" /></label>
                 <datalist id="aingel-zones"><option value="America/Guayaquil" /><option value="America/Bogota" /><option value="America/Lima" /><option value="America/Mexico_City" /><option value="America/New_York" /><option value="Europe/Madrid" /></datalist>
@@ -200,6 +244,8 @@ export default function Onboarding(props: Context & { onCreated: (id: string) =>
               {stepError && <p className="form-error" role="alert">{stepError}</p>}
               <button type="button" className="auth-link" onClick={() => setShowInvite(!showInvite)}>{L("¿Recibiste un código de invitación? Únete a un AINGEL existente", "Got an invite code? Join an existing AINGEL")}</button>
               {showInvite && <div className="invite-box"><AcceptInvite {...props} onAccepted={onCreated} /></div>}
+              <button type="button" className="auth-link" aria-expanded={showCode} onClick={() => setShowCode(!showCode)}>{L("Tengo un código de AINGEL", "I have an AINGEL code")}</button>
+              {showCode && <div className="invite-box"><RedeemCode {...props} onRedeemed={props.onRedeemed} /></div>}
             </div>
           )}
           {step === 2 && (
@@ -254,7 +300,13 @@ export default function Onboarding(props: Context & { onCreated: (id: string) =>
               <AingelOrb size={mobile ? 270 : 340} state={act} configured={done} reducedMotion={reduced} />
               <h2 role="status" aria-live="polite">{done ? L("Tu AINGEL está listo", "Your AINGEL is ready") : L("Todo listo para activar", "Ready to activate")}</h2>
               <p>{done ? greet : L(`AINGEL aplicará la configuración predefinida para ${shown}. Podrás cambiarla en Personalizar.`, `AINGEL will apply the preset for ${shown}. You can change it in Personalize.`)}</p>
-              {!done && <Consents value={consents} onChange={setConsents} es={es} disabled={busy} />}
+              {!done && who === "me" && (purposes
+                ? <Consents purposes={purposes.purposes} notice={purposes.credits_notice} value={grants} onChange={setGrants} lang={profileLocale} es={es} disabled={busy} />
+                : purposes === undefined ? <p className="hint" role="status">{props.t("loading")}</p>
+                : <p className="hint">{L("No se pudieron cargar los permisos. Puedes activar AINGEL sin permitir nada y decidir después en Personalizar.", "Permissions could not be loaded. You can activate AINGEL without allowing anything and decide later in Personalize.")}</p>)}
+              {!done && who === "other" && <p className="callout subject-note">{L(`No decides por ${shown}: ${shown} aceptará o rechazará cada permiso desde su propia cuenta de AINGEL, con un código que generarás después de activar. Ayudarle a usar una pantalla no es decidir por ella. Hasta entonces no se activa nada que dependa de un permiso.`,
+                `You don't decide for ${shown}: they will accept or decline each permission from their own AINGEL account, with a code you generate after activating. Helping them use a screen is not deciding for them. Until then nothing that depends on a permission is enabled.`)}</p>}
+              {done && who === "other" && <SubjectCode {...props} profileId={created!} name={shown} />}
               {props.busy && <p className="hint" role="status">{props.t("working")}</p>}
               <div className="setup-activate-actions">
                 {done

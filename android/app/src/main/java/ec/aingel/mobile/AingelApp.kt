@@ -12,6 +12,12 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.selectableGroup
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -92,6 +98,8 @@ private val Muted = Color(0xFF5A6780)
     SideEffect { Ui.highContrast(contrast) }
     // A new session (or the end of setup) always starts on the assistant, not on the last tab used.
     LaunchedEffect(s.username) { if (s.username == null) screen = "home" }
+    // A code just linked this account to a profile set up for the person: open their authorizations.
+    LaunchedEffect(s.openConsent) { if (s.openConsent) { model.consentOpened(); screen = "consent" } }
     fun navigate(target: String) { if (screen != target) { if (target == "signs") signsFrom = screen; model.resetScreen(); focus = false; screen = target } }
     BackHandler(s.username != null && s.profile != null && screen != "home") { navigate(if (screen in setOf("today", "remember", "circle", "more")) "home" else if (screen == "signs") signsFrom else "more") }
     MaterialTheme(colorScheme = lightColorScheme(primary = Ui.Navy, onPrimary = Color.White, background = Color.White,
@@ -111,6 +119,7 @@ private val Muted = Color(0xFF5A6780)
                 Box(Modifier.fillMaxSize().padding(padding)) {
                     when {
                         s.username == null -> AccessFlow(model, s)
+                        !s.adultDeclared -> AdultDeclaration(model, s)  // accounts from before the age policy
                         screen == "security" -> Legacy(R.string.security, s, { navigate(if (s.profile == null) "home" else "more") }) { SecurityScreen(model, s) }
                         s.profile == null -> SetupFlow(model, s)
                         else -> key(screen, s.profile!!.optString("id")) {
@@ -120,6 +129,7 @@ private val Muted = Color(0xFF5A6780)
                                 "today" -> TodayScreen(model, s)
                                 "more" -> MoreScreen(model, s, ::navigate)
                                 "sound" -> SoundSettingsScreen(model, s) { navigate("more") }
+                                "consent" -> ConsentScreen(model, s) { navigate("more") }
                                 "remember" -> Legacy(R.string.nav_remember, s, null) { MemoryScreen(model, s) }
                                 "circle" -> Legacy(R.string.circle, s, null) {
                                     CircleScreen(model, s)
@@ -188,7 +198,22 @@ internal fun errorMessage(error: String): Int = when (error) {
     "camera_unavailable", "microphone_unavailable" -> R.string.device_error
     "private_test_consent_required" -> R.string.private_test_missing_consent
     "privacy_review_required" -> R.string.private_test_server_denied
-    else -> R.string.failed
+    "adult_declaration_required" -> R.string.err_adult_declaration_required
+    "consent_subject_only" -> R.string.err_consent_subject_only
+    "legal_review_required" -> R.string.err_legal_review_required
+    "consent_code_invalid" -> R.string.err_consent_code_invalid
+    "consent_not_pending" -> R.string.err_consent_not_pending
+    "consent_changed" -> R.string.err_consent_changed
+    // The person's consent, not Android's permission (R.string.permissions).
+    "camera_consent_missing" -> R.string.capture_camera_not_authorized
+    "microphone_consent_missing" -> R.string.capture_microphone_not_authorized
+    "camera_consent_stopped", "camera_consent_revoked" -> R.string.capture_camera_stopped
+    "microphone_consent_stopped" -> R.string.capture_microphone_stopped
+    "subject_minor_not_supported" -> R.string.err_subject_minor_not_supported
+    "subject_confirmation_required" -> R.string.err_subject_confirmation_required
+    "subject_already_confirmed" -> R.string.err_subject_already_confirmed
+    // Network and server failures (NetworkErrors.kt): specific messages instead of a generic «failed».
+    else -> networkErrorMessage(error) ?: R.string.failed
 }
 
 @Composable private fun AcceptInvitation(model: AingelViewModel, busy: Boolean) {
@@ -349,6 +374,11 @@ internal fun verifiedMedlinePlusUrl(raw: String): String? {
         val updated = JSONObject(profile.optJSONObject("preferences")?.toString() ?: "{}").put("large_text", large).put("high_contrast", contrast).put("voice_output", voice)
         model.savePreferences(name, allergies, notes, updated)
     }
+    Text(stringResource(R.string.synthetic_conversation_title))
+    Text(stringResource(R.string.synthetic_conversation_explanation))
+    Check(R.string.synthetic_conversation_enable, s.syntheticConversationProfileId == profile.optString("id")) {
+        model.setSyntheticConversation(it)
+    }
     if (profile.optString("role") == "owner") {
         val consents = profile.optJSONObject("consents")
         var camera by remember(profile.optString("id"), consents?.toString()) { mutableStateOf(consents?.optBoolean("camera") == true) }
@@ -362,6 +392,88 @@ internal fun verifiedMedlinePlusUrl(raw: String): String? {
         Action(R.string.private_test_save_consent, !s.busy) { model.saveMediaConsents(camera, microphone, meta) }
         Text(stringResource(R.string.private_test_declaration))
         Check(R.string.private_test_enable, s.privateTestProfileId == profile.optString("id")) { model.setPrivateTest(it) }
+    }
+    CommunicationPrefs(model, s)
+}
+
+private fun JSONObject.choice(key: String, options: Set<String>, default: String) = optString(key).takeIf { it in options } ?: default
+private val PRIORITY = listOf("visual" to R.string.cp_prio_visual, "auditory" to R.string.cp_prio_auditory, "cognitive" to R.string.cp_prio_cognitive,
+    "communication" to R.string.cp_prio_communication, "none" to R.string.cp_prio_none)
+private val DETAIL = listOf("brief" to R.string.cp_detail_brief, "detailed" to R.string.cp_detail_detailed)
+private val SPONTANEOUS = listOf("few" to R.string.cp_spont_few, "normal" to R.string.cp_spont_normal, "many" to R.string.cp_spont_many)
+private val YES_NO = listOf("yes" to R.string.cp_yes, "no" to R.string.cp_no)
+
+/**
+ * «Cómo quiere comunicarse»: the four style preferences of backend care.serializers.CommunicationSerializer.
+ * Editable by whoever may configure the profile (owner, the person, caregivers with configure); the server checks it too.
+ * Saved with a partial PATCH straight to the API (the ViewModel has no communication save yet), so only these fields change.
+ */
+@Composable private fun CommunicationPrefs(model: AingelViewModel, s: MobileState) {
+    val profile = s.profile ?: return
+    val current = s.communication ?: return  // still loading
+    val canEdit = profile.optJSONObject("permissions")?.optBoolean("configure") == true
+    val scope = rememberCoroutineScope()
+    var base by remember(profile.optString("id"), current.toString()) { mutableStateOf(current) }
+    var priority by remember(base) { mutableStateOf(base.choice("priority_support", PRIORITY.map { it.first }.toSet(), "none")) }
+    var detail by remember(base) { mutableStateOf(base.choice("detail", setOf("brief", "detailed"), "brief")) }
+    var spontaneous by remember(base) { mutableStateOf(base.choice("spontaneous", setOf("few", "normal", "many"), "normal")) }
+    var repeat by remember(base) { mutableStateOf(base.choice("repeat_important", setOf("yes", "no"), "no")) }
+    var saving by remember { mutableStateOf(false) }
+    var saved by remember { mutableStateOf(false) }
+    val editable = canEdit && !saving && !s.busy
+    fun edit(change: () -> Unit) { change(); saved = false }
+    HorizontalDivider(color = Ui.Divider)
+    Text(stringResource(R.string.cp_title), style = MaterialTheme.typography.titleLarge, color = Ui.Navy, modifier = Modifier.semantics { heading() })
+    Text(stringResource(R.string.cp_intro), color = Muted)
+    if (!canEdit) Text(stringResource(R.string.cp_read_only), color = Muted)
+    PrefGroup(R.string.cp_priority, R.string.cp_priority_help, PRIORITY, priority, editable, R.string.cp_priority_meta) { edit { priority = it } }
+    PrefGroup(R.string.cp_detail, R.string.cp_detail_help, DETAIL, detail, editable) { edit { detail = it } }
+    PrefGroup(R.string.cp_spontaneous, R.string.cp_spontaneous_help, SPONTANEOUS, spontaneous, editable) { edit { spontaneous = it } }
+    PrefGroup(R.string.cp_repeat, R.string.cp_repeat_help, YES_NO, repeat, editable) { edit { repeat = it } }
+    // A.3 transparency: what may accompany Meta requests and what stays in AINGEL (backend assistance.persona).
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Ui.Selected).padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(stringResource(R.string.cp_legend_title), fontWeight = FontWeight.SemiBold, color = Ui.Navy, modifier = Modifier.semantics { heading() })
+        Text("• " + stringResource(R.string.cp_legend_style), style = MaterialTheme.typography.bodyMedium)
+        Text("• " + stringResource(R.string.cp_legend_priority), style = MaterialTheme.typography.bodyMedium)
+        Text("• " + stringResource(R.string.cp_legend_local), style = MaterialTheme.typography.bodyMedium)
+    }
+    if (canEdit) Action(R.string.cp_save, editable) {
+        val patch = JSONObject().put("priority_support", priority).put("detail", detail).put("spontaneous", spontaneous).put("repeat_important", repeat)
+        saving = true; saved = false
+        scope.launch {
+            try { base = model.saveCommunication(patch); saved = true }
+            catch (failure: ApiFailure) { model.reportError(failure.code) }
+            catch (_: Exception) { model.reportError("request_invalid") }
+            finally { saving = false }
+        }
+    }
+    if (saved) Text(stringResource(R.string.cp_saved), color = Ui.Navy, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+}
+
+/** One labelled radio group of segmented choices (48 dp targets), at most three per row. */
+@Composable private fun PrefGroup(label: Int, help: Int, options: List<Pair<String, Int>>, value: String, enabled: Boolean, note: Int? = null, pick: (String) -> Unit) {
+    val title = stringResource(label)
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(title, fontWeight = FontWeight.SemiBold, color = Ui.Navy)
+        Column(Modifier.fillMaxWidth().semantics { contentDescription = title; selectableGroup() }, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            options.chunked(3).forEach { row ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    row.forEach { (key, res) ->
+                        val on = key == value
+                        Box(Modifier.weight(1f).heightIn(min = 48.dp).clip(RoundedCornerShape(12.dp)).background(if (on) Ui.Navy else Color.White)
+                            .border(1.5.dp, if (on) Ui.Navy else Ui.Control, RoundedCornerShape(12.dp))
+                            .selectable(on, enabled = enabled, role = Role.RadioButton) { pick(key) }.padding(horizontal = 6.dp, vertical = 8.dp),
+                            contentAlignment = Alignment.Center) {
+                            Text(stringResource(res), color = if (on) Color.White else Ui.Navy, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
+                                modifier = if (enabled || on) Modifier else Modifier.alpha(0.6f))
+                        }
+                    }
+                    if (options.size > 3) repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }  // keep widths equal across rows
+                }
+            }
+        }
+        Text(stringResource(help), color = Muted, style = MaterialTheme.typography.bodySmall)
+        if (note != null) Text(stringResource(note), style = MaterialTheme.typography.bodySmall)
     }
 }
 @Composable private fun CircleScreen(model: AingelViewModel, s: MobileState) {
@@ -391,10 +503,16 @@ internal fun verifiedMedlinePlusUrl(raw: String): String? {
         }
     }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { allowed -> if (allowed) camera = true else model.reportError("device_permission_denied") }
+    // The person's camera grant first (fresh), then Android's permission; a refusal seen later closes the camera.
+    RefreshConsentWhile(model, camera)
+    LaunchedEffect(s.consent) { if (camera && !mayStart(s.consent, Capture.CAMERA)) { camera = false; model.reportError("camera_consent_stopped") } }
     if (camera) CameraCapture(front, { model.setImage(it); camera = false }, { camera = false }, { camera = false; model.reportError("camera_unavailable") })
     else {
         Action(R.string.camera, !s.busy) {
-            if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) camera = true else permission.launch(Manifest.permission.CAMERA)
+            scope.launch {
+                if (!model.captureAllowed(Capture.CAMERA)) { model.reportError("camera_consent_missing"); return@launch }
+                if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) camera = true else permission.launch(Manifest.permission.CAMERA)
+            }
         }
         Action(R.string.gallery, !s.busy) { gallery.launch("image/*") }
     }
@@ -405,14 +523,20 @@ internal fun verifiedMedlinePlusUrl(raw: String): String? {
 }
 @Composable private fun SeeScreen(model: AingelViewModel, s: MobileState) {
     var objectName by remember { mutableStateOf("") }
-    // Real photos use the sign-up authorization; only the included shapes image is a synthetic test.
+    // Real photos need the person's own grants; the shapes preview stands for the server's synthetic fixture.
     val shapes = remember { syntheticPhoto() }
     val fixture = s.image?.contentEquals(shapes) == true
     Text(stringResource(if (s.privateTestProfileId != null) R.string.private_test_active else R.string.synthetic_only)); PhotoInput(model, s)
     Action(R.string.fixture, !s.busy) { model.setImage(shapes) }
     Action(R.string.describe, !s.busy && s.image != null) { model.analyze(fixture) }
-    Input(R.string.object_prompt, objectName, { objectName = it })
-    Action(R.string.locate, !s.busy && s.image != null && objectName.isNotBlank()) { model.analyze(fixture, objectName) }
+    if (fixture) {
+        // The synthetic test only offers the server's objects: nothing typed is sent.
+        Action(R.string.locate_red_circle, !s.busy) { model.analyze(true, "red_circle") }
+        Action(R.string.locate_blue_square, !s.busy) { model.analyze(true, "blue_square") }
+    } else {
+        Input(R.string.object_prompt, objectName, { objectName = it })
+        Action(R.string.locate, !s.busy && s.image != null && objectName.isNotBlank()) { model.analyze(false, objectName) }
+    }
     s.result?.let { result ->
         val description = result.optString("text")
         if (description.isNotBlank()) { Text(description); Action(R.string.read) { model.speak(description) } }
@@ -514,6 +638,7 @@ internal fun verifiedMedlinePlusUrl(raw: String): String? {
     val context = LocalContext.current
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { allowed -> if (allowed) model.startCaptions() else model.reportError("device_permission_denied") }
     DisposableEffect(Unit) { onDispose { model.stopCaptions() } }
+    RefreshConsentWhile(model, s.captionStatus != "idle")
     val language = when (s.communication?.optString("sign_language")) {
         "lsec" -> R.string.sign_lsec
         "asl" -> R.string.sign_asl

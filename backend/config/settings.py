@@ -15,6 +15,15 @@ if AINGEL_ENV not in {"local", "production"}:
     raise ImproperlyConfigured("AINGEL_ENV must be local or production")
 PRODUCTION = AINGEL_ENV == "production"
 
+# Shared provider-call admission limits. Zero deliberately disables all calls.
+try:
+    AINGEL_META_LIMIT_PER_MINUTE = int(os.environ.get("AINGEL_META_LIMIT_PER_MINUTE", "10"))
+    AINGEL_META_LIMIT_PER_DAY = int(os.environ.get("AINGEL_META_LIMIT_PER_DAY", "100"))
+    if not 0 <= AINGEL_META_LIMIT_PER_MINUTE <= 100000 or not 0 <= AINGEL_META_LIMIT_PER_DAY <= 100000:
+        raise ValueError
+except ValueError:
+    raise ImproperlyConfigured("Meta call limits must be integers between 0 and 100000") from None
+
 
 def required(name):
     value = os.environ.get(name, "").strip()
@@ -121,23 +130,31 @@ if PRODUCTION:
             "OPTIONS": {"sslmode": "verify-full", "sslrootcert": required("AINGEL_DB_SSLROOTCERT")},
         }
     }
-    redis_url = required("AINGEL_REDIS_URL")
-    try:
-        redis_parts = urlsplit(redis_url)
-        if redis_parts.scheme != "rediss" or not redis_parts.hostname or redis_parts.query or redis_parts.fragment:
-            raise ValueError
-        redis_parts.port  # Validate the optional port without leaking the URL.
-    except ValueError:
-        raise ImproperlyConfigured("AINGEL_REDIS_URL must be a TLS Redis URL without query options") from None
+    def redis_tls_url(name):
+        value = required(name)
+        try:
+            parts = urlsplit(value)
+            if parts.scheme != "rediss" or not parts.hostname or parts.query or parts.fragment:
+                raise ValueError
+            parts.port  # Validate without leaking the URL.
+        except ValueError:
+            raise ImproperlyConfigured(f"{name} must be a TLS Redis URL without query options") from None
+        return value
+
+    redis_url = redis_tls_url("AINGEL_REDIS_URL")
+    quota_redis_url = redis_tls_url("AINGEL_META_REDIS_URL")
+    if redis_url == quota_redis_url:
+        raise ImproperlyConfigured("Meta quota Redis must be separate from the ephemeral cache")
     # Use a Redis-specific CA rather than replacing the public trust store used for Meta.
     redis_ca = Path(required("AINGEL_REDIS_CA_CERT"))
     if not redis_ca.is_absolute():
         raise ImproperlyConfigured("AINGEL_REDIS_CA_CERT must be an absolute path")
     # URL query options override pool settings in redis-py, so queries are disallowed above.
-    CACHES = {"default": {
-        "BACKEND": "django.core.cache.backends.redis.RedisCache", "LOCATION": redis_url,
-        "OPTIONS": {"ssl_cert_reqs": "required", "ssl_check_hostname": True, "ssl_ca_certs": str(redis_ca)},
-    }}
+    redis_options = {"ssl_cert_reqs": "required", "ssl_check_hostname": True, "ssl_ca_certs": str(redis_ca)}
+    CACHES = {
+        "default": {"BACKEND": "django.core.cache.backends.redis.RedisCache", "LOCATION": redis_url, "OPTIONS": redis_options},
+        "meta_quota": {"BACKEND": "django.core.cache.backends.redis.RedisCache", "LOCATION": quota_redis_url, "OPTIONS": redis_options.copy()},
+    }
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 USE_TZ = True
@@ -160,6 +177,8 @@ REST_FRAMEWORK = {
         "chat": "6/min",
         "conversation": "12/min",
         "gloss": "30/min",
+        "consent_code": "10/hour",
+        "video": "30/min",  # experimental clips: one every ~4 s while watching  # one-time codes: creation and redemption attempts
     },
 }
 SESSION_COOKIE_HTTPONLY = True

@@ -70,8 +70,7 @@
     <string name="camera_active">Camera active. Capture is processed only when you press the button.</string>
     <string name="capture">Take photo</string>
     <string name="fixture">Load synthetic test image</string>
-    <string name="synthetic_only">Meta tests are limited to synthetic content. Do not send personal photos or voices.</string>
-    <string name="synthetic_confirm">I confirm this is synthetic content without personal data.</string>
+    <string name="synthetic_only">The shapes image is the server\'s synthetic test: the server\'s copy is sent, never a photo of yours. Real photos are sent only with your «Send photos to Meta» authorization.</string>
     <string name="describe">Describe scene</string>
     <string name="locate">Locate object</string>
     <string name="object_prompt">Object to locate, for example red circle</string>
@@ -82,7 +81,7 @@
     <string name="setup">Set up authenticator</string>
     <string name="close">Hide</string>
     <string name="recovery">Save these codes: they are shown only once.</string>
-    <string name="mic_intro">Test captions: the server sends audio to Meta and does not store it locally. Play synthetic speech only. The microphone stops when leaving this screen.</string>
+    <string name="mic_intro">Live captions: microphone audio is sent to Meta only with the person\'s «Send voice to Meta» authorization, and is not stored. There is no synthetic voice test. The microphone stops when leaving this screen.</string>
     <string name="start">Start test microphone</string>
     <string name="recording">Microphone active</string>
     <string name="connecting">Connecting…</string>
@@ -222,4 +221,6 @@
     <string name="setup_continue">Continue</string>
     <string name="setup_skip">Skip</string>
     <string name="setup_invited">Have an invitation?</string>
+    <string name="locate_red_circle">Find the red circle (test)</string>
+    <string name="locate_blue_square">Find the blue square (test)</string>
 </resources>

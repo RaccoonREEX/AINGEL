@@ -1,6 +1,8 @@
+import { speakLocally } from "./components/aingel/browserSpeech";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { WithProfile } from "./ui";
-import Auth, { Brand, type Who } from "./screens/Auth";
+import Auth, { AdultDeclaration, Brand, type Who } from "./screens/Auth";
+import { RedeemCode } from "./components/ConsentPanel";
 import Onboarding, { AcceptInvite } from "./screens/Onboarding";
 import Home from "./screens/Home";
 import SignTranslator from "./screens/SignTranslator";
@@ -12,7 +14,7 @@ import Memories from "./screens/Memories";
 import Ask from "./screens/Ask";
 import See from "./screens/See";
 import Activity from "./screens/Activity";
-import { api, APIError } from "./api";
+import { api, errorKey } from "./api";
 import Security from "./Security";
 import Hear from "./Hear";
 import FamilyFaces from "./FamilyFaces";
@@ -55,6 +57,10 @@ export default function App() {
   const [notice, setNotice] = useState(""),
     [error, setError] = useState("");
   const [mfaRequired, setMfaRequired] = useState(false);
+  // The terms the 18+ declaration refers to; sent back as-is (the server rejects a stale version).
+  const [termsVersion, setTermsVersion] = useState("");
+  const [speechVersion, setSpeechVersion] = useState("");
+  const [focusConsent, setFocusConsent] = useState(false);
   const [version, setVersion] = useState(0);
   const [homeKey, setHomeKey] = useState(0);
   const [question, setQuestion] = useState<string | undefined>();
@@ -69,24 +75,7 @@ export default function App() {
     try {
       await task();
     } catch (e) {
-      let key: Key = "errorGeneric";
-      if (e instanceof APIError) {
-        const detail = JSON.stringify(e.detail);
-        // Not a Meta failure: the account has not authorized sending data to Meta (enabled in Personalizar).
-        if (detail.includes("privacy_review_required")) key = "errorPrivacy";
-        else if (detail.includes("mfa_")) key = "mfaError";
-        else if (detail.includes("face_") || detail.includes("self_enrollment")) key = "faceError";
-        else if (detail.includes("credentials_invalid")) key = "errorAuth";
-        else if (detail.includes("registration_invalid")) key = "errorRegister";
-        else if (detail.includes("care_circle_full")) key = "errorFull";
-        else if (detail.includes("image_")) key = "errorImage";
-        else if (detail.includes("meta_") || detail.includes("sam_") || detail.includes("privacy_review")) key = "errorMeta";
-        else if (detail.includes("observation_")) key = "errorFuture";
-        else if (e.status === 403) key = "noAccess";
-        else if (e.status === 404) key = notFound;
-        else if (e.status === 429) key = "errorGeneric";
-      }
-      setError(t(key));
+      setError(t(errorKey(e, notFound)));
     } finally {
       setBusy(false);
     }
@@ -101,6 +90,8 @@ export default function App() {
     api<Session>("auth/session/")
       .then(async (result) => {
         setUser(result.user);
+        setTermsVersion(result.terms_version ?? "");
+        setSpeechVersion(result.speech_service_version ?? "");
         setMfaRequired(!!result.mfa_required);
         if (result.user) await loadProfiles();
       })
@@ -115,7 +106,15 @@ export default function App() {
     if (session.mfa_required) { setMfaRequired(true); return; }
     setMfaRequired(false);
     setUser(session.user);
+    if (session.terms_version) setTermsVersion(session.terms_version);
+    if (session.speech_service_version) setSpeechVersion(session.speech_service_version);
     await loadProfiles();
+  };
+  /** After a code: the profile is now this account's own (role subject); open its permissions. */
+  const redeemed = async (id: string) => {
+    await loadProfiles(id);
+    go("settings");
+    setFocusConsent(true);
   };
   const logout = () =>
     void run(async () => {
@@ -141,6 +140,15 @@ export default function App() {
     run,
     date,
     currentUser: user?.username,
+    speech: {
+      identity: `${user?.id ?? ""}:${profile?.id ?? ""}`,
+      accepted: !!user?.speech_service,
+      decide: async (accept: boolean) => {
+        const session = await api<Session>("auth/speech-service/", "POST", { accept, version: speechVersion });
+        setUser(session.user);
+        return !!session.user?.speech_service;
+      },
+    },
     refresh: async () => {
       await loadProfiles();
       setNotice(t("saved"));
@@ -149,6 +157,7 @@ export default function App() {
   const go = (next: Tab, ask?: string) => {
     if (next === "ask" && (tab === "ask" || ask)) setHomeKey((k) => k + 1);
     setQuestion(ask);
+    setFocusConsent(false);
     setTab(next);
     setError("");
     setNotice("");
@@ -173,9 +182,23 @@ export default function App() {
         <Auth
           t={t} locale={locale} setLocale={setLocale} busy={busy} error={error} mfaRequired={mfaRequired}
           onLogin={(data) => void run(async () => signedIn(await api<Session>("auth/login/", "POST", data)))}
-          onRegister={(data, extra) => void run(async () => { setSignup(extra); await signedIn(await api<Session>("auth/register/", "POST", data)); })}
+          onRegister={(data, extra) => void run(async () => { setSignup(extra); await signedIn(await api<Session>("auth/register/", "POST", { ...data, terms_version: termsVersion })); })}
           onMfa={(code) => void run(async () => signedIn(await api<Session>("auth/mfa/verify/", "POST", { code })))}
         />
+      </div>
+    );
+
+  // Accounts from before the age policy declare it before anything else (Meta endpoints refuse them until then).
+  if (!user.adult_declared)
+    return (
+      <div className={rootClass}>
+        <a href="#main" className="skip">{L("Saltar al contenido", "Skip to content")}</a>
+        <AdultDeclaration t={t} locale={locale} setLocale={setLocale} busy={busy} error={error} username={user.username} onLogout={logout}
+          onDeclare={() => void run(async () => {
+            const session = await api<Session>("auth/adult/", "POST", { adult: true, terms_version: termsVersion });
+            setTermsVersion(session.terms_version ?? termsVersion);
+            setUser(session.user);
+          })} />
       </div>
     );
 
@@ -184,7 +207,7 @@ export default function App() {
       <div className={rootClass}>
         <a href="#main" className="skip">{L("Saltar al contenido", "Skip to content")}</a>
         {error && <p className="toast toast--error" role="alert">{error}</p>}
-        <Onboarding {...context} who={signup.who} ownName={signup.name} username={user.username} onLogout={logout} onCreated={async (id) => { await loadProfiles(id); go("ask"); }} />
+        <Onboarding {...context} who={signup.who} ownName={signup.name} username={user.username} onLogout={logout} onCreated={async (id) => { await loadProfiles(id); go("ask"); }} onRedeemed={redeemed} />
       </div>
     );
 
@@ -243,7 +266,13 @@ export default function App() {
         ) : (
           <Page title={label(tab)} subtitle={`${profile.display_name} · ${t(profile.role)}`} badge={profile.ready ? undefined : t("draft")}>
             {!profile.ready && tab === "circle" && <p className="callout">{t("incomplete")}</p>}
-            <ProfileContent key={`${profile.id}:${tab}`} {...context} profile={profile} tab={tab} version={version} />
+            <ProfileContent key={`${profile.id}:${tab}`} {...context} profile={profile} tab={tab} version={version} focusConsent={focusConsent} />
+            {tab === "settings" && (
+              <section className="panel join-extra">
+                <h2>{L("Tengo un código de AINGEL", "I have an AINGEL code")}</h2>
+                <RedeemCode {...context} onRedeemed={redeemed} />
+              </section>
+            )}
             {tab === "circle" && (
               <section className="panel join-extra">
                 <h2>{t("acceptInvite")}</h2>
@@ -333,8 +362,7 @@ function SupportDialog({ profile, t, onClose }: { profile: Profile; t: ReturnTyp
     const u = new SpeechSynthesisUtterance(text);
     u.lang = profile.locale;
     u.rate = value?.pace === "slow" ? 0.8 : 1;
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(u);
+    speakLocally(u);
   };
   return (
     <dialog ref={ref} className="support-dialog" onClose={onClose} aria-labelledby="support-title">
@@ -349,7 +377,7 @@ function SupportDialog({ profile, t, onClose }: { profile: Profile; t: ReturnTyp
   );
 }
 
-function ProfileContent(props: WithProfile & { tab: Tab; version: number }) {
+function ProfileContent(props: WithProfile & { tab: Tab; version: number; focusConsent: boolean }) {
   switch (props.tab) {
     case "settings":
       return <Settings {...props} />;

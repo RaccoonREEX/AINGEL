@@ -2,10 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { api, APIError } from "../api";
 import AingelOrb, { type OrbState } from "../components/aingel/AingelOrb";
 import { useSpeechInput, type SpeechOutcome } from "../components/aingel/useSpeechInput";
+import BrowserSpeechConsent, { BrowserSpeechRevoke, micPrivacyLine } from "../components/BrowserSpeechConsent";
+import { stopsCapture, useConsentWatch } from "../consentWatch";
 import { useSpeechSynthesisLevel } from "../components/aingel/useOutputAudioLevel";
 import { useCamera } from "../components/aingel/useCamera";
 import { HandIcon } from "../components/aingel/HandIcon";
 import PrivateMediaConsent, { imageTestFields } from "../components/PrivateMediaConsent";
+import SyntheticConversationConsent, { type SyntheticQuestion } from "../components/SyntheticConversationConsent";
 import { useCommunication } from "../Communication";
 import { useMediaQuery } from "../useMediaQuery";
 import { greetingKey, initials, longDate, summarizeToday } from "../today";
@@ -60,14 +63,22 @@ const MAX_MODEL_PAIRS = 5;
 const MAX_TURN_CHARS = 8000;
 
 /** 1b / 1c on the web and 1f / 1g / 1h on phones, wired to the real routines, messages and memories. */
-export default function Home({ profile, t, locale, run, busy, date, onOpenToday, onOpenSigns, initialQuestion }: WithProfile & { onOpenToday: () => void; onOpenSigns: () => void; initialQuestion?: string }) {
+export default function Home({ profile, t, locale, run, busy, date, speech: accountSpeech, onOpenToday, onOpenSigns, initialQuestion }: WithProfile & { onOpenToday: () => void; onOpenSigns: () => void; initialQuestion?: string }) {
   const es = locale === "es-EC";
   const L = (a: string, b: string) => (es ? a : b);
   const mobile = useMediaQuery("(max-width: 760px)");
   const { value: communication } = useCommunication(profile.id);
-  const speech = useSpeechInput(profile.locale);
+  const speech = useSpeechInput(profile.locale, accountSpeech);
+  const [askSpeech, setAskSpeech] = useState(false);
   const tts = useSpeechSynthesisLevel(profile.locale, communication?.pace === "slow" ? 0.8 : 1);
   const camera = useCamera();
+  // Requests that depend on the person's authorizations: a revocation aborts them (consentWatch.ts).
+  const inflight = useRef(new Set<AbortController>());
+  const request = <T,>(path: string, method: string, data: unknown) => {
+    const control = new AbortController();
+    inflight.current.add(control);
+    return api<T>(path, method, data, control.signal).finally(() => inflight.current.delete(control));
+  };
   const [phase, setPhase] = useState<OrbState>("idle");
   const [thread, setThread] = useState<Exchange[]>([]);
   const [notice, setNotice] = useState("");
@@ -80,7 +91,7 @@ export default function Home({ profile, t, locale, run, busy, date, onOpenToday,
   const [seeking, setSeeking] = useState("");
   const [vision, setVision] = useState(false);
   const [privateTest, setPrivateTest] = useState(false);
-  useEffect(() => setPrivateTest(false), [profile.id]);
+  const [syntheticConversation, setSyntheticConversation] = useState(false);
   const timers = useRef<number[]>([]);
   // Bumped when the person clears, stops or leaves: answers still in flight for an older turn are dropped.
   const turn = useRef(0);
@@ -88,6 +99,10 @@ export default function Home({ profile, t, locale, run, busy, date, onOpenToday,
   const threadEnd = useRef<HTMLDivElement>(null);
   const nextId = useRef(1);
   const phaseRef = useRef(phase); phaseRef.current = phase;
+  useEffect(() => {
+    setPrivateTest(false); setSyntheticConversation(false); setThread([]); setDraft("");
+    turn.current++;
+  }, [profile.id]);
   const reduced = !!profile.preferences.reduced_motion;
   const name = communication?.preferred_name || profile.display_name.split(" ")[0];
   const base = `profiles/${profile.id}/`;
@@ -181,6 +196,11 @@ export default function Home({ profile, t, locale, run, busy, date, onOpenToday,
 
   /** General questions go to Muse Spark under the sign-up authorization, with MedlinePlus and, if needed, web search. */
   const general = async (question: string, history: Exchange[]): Promise<Answer> => {
+    if (syntheticConversation) {
+      // The synthetic demo only sends the server's example questions (askFixture), never what was typed or said.
+      const text = L("En la prueba sintética elige una de las preguntas de ejemplo: lo que escribes o dices no se envía a Meta.", "In the synthetic test pick one of the example questions: what you type or say is not sent to Meta.");
+      return { text, spoken: text, source: localSource, origin: "notice" };
+    }
     let pairs = history.filter((x) => x.answer?.origin === "model" && x.question).slice(-MAX_MODEL_PAIRS);
     const build = () => [
       ...pairs.flatMap((x) => [{ role: "user", text: x.question.slice(0, 1000) }, { role: "assistant", text: x.answer!.spoken.slice(0, 1000) }]),
@@ -190,7 +210,9 @@ export default function Home({ profile, t, locale, run, busy, date, onOpenToday,
     // Oldest pairs go first until the whole conversation fits the server's cap.
     while (pairs.length && turns.reduce((n, x) => n + x.text.length, 0) > MAX_TURN_CHARS) { pairs = pairs.slice(1); turns = build(); }
     try {
-      const reply = await api<ConversationReply>(base + "conversation/", "POST", { turns, actions: ACTIONS });
+      const reply = await request<ConversationReply>(base + "conversation/", "POST", {
+        turns, actions: ACTIONS,
+      });
       const retrieval = reply.provenance.retrieval === "medlineplus";
       if (reply.mode === "mock") {
         return {
@@ -252,6 +274,27 @@ export default function Home({ profile, t, locale, run, busy, date, onOpenToday,
     later(Math.max(0, 600 - (performance.now() - started)), () => respond(id, final));
   };
 
+  /** Synthetic demo: the server's own question, answered with a fictitious profile; nothing typed is sent. */
+  const askFixture = async (fixture: SyntheticQuestion) => {
+    clearTimers(); tts.stop();
+    const id = nextId.current++;
+    setThread((all) => [...all, { id, question: es ? fixture["es-EC"] : fixture["en-US"], answer: null }]);
+    setNotice("");
+    setPhase("thinking");
+    const gen = turn.current;
+    let answer: Answer;
+    try {
+      const reply = await request<ConversationReply>(base + "conversation/", "POST", { fixture: fixture.id, locale });
+      answer = {
+        text: reply.text, spoken: reply.text, link: reply.source, origin: reply.mode === "mock" ? "mock" : "model",
+        source: reply.mode === "mock" ? L("Modo de prueba · sin modelo", "Test mode · no model") : L("Prueba sintética · Meta Muse Spark con un perfil ficticio", "Synthetic test · Meta Muse Spark with a fictitious profile"),
+      };
+    } catch {
+      answer = { text: t("errorGeneric"), spoken: t("errorGeneric"), source: localSource, origin: "notice" };
+    }
+    if (gen === turn.current) respond(id, answer);
+  };
+
   /** Runs the app feature Meta chose for this turn. true when it took the turn over (no text bubble is shown). */
   const act = async (action: Action, id: number, gen: number) => {
     const raw = action.arguments?.object_name;
@@ -285,13 +328,17 @@ export default function Home({ profile, t, locale, run, busy, date, onOpenToday,
       turn.current++; clearTimers(); tts.stop(); speech.cancel(); setThread((all) => all.filter((x) => x.answer)); setPhase("idle"); return;
     }
     clearTimers(); tts.stop(); setNotice("");
+    // The person's consent, read fresh; the browser's own permission is asked afterwards by getUserMedia.
+    if (!(await consent.allowed("microphone"))) { setNotice(micNeedsConsent); settle("retrying", 1800); return; }
     const started = await speech.start(onHeard);
+    if (started === "consent") { setAskSpeech(true); return; }
     if (started) setPhase("listening");
     else if (started === false) { setNotice(L("No se pudo acceder al micrófono. Revisa el permiso del navegador.", "Couldn't access the microphone. Check the browser permission.")); settle("retrying", 1800); }
   };
 
   /** Opens the camera like the eyes button; false (with a notice if it failed) when it isn't on. */
   const openEyes = async () => {
+    if (!(await consent.allowed("camera"))) { setNotice(cameraNeedsConsent); return false; }
     setVision(true);
     const opened = await camera.start("environment");
     if (opened === true) return true;
@@ -306,6 +353,23 @@ export default function Home({ profile, t, locale, run, busy, date, onOpenToday,
     await openEyes();
   };
 
+  const cameraNeedsConsent = L("La persona no ha autorizado el uso de la cámara en este perfil. Puede hacerlo en Autorizaciones.", "The person has not authorized using the camera for this profile. They can do it in Authorizations.");
+  const micNeedsConsent = L("La persona no ha autorizado el uso del micrófono en este perfil. Puede hacerlo en Autorizaciones.", "The person has not authorized using the microphone for this profile. They can do it in Authorizations.");
+  const revokedText = L("Se retiró una autorización: AINGEL detuvo lo que dependía de ella y descartó las respuestas pendientes.", "An authorization was withdrawn: AINGEL stopped what depended on it and discarded pending answers.");
+  // A revocation (here, in another tab or on another device) stops the captures it covers, aborts pending requests
+  // and drops their late answers; starting again needs a new grant (allowed() above).
+  const consent = useConsentWatch(profile.id, vision || camera.active || phase === "listening" || phase === "thinking" || phase === "searching", (change) => {
+    if (change.epoch) {
+      inflight.current.forEach((control) => control.abort());
+      inflight.current.clear();
+      turn.current++; clearTimers();
+      setThread((all) => all.filter((x) => x.answer));
+    }
+    if (change.camera || change.unverified) { camera.stop(); setVision(false); }
+    if (change.microphone || change.unverified) speech.cancel();
+    tts.stop(); setPhase("idle"); setNotice(revokedText);
+  });
+
   /** One-off capture of the full frame, under the sign-up authorization (camera + Meta); nothing is stored.
    * `existing` answers a turn already in the thread (an action chosen by Meta), whose camera was just opened. */
   const look = async (objectName?: string, existing?: number) => {
@@ -315,7 +379,7 @@ export default function Home({ profile, t, locale, run, busy, date, onOpenToday,
     const question = objectName ? L(`Busca: ${objectName}`, `Find: ${objectName}`) : L("Describe lo que ves", "Describe what you see");
     if (!existing) setThread((all) => [...all, { id, question, answer: null }]);
     setPhase(objectName ? "searching" : "thinking");
-    const testFields = imageTestFields(profile, privateTest, false);
+    const testFields = imageTestFields(profile, privateTest);
     setPrivateTest(false);
     const image = await camera.capture();
     if (gen !== turn.current) return;
@@ -330,7 +394,7 @@ export default function Home({ profile, t, locale, run, busy, date, onOpenToday,
     try {
       let answer: Answer;
       if (objectName) {
-        const result = await api<Located>("locate/", "POST", form);
+        const result = await request<Located>("locate/", "POST", form);
         const sides = result.matches.map((m) => ({ left: L("a la izquierda", "on the left"), right: L("a la derecha", "on the right"), center: L("al centro", "in the centre") })[m.horizontal]);
         const text = result.mode === "mock"
           ? L("Modo de prueba: no se analizó la imagen.", "Test mode: the image was not analysed.")
@@ -338,15 +402,17 @@ export default function Home({ profile, t, locale, run, busy, date, onOpenToday,
         answer = { text: <>{text} <span className="muted">{caution}</span></>, spoken: text, origin: "vision",
           source: result.mode === "mock" ? L("Modo de prueba · imagen no enviada", "Test mode · image not sent") : L(`Meta ${result.model ?? "SAM"} · imagen no guardada`, `Meta ${result.model ?? "SAM"} · image not stored`) };
       } else {
-        const result = await api<Scene>("scene/", "POST", form);
+        const result = await request<Scene>("scene/", "POST", form);
         answer = { text: <>{result.text} <span className="muted">{caution}</span></>, spoken: result.text, origin: "vision",
           source: result.mode === "mock" ? L("Modo de prueba · imagen no enviada", "Test mode · image not sent") : L("Meta Muse Spark · imagen no guardada", "Meta Muse Spark · image not stored") };
       }
       if (gen === turn.current) respond(id, answer);
     } catch (e) {
       if (gen !== turn.current) return;
+      const code = e instanceof APIError ? String((e.detail as { error?: unknown } | null)?.error ?? "") : "";
+      if (stopsCapture(code)) { camera.stop(); setVision(false); }
       const detail = e instanceof APIError ? JSON.stringify(e.detail) : "";
-      const text = detail.includes("privacy_review")
+      const text = code === "camera_consent_revoked" || code === "consent_changed" ? revokedText : detail.includes("privacy_review")
         ? L("La prueba no está autorizada. Comprueba los permisos en Personalizar y confirma la prueba privada antes de cada imagen.", "The test is not authorized. Check permissions in Personalize and confirm the private test before each image.")
         : L("No pude analizar la imagen ahora. Inténtalo de nuevo.", "I couldn't analyse the image right now. Please try again.");
       respond(id, { text, spoken: text, source: localSource, origin: "notice" });
@@ -381,6 +447,14 @@ export default function Home({ profile, t, locale, run, busy, date, onOpenToday,
     happy: L("Toca para hablar", "Tap to talk"), confused: L("Toca para hablar", "Tap to talk"),
   };
   const busyPhase = phase !== "idle" && phase !== "happy" && phase !== "confused";
+  const syntheticControl = (
+    <SyntheticConversationConsent es={es} checked={syntheticConversation} disabled={busyPhase} onChange={(next) => {
+      clearConversation(); setDraft(""); setSyntheticConversation(next);
+    }} onPick={(q) => void askFixture(q)} />
+  );
+  const speechConsent = askSpeech
+    ? <BrowserSpeechConsent es={es} onAccept={() => void speech.accept(true).then((ok) => { setAskSpeech(false); if (ok) void onMic(); else openComposer(); })} onDecline={() => { setAskSpeech(false); openComposer(); }} />
+    : speech.accepted && speech.place === "browser_service" && phase !== "listening" ? <BrowserSpeechRevoke es={es} onRevoke={() => void speech.accept(false)} /> : null;
   const level = phase === "listening" ? speech.level : phase === "speaking" ? tts.level : undefined;
   const micButton = (size: "lg" | "sm") => (
     <button type="button" className={`mic-btn mic-btn--${size}`} onClick={() => void onMic()} aria-label={hint[phase]}>
@@ -489,10 +563,12 @@ export default function Home({ profile, t, locale, run, busy, date, onOpenToday,
             {answerView(x)}
           </div>
         ))}
+        {speechConsent}
         {notice && <p className="home-notice" role="alert">{notice}</p>}
         <div ref={threadEnd} />
       </div>
       <div className="convo-controls">
+        {syntheticControl}
         <label className="switch-line"><input type="checkbox" checked={autoRead} onChange={(e) => { setAutoRead(e.target.checked); if (!e.target.checked) tts.stop(); }} />{L("Leer respuestas en voz alta", "Read answers aloud")}</label>
         {!!thread.length && <button type="button" className="text-btn" onClick={clearConversation}>{L("Borrar conversación", "Clear conversation")}</button>}
         {!tts.supported && <span className="muted">{L("Este navegador no tiene voz para leer.", "This browser has no voice to read aloud.")}</span>}
@@ -535,9 +611,11 @@ export default function Home({ profile, t, locale, run, busy, date, onOpenToday,
             <div className="home-mic">
               {micButton("lg")}
               <span className="home-hint">{hint[phase]}</span>
-              {phase === "listening" && <span className="mic-privacy">{L("Micrófono activo. El audio no se guarda.", "Microphone on. Audio is not stored.")}</span>}
+              {phase === "listening" && <span className="mic-privacy">{micPrivacyLine(es, speech.place)}</span>}
               {phase === "idle" && <button type="button" className="text-btn" onClick={openComposer}>{L("Prefiero escribir", "I'd rather type")}</button>}
             </div>
+            {syntheticControl}
+            {speechConsent}
             {notice && <p className="home-notice" role="alert">{notice}</p>}
             <div className="suggestions">
               {suggestions.map((s) => <button type="button" key={s} className="pill" disabled={busyPhase} onClick={() => askOther(s)}>{s}</button>)}

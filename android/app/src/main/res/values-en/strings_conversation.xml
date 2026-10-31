@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="synthetic_conversation_title">Test conversation with Meta</string>
+    <string name="synthetic_conversation_explanation">Pick an example question written by the server: AINGEL sends it to Meta with a fictitious profile, without your data or history. In this test nothing you type or say is sent to Meta. It turns off when switching profiles or signing out; it does not enable the camera or the private media test.</string>
+    <string name="synthetic_conversation_enable">Enable the test conversation with example questions</string>
+    <string name="synthetic_conversation_active">Synthetic test on: pick an example question. What you type or say is not sent to Meta.</string>
     <string name="private_test_title">Private camera and voice test</string>
     <string name="private_test_active">Private test enabled: only your own images and voice, without other people or sensitive content. They are sent to Meta.</string>
     <string name="private_test_explanation">Only the profile owner can enable this test. Save permission to send to Meta and the camera or microphone permission you want to use. The server must have the private test enabled.</string>
@@ -169,4 +173,6 @@
     <string name="ui_auth_meta">Send data to Meta to answer</string>
     <string name="ui_auth_meta_d">The questions, images and audio to analyse, and the support needs and allergies, are sent to Meta Muse Spark. While the account uses free credits, Meta warns it may use that content to improve its products. Names, routines, messages and memories are not sent.</string>
     <string name="ui_auth_hint">Without these, AINGEL still works with routines, messages and memories. They can be changed on the web, in Personalize.</string>
+    <string name="ui_src_synthetic">Synthetic test · Meta Muse Spark with a fictitious profile</string>
+    <string name="ui_conv_synthetic_pick">In the synthetic test pick one of the example questions: what you type or say is not sent to Meta.</string>
 </resources>

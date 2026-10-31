@@ -10,6 +10,11 @@ from PIL import Image
 from rest_framework.test import APIClient
 
 from care.models import Profile
+from care.consent import CONSENT_VERSION
+from care.models import ConsentGrant
+from care.testing import adult, authorize
+
+from assistance import synthetic
 
 
 def png():
@@ -24,21 +29,21 @@ class SignUpConsentTests(TestCase):
     def setUp(self):
         cache.clear()
         users = get_user_model().objects
-        self.owner = users.create_user(username="consent-owner")
-        self.outsider = users.create_user(username="consent-outsider")
+        self.owner = adult(users.create_user(username="consent-owner"))
+        self.outsider = adult(users.create_user(username="consent-outsider"))
         self.profile = Profile.objects.create(owner=self.owner, display_name="Synthetic")
         self.client = APIClient()
         self.client.force_authenticate(self.owner)
 
-    def test_consents_are_stamped_and_validated(self):
-        url = f"/api/v1/profiles/{self.profile.id}/"
-        response = self.client.patch(url, {"consents": {"camera": True, "microphone": True, "meta_data": True}}, format="json")
+    def test_decisions_are_recorded_with_purpose_version_who_and_when(self):
+        authorize(self.profile)
+        url = f"/api/v1/profiles/{self.profile.id}/consent/"
+        response = self.client.post(url, {"purpose": "camera_local", "decision": "grant"}, format="json")
         self.assertEqual(response.status_code, 200, response.data)
-        stored = Profile.objects.get(pk=self.profile.pk).consents
-        self.assertEqual((stored["camera"], stored["meta_data"], stored["granted_by"]), (True, True, "consent-owner"))
-        self.assertTrue(stored["version"] and stored["granted_at"])
-        for bad in ({"camera": "yes"}, {"anything": True}, ["camera"]):
-            self.assertEqual(self.client.patch(url, {"consents": bad}, format="json").status_code, 400)
+        grant = ConsentGrant.objects.get(profile=self.profile, purpose="camera_local")
+        self.assertEqual((grant.status, grant.decided_by, grant.method, grant.version), ("granted", self.owner, "own_account", CONSENT_VERSION))
+        for bad in ({"purpose": "everything", "decision": "grant"}, {"purpose": "camera_local", "decision": "maybe"}, {"purpose": "camera_local"}):
+            self.assertEqual(self.client.post(url, bad, format="json").status_code, 400, bad)
 
     def describe(self, profile=None):
         data = {"image": png(), "locale": "es-EC"}
@@ -52,14 +57,14 @@ class SignUpConsentTests(TestCase):
         with patch.dict(os.environ, env), patch("assistance.scene.call_meta_vision", return_value=fake, create=True):
             self.assertEqual(self.describe().data["error"], "privacy_review_required")
             self.assertEqual(self.describe(self.profile.id).data["error"], "privacy_review_required")
-            self.profile.consents = {"camera": True, "microphone": False, "meta_data": True}
-            self.profile.save()
+            authorize(self.profile, {"camera": True, "microphone": False, "meta_data": True})
             with patch("assistance.views.describe_scene", return_value=fake) as describe:
                 self.assertEqual(self.describe(self.profile.id).status_code, 200)
-                self.assertTrue(describe.call_args.args[2])
+                self.assertEqual(describe.call_args.args[2], synthetic.REAL)
             self.client.force_authenticate(self.outsider)
             self.assertEqual(self.describe(self.profile.id).status_code, 404)
         with patch.dict(os.environ, {**env, "AINGEL_REAL_DATA": "0"}), patch("assistance.views.describe_scene", return_value=fake) as describe:
             self.client.force_authenticate(self.owner)
-            self.describe(self.profile.id)
-            self.assertFalse(describe.call_args.args[2])
+            # Without the operator switch the real image is refused before any provider request is built.
+            self.assertEqual(self.describe(self.profile.id).data["error"], "privacy_review_required")
+            describe.assert_not_called()

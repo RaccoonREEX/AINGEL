@@ -1,6 +1,9 @@
 package ec.aingel.mobile
 
 import android.content.Context
+import android.content.pm.PackageManager
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
@@ -23,7 +26,7 @@ import javax.crypto.spec.GCMParameterSpec
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
-class ApiFailure(val code: String, val status: Int = 0) : Exception(code)
+class ApiFailure(val code: String, val status: Int = 0, val retryAfterSeconds: Long? = null) : Exception(code)
 
 internal const val DEFAULT_BACKEND = "https://aingel.mapatechstudio.com/"
 
@@ -39,16 +42,26 @@ fun validBackend(raw: String, debug: Boolean): String? {
     return url.toString()
 }
 
-/** Parse only bounded error codes; raw server text is never shown directly. */
-fun safeApiError(result: Any): String {
-    val message = when (result) {
-        is JSONArray -> result.optString(0)
-        is JSONObject -> result.optString("error").ifBlank { result.optString("detail") }
-        else -> ""
-    }
-    if (message.contains("Authentication credentials were not provided")) return "authentication_required"
-    return if (message.length <= 80 && message.matches(Regex("[a-z][a-z0-9_]*"))) message else "request_invalid"
+/** Result of reading the saved backend at start-up. */
+internal data class SavedBackend(val base: String, val discardSession: Boolean, val persist: Boolean)
+
+/**
+ * Resolves the backend saved by an earlier install. Pre-public loopback builds are moved once to the
+ * public default; a saved value that is not valid for this build type (e.g. plain http in release, or a
+ * malformed value) is never used and falls back to the default, discarding its cookies.
+ */
+internal fun resolveSavedBackend(saved: String?, migrated: Boolean, debug: Boolean): SavedBackend {
+    if (!migrated && isLegacyLoopbackBackend(saved)) return SavedBackend(DEFAULT_BACKEND, discardSession = true, persist = true)
+    if (saved == null) return SavedBackend(DEFAULT_BACKEND, discardSession = false, persist = false)
+    val valid = validBackend(saved, debug) ?: return SavedBackend(DEFAULT_BACKEND, discardSession = true, persist = true)
+    return SavedBackend(valid, discardSession = false, persist = valid != saved)
 }
+
+/** Parse only bounded error codes; raw server text is never shown directly. */
+fun safeApiError(result: Any): String = apiErrorCode(result) ?: NetworkError.REQUEST_INVALID
+
+internal fun defaultHttpClientBuilder(): OkHttpClient.Builder = OkHttpClient.Builder()
+    .connectTimeout(15, TimeUnit.SECONDS).readTimeout(65, TimeUnit.SECONDS).callTimeout(75, TimeUnit.SECONDS)
 
 private class SecretStore(context: Context) {
     private val prefs = context.getSharedPreferences("aingel-session", Context.MODE_PRIVATE)
@@ -108,39 +121,80 @@ private class DeviceCookies(context: Context) : CookieJar {
 }
 
 class ApiClient(context: Context) {
+    private val appContext = context.applicationContext ?: context
     private val preferences = context.getSharedPreferences("aingel-config", Context.MODE_PRIVATE)
     private val cookies = DeviceCookies(context)
     private val gate = SessionCookieGate(cookies, cookies::clear)
-    private val stateLock = Any()
     private fun initialBackend(): String {
-        val saved = preferences.getString("backend", null)
-        if (!preferences.getBoolean("backend-default-migrated-v1", false)) {
-            val migrate = isLegacyLoopbackBackend(saved)
-            if (migrate) gate.invalidate()
-            preferences.edit().putBoolean("backend-default-migrated-v1", true).apply {
-                if (migrate) putString("backend", DEFAULT_BACKEND)
-            }.apply()
-            if (migrate) return DEFAULT_BACKEND
-        }
-        return saved ?: DEFAULT_BACKEND
+        val saved = resolveSavedBackend(preferences.getString("backend", null),
+            preferences.getBoolean("backend-default-migrated-v1", false), BuildConfig.DEBUG)
+        if (saved.discardSession) gate.invalidate()
+        preferences.edit().putBoolean("backend-default-migrated-v1", true).apply {
+            if (saved.persist) putString("backend", saved.base)
+        }.apply()
+        return saved.base
     }
+    private val transport = ApiTransport(gate, initialBackend(), online = ::online)
+
+    val base: String get() = transport.base
+    val csrf: String get() = transport.csrf
+    val client: OkHttpClient get() = transport.client
+
+    /** null when connectivity cannot be read (ACCESS_NETWORK_STATE not granted). */
+    private fun online(): Boolean? = try {
+        if (appContext.checkSelfPermission(android.Manifest.permission.ACCESS_NETWORK_STATE) != PackageManager.PERMISSION_GRANTED) null
+        else {
+            val manager = appContext.getSystemService(ConnectivityManager::class.java)
+            val capabilities = manager?.activeNetwork?.let { manager.getNetworkCapabilities(it) }
+            capabilities?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+        }
+    } catch (_: Exception) { null }
+
+    fun configure(raw: String) {
+        val value = validBackend(raw, BuildConfig.DEBUG) ?: throw ApiFailure("backend_invalid")
+        transport.reconfigure(value) { preferences.edit().putString("backend", value).apply() }
+    }
+    fun clear() = transport.clear()
+
+    suspend fun request(path: String, method: String = "GET", data: JSONObject? = null): Any = transport.request(path, method, data)
+    suspend fun upload(path: String, image: ByteArray, values: Map<String, String>): JSONObject = uploadImages(path, listOf(image), values)
+    suspend fun uploadImages(path: String, images: List<ByteArray>, values: Map<String, String>): JSONObject = transport.uploadImages(path, images, values)
+    suspend fun uploadClip(path: String, clip: ByteArray, values: Map<String, String>): JSONObject = transport.uploadClip(path, clip, values)
+    /** A multipart form without files: synthetic tests name a server fixture instead of sending media. */
+    suspend fun uploadForm(path: String, values: Map<String, String>): JSONObject = transport.uploadForm(path, values)
+    suspend fun signClip(profileId: String, clipId: String): ByteArray = transport.signClip(profileId, clipId)
+}
+
+/**
+ * Context-free HTTP core of [ApiClient] (unit-testable on the JVM).
+ *
+ * Writes always carry `X-CSRFToken` and a same-origin `Origin` (Django checks Origin against the request
+ * host / CSRF_TRUSTED_ORIGINS on HTTPS). A write without a token first bootstraps one from `auth/session/`,
+ * and a write rejected with `csrf_failed` is retried exactly once after refreshing the token: Django rejects
+ * CSRF failures before running the view, so the retry cannot duplicate a write.
+ */
+internal class ApiTransport(
+    private val gate: SessionCookieGate,
+    initialBase: String,
+    builder: OkHttpClient.Builder = defaultHttpClientBuilder(),
+    private val online: () -> Boolean? = { null },
+) {
+    private val stateLock = Any()
     @Volatile
-    var base: String = initialBackend()
+    var base: String = initialBase
         private set
     @Volatile
     var csrf: String = ""
         private set
     @Volatile
-    var client = OkHttpClient.Builder().cookieJar(gate.cookieJar()).connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(65, TimeUnit.SECONDS).callTimeout(75, TimeUnit.SECONDS).followRedirects(false).build()
+    var client: OkHttpClient = builder.cookieJar(gate.cookieJar()).followRedirects(false).followSslRedirects(false).build()
         private set
     private data class SessionSnapshot(val base: String, val csrf: String, val client: OkHttpClient, val generation: Long)
     private fun snapshot() = synchronized(stateLock) { SessionSnapshot(base, csrf, client, gate.generation()) }
 
-    fun configure(raw: String) {
-        val value = validBackend(raw, BuildConfig.DEBUG) ?: throw ApiFailure("backend_invalid")
+    fun reconfigure(value: String, persist: () -> Unit) {
         synchronized(stateLock) {
-            if (value != base) { clearLocked(); base = value; preferences.edit().putString("backend", value).apply() }
+            if (value != base) { clearLocked(); base = value; persist() }
         }
     }
     private fun clearLocked() {
@@ -150,20 +204,71 @@ class ApiClient(context: Context) {
     }
     fun clear() = synchronized(stateLock) { clearLocked() }
 
-    suspend fun request(path: String, method: String = "GET", data: JSONObject? = null): Any {
-        val session = snapshot()
-        val body = if (method == "GET" || method == "HEAD") null else (data ?: JSONObject()).toString().toRequestBody("application/json".toMediaType())
-        return execute(session, Request.Builder().url(session.base + "api/v1/" + path).method(method, body).apply { if (method != "GET") header("X-CSRFToken", session.csrf) }.build())
+    private fun Request.Builder.csrfHeaders(session: SessionSnapshot) = apply {
+        header("X-CSRFToken", session.csrf)
+        header("Origin", session.base.removeSuffix("/"))
     }
-    suspend fun upload(path: String, image: ByteArray, values: Map<String, String>): JSONObject = uploadImages(path, listOf(image), values)
+
+    suspend fun request(path: String, method: String = "GET", data: JSONObject? = null): Any {
+        val unsafe = method != "GET" && method != "HEAD"
+        val body = if (!unsafe) null else (data ?: JSONObject()).toString().toRequestBody("application/json".toMediaType())
+        return send(unsafe) { session ->
+            Request.Builder().url(session.base + "api/v1/" + path).method(method, body).apply { if (unsafe) csrfHeaders(session) }.build()
+        }
+    }
+
+    suspend fun uploadForm(path: String, values: Map<String, String>): JSONObject {
+        val body = MultipartBody.Builder().setType(MultipartBody.FORM).apply { values.forEach { (key, value) -> addFormDataPart(key, value) } }.build()
+        val result = send(unsafe = true) { session ->
+            Request.Builder().url(session.base + "api/v1/" + path).csrfHeaders(session).post(body).build()
+        }
+        return result as? JSONObject ?: throw ApiFailure(NetworkError.RESPONSE_INVALID)
+    }
+
     suspend fun uploadImages(path: String, images: List<ByteArray>, values: Map<String, String>): JSONObject {
         if (images.isEmpty() || images.size > 3 || images.sumOf { it.size.toLong() } > 5 * 1024 * 1024) throw ApiFailure("image_too_large")
-        val session = snapshot()
         val body = MultipartBody.Builder().setType(MultipartBody.FORM).apply {
             images.forEachIndexed { index, image -> addFormDataPart("image", "capture-$index.jpg", image.toRequestBody("image/jpeg".toMediaType())) }
             values.forEach { (key, value) -> addFormDataPart(key, value) }
         }.build()
-        return execute(session, Request.Builder().url(session.base + "api/v1/" + path).header("X-CSRFToken", session.csrf).post(body).build()) as JSONObject
+        val result = send(unsafe = true) { session ->
+            Request.Builder().url(session.base + "api/v1/" + path).csrfHeaders(session).post(body).build()
+        }
+        return result as? JSONObject ?: throw ApiFailure(NetworkError.RESPONSE_INVALID)
+    }
+
+    /** One short MP4 clip (experimental continuous vision); the fields go first so the server can reject early. */
+    suspend fun uploadClip(path: String, clip: ByteArray, values: Map<String, String>): JSONObject {
+        if (clip.isEmpty() || clip.size > 8 * 1024 * 1024) throw ApiFailure("clip_too_large")
+        val body = MultipartBody.Builder().setType(MultipartBody.FORM).apply {
+            values.forEach { (key, value) -> addFormDataPart(key, value) }
+            addFormDataPart("clip", "clip.mp4", clip.toRequestBody("video/mp4".toMediaType()))
+        }.build()
+        val result = send(unsafe = true) { session ->
+            Request.Builder().url(session.base + "api/v1/" + path).csrfHeaders(session).post(body).build()
+        }
+        return result as? JSONObject ?: throw ApiFailure(NetworkError.RESPONSE_INVALID)
+    }
+
+    /** Fetches `auth/session/`, which stores the current CSRF token from its JSON `csrf` field. */
+    private suspend fun refreshCsrf() {
+        val session = snapshot()
+        execute(session, Request.Builder().url(session.base + "api/v1/auth/session/").get().build())
+    }
+
+    private suspend fun send(unsafe: Boolean, build: (SessionSnapshot) -> Request): Any {
+        if (!unsafe) return snapshot().let { execute(it, build(it)) }
+        if (csrf.isBlank()) refreshCsrf()
+        val first = snapshot()
+        return try {
+            execute(first, build(first))
+        } catch (failure: ApiFailure) {
+            if (failure.code != NetworkError.CSRF_FAILED) throw failure
+            refreshCsrf()
+            val retry = snapshot()
+            if (retry.generation != first.generation) throw ApiFailure("session_changed")
+            execute(retry, build(retry))
+        }
     }
 
     suspend fun signClip(profileId: String, clipId: String): ByteArray {
@@ -214,34 +319,32 @@ class ApiClient(context: Context) {
         continuation.invokeOnCancellation { call.cancel() }
         call.enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
-                if (continuation.isActive) continuation.resumeWithException(ApiFailure("server_unavailable"))
+                if (continuation.isActive) continuation.resumeWithException(failureForIOException(e, online()))
             }
             override fun onResponse(call: Call, response: Response) {
                 try {
                     val result = response.use { readResponse(session, it) }
                     if (continuation.isActive) continuation.resume(result)
                 } catch (error: Exception) {
-                    if (continuation.isActive) continuation.resumeWithException(if (error is ApiFailure) error else ApiFailure("server_unavailable"))
+                    if (continuation.isActive) continuation.resumeWithException(when (error) {
+                        is ApiFailure -> error
+                        is IOException -> failureForIOException(error, online())
+                        else -> ApiFailure(NetworkError.RESPONSE_INVALID, response.code)
+                    })
                 }
             }
         })
     }
 
     private fun readResponse(session: SessionSnapshot, response: Response): Any {
-        try {
-            val result: Any = if (response.code == 204) JSONObject() else {
-                val raw = response.body?.string() ?: throw ApiFailure("server_unavailable")
-                if (raw.trimStart().startsWith("[")) JSONArray(raw) else try { JSONObject(raw) } catch (_: Exception) { throw ApiFailure("server_unavailable", response.code) }
-            }
-            if (!response.isSuccessful) {
-                throw ApiFailure(safeApiError(result), response.code)
-            }
-            synchronized(stateLock) {
-                if (!gate.isCurrent(session.generation)) throw ApiFailure("session_changed")
-                (result as? JSONObject)?.optString("csrf")?.takeIf { it.isNotBlank() }?.let { csrf = it }
-            }
-            return result
-        } catch (error: ApiFailure) { throw error }
-        catch (_: Exception) { throw ApiFailure("server_unavailable") }
+        // Redirect bodies are never read; error bodies are decoded only into bounded codes.
+        val body = if (response.code in 300..399) null else response.body?.string()
+        val result = decodeApiResponse(response.code, response.header("Content-Type"), body,
+            response.header("Location"), response.header("Retry-After"), response.request.url.scheme)
+        synchronized(stateLock) {
+            if (!gate.isCurrent(session.generation)) throw ApiFailure("session_changed")
+            (result as? JSONObject)?.optString("csrf")?.takeIf { it.isNotBlank() }?.let { csrf = it }
+        }
+        return result
     }
 }
