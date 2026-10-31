@@ -12,6 +12,8 @@ from PIL import Image
 from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework.test import APIClient
 
+from .consent import TERMS_VERSION
+from .models import AccountPolicy
 from .models import Invitation, Membership, Memory, Message, Profile, Routine
 
 
@@ -393,13 +395,25 @@ class AuthTests(TestCase):
             HTTP_X_CSRFTOKEN=token,
         )
         self.assertEqual(weak.status_code, 400)
+        # Adults only (Meta Model API terms): the explicit declaration for the current terms is checked here.
+        for statement in ({}, {"adult": False, "terms_version": TERMS_VERSION}, {"adult": True, "terms_version": "old"}):
+            refused = self.client.post(
+                "/api/v1/auth/register/",
+                {"username": "new-user", "password": "Synthetic!Long-19483", **statement},
+                format="json",
+                HTTP_X_CSRFTOKEN=token,
+            )
+            self.assertEqual((refused.status_code, refused.json()), (400, {"error": "adult_declaration_required"}))
         valid = self.client.post(
             "/api/v1/auth/register/",
-            {"username": "new-user", "password": "Synthetic!Long-19483"},
+            {"username": "new-user", "password": "Synthetic!Long-19483", "adult": True, "terms_version": TERMS_VERSION},
             format="json",
             HTTP_X_CSRFTOKEN=token,
         )
         self.assertEqual(valid.status_code, 200)
+        self.assertTrue(valid.json()["user"]["adult_declared"])
+        policy = AccountPolicy.objects.get(user__username="new-user")
+        self.assertEqual((policy.terms_version, policy.declaration), (TERMS_VERSION, "self_declaration"))
 
     def test_sensitive_api_responses_not_cached(self):
         self.assertEqual(

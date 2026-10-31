@@ -9,6 +9,7 @@ from rest_framework.test import APIClient
 
 from care.knowledge import KnowledgeUnavailable
 from care.models import AuditEvent, Profile
+from care.testing import adult, authorize
 
 TOPIC = {
     "title": "Diabetes",
@@ -25,8 +26,8 @@ class ConversationTests(TestCase):
     def setUp(self):
         cache.clear()
         users = get_user_model().objects
-        self.owner = users.create_user(username="conversation-owner")
-        self.outsider = users.create_user(username="conversation-outsider")
+        self.owner = adult(users.create_user(username="conversation-owner"))
+        self.outsider = adult(users.create_user(username="conversation-outsider"))
         self.profile = Profile.objects.create(
             owner=self.owner,
             display_name="PRIVATE_PROFILE_MARKER",
@@ -140,8 +141,7 @@ class SignUpConsentConversationTests(TestCase):
         ConversationTests.setUp(self)
         self.profile.support_notes = "Apoyos indicados: Sordera o hipoacusia: Sordera profunda.\nRelación de quien configura: Hija.\nEsta información no es un diagnóstico."
         self.profile.allergies = "Penicilina"
-        self.profile.consents = {"camera": True, "microphone": True, "meta_data": True}
-        self.profile.save()
+        authorize(self.profile, {"camera": True, "microphone": True, "meta_data": True})
 
     post = ConversationTests.post
 
@@ -169,8 +169,7 @@ class SignUpConsentConversationTests(TestCase):
         turns = [{"role": "user", "text": "Hola"}]
         with patch.dict(os.environ, {**META_ENV, "AINGEL_REAL_DATA": "0"}):
             self.assertEqual(self.post(turns, synthetic=False).data["error"], "privacy_review_required")
-        self.profile.consents = {"camera": True, "microphone": True, "meta_data": False}
-        self.profile.save()
+        authorize(self.profile, {"camera": True, "microphone": True, "meta_data": False})
         with patch.dict(os.environ, {**META_ENV, "AINGEL_REAL_DATA": "1"}):
             self.assertEqual(self.post(turns, synthetic=False).data["error"], "privacy_review_required")
 
@@ -181,8 +180,7 @@ class AppActionTests(TestCase):
 
     def setUp(self):
         ConversationTests.setUp(self)
-        self.profile.consents = {"camera": True, "microphone": True, "meta_data": True}
-        self.profile.save()
+        authorize(self.profile, {"camera": True, "microphone": True, "meta_data": True})
 
     def ask(self, actions, reply_action):
         captured = {}

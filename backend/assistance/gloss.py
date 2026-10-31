@@ -15,7 +15,7 @@ from rest_framework.decorators import api_view, throttle_classes
 from rest_framework.response import Response
 from rest_framework.throttling import UserRateThrottle
 
-from care.consent import meta_allowed, meta_user_allowed
+from care.consent import meta_account_denial, meta_allowed, still_current
 from care.permissions import access, audit
 
 from .companion import CompanionUnavailable, call_spark
@@ -110,8 +110,8 @@ def valid_gloss(signs, vocabulary):
 @api_view(["POST"])
 @throttle_classes([GlossRate])
 def gloss(request, profile_id):
-    if not meta_user_allowed(request.user):
-        return Response({"error": "meta_access_denied"}, status=403)
+    if denial := meta_account_denial(request.user):
+        return Response({"error": denial}, status=403)
     profile = access(request.user, profile_id)
     data = request.data
     if not isinstance(data, dict) or set(data) != {"text", "vocabulary"}:
@@ -124,10 +124,13 @@ def gloss(request, profile_id):
         return Response({"error": "model_unavailable"}, status=503)
     if not meta_allowed(profile, "conversation"):
         return Response({"error": "privacy_review_required"}, status=400)
+    epoch = profile.consent_epoch
     try:
         result = call_spark(instructions(vocabulary), text, 600, functions=SIGN_TOOL)
     except CompanionUnavailable as error:
         return Response({"error": str(error)}, status=503)
+    if not still_current(profile, epoch):
+        return Response({"error": "consent_changed"}, status=409)
     action = result.get("action") or {}
     signs = valid_gloss(action.get("arguments", {}).get("signs"), vocabulary)
     if signs is None:

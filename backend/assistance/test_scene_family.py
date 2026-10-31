@@ -9,6 +9,7 @@ from PIL import Image
 from rest_framework.test import APIClient
 
 from care.models import Membership, Profile
+from care.testing import adult, authorize
 
 DAVID = {"box": [0.2, 0.1, 0.6, 0.7], "candidate": {"id": "face-1", "display_name": "David", "relationship": "Hijo"}}
 
@@ -25,10 +26,11 @@ class SceneFamilyTests(TestCase):
     def setUp(self):
         cache.clear()
         users = get_user_model().objects
-        self.owner = users.create_user(username="scene-owner")
-        self.son = users.create_user(username="scene-son")
+        self.owner = adult(users.create_user(username="scene-owner"))
+        self.son = adult(users.create_user(username="scene-son"))
         self.profile = Profile.objects.create(owner=self.owner, display_name="Owner", face_recognition_enabled=True)
         Membership.objects.create(profile=self.profile, user=self.son, relationship="Hijo")
+        authorize(self.profile, face_local=True)  # the person's own grant for local family recognition
         self.client = APIClient()
         self.client.force_authenticate(self.owner)
 

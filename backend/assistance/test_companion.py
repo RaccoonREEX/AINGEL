@@ -11,6 +11,7 @@ from django.test import TestCase
 from rest_framework.test import APIClient
 
 from care.models import AuditEvent, Membership, Profile
+from care.testing import adult, authorize
 
 TOPIC = {
     "title": "Synthetic source title",
@@ -26,9 +27,9 @@ class CompanionTests(TestCase):
     def setUp(self):
         cache.clear()
         users = get_user_model().objects
-        self.owner = users.create_user(username="companion-owner")
-        self.reader = users.create_user(username="companion-reader")
-        self.outsider = users.create_user(username="companion-outsider")
+        self.owner = adult(users.create_user(username="companion-owner"))
+        self.reader = adult(users.create_user(username="companion-reader"))
+        self.outsider = adult(users.create_user(username="companion-outsider"))
         self.profile = Profile.objects.create(
             owner=self.owner,
             display_name="PRIVATE_PROFILE_MARKER",

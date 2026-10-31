@@ -10,6 +10,7 @@ from rest_framework.test import APIClient
 
 from care.consent import meta_user_allowed
 from care.models import Profile
+from care.testing import adult, authorize
 from config.asgi import application
 from assistance.test_captions import FakeMeta
 
@@ -20,7 +21,7 @@ PROD_META = {"AINGEL_ENV": "production", "AINGEL_AI_MODE": "meta", "MODEL_API_KE
 class MetaAccessTests(TestCase):
     def setUp(self):
         cache.clear()
-        self.user = get_user_model().objects.create_user(username="allowed-test")
+        self.user = adult(get_user_model().objects.create_user(username="allowed-test"))
         self.profile = Profile.objects.create(owner=self.user, display_name="Test")
         self.client = APIClient()
         self.client.force_authenticate(self.user)
@@ -53,7 +54,7 @@ class MetaAccessTests(TestCase):
 
     def test_public_wildcard_requires_explicit_synthetic_only_and_active_account(self):
         public = {**PROD_META, "AINGEL_META_ALLOWED_USER_IDS": "*", "AINGEL_SYNTHETIC_TESTS_ONLY": "1", "AINGEL_REAL_DATA": "0", "AINGEL_PRIVATE_OWN_MEDIA_TEST": "0"}
-        second = get_user_model().objects.create_user(username="second-demo-user")
+        second = adult(get_user_model().objects.create_user(username="second-demo-user"))
         with patch.dict(os.environ, public, clear=True):
             self.assertTrue(meta_user_allowed(self.user))
             self.assertTrue(meta_user_allowed(second))
@@ -79,7 +80,7 @@ class MetaAccessTests(TestCase):
 class MetaWebsocketAccessTests(TransactionTestCase):
     def setUp(self):
         cache.clear()
-        self.user = get_user_model().objects.create_user(username="ws-test")
+        self.user = adult(get_user_model().objects.create_user(username="ws-test"))
         self.client.force_login(self.user)
         self.cookie = f"sessionid={self.client.cookies['sessionid'].value}".encode()
 

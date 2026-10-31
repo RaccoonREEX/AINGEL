@@ -7,6 +7,7 @@ from django.test import TestCase
 from rest_framework.test import APIClient
 
 from care.models import AuditEvent, Profile
+from care.testing import adult, authorize
 
 VOCABULARY = {"tu": "tú / you", "bien": "bien / good", "pregunta": "¿pregunta? / question?", "yo": "yo / I", "comer": "comer / eat"}
 META = {"AINGEL_AI_MODE": "meta", "MODEL_API_KEY": "synthetic-key", "AINGEL_REAL_DATA": "1"}
@@ -18,8 +19,9 @@ class GlossTests(TestCase):
     def setUp(self):
         cache.clear()
         users = get_user_model().objects
-        self.owner = users.create_user(username="gloss-owner")
+        self.owner = adult(users.create_user(username="gloss-owner"))
         self.profile = Profile.objects.create(owner=self.owner, display_name="Owner", consents={"camera": True, "microphone": True, "meta_data": True})
+        authorize(self.profile, {"camera": True, "microphone": True, "meta_data": True})
         self.path = f"/api/v1/profiles/{self.profile.pk}/signs/gloss/"
         self.client = APIClient()
         self.client.force_authenticate(self.owner)
@@ -61,8 +63,7 @@ class GlossTests(TestCase):
             self.assertEqual(self.client.post(self.path, body, format="json").status_code, 400, body)
         response, _ = self.post(["tu"], env={"AINGEL_AI_MODE": "mock"})
         self.assertEqual(response.status_code, 503)
-        self.profile.consents = {"camera": True, "microphone": True, "meta_data": False}
-        self.profile.save()
+        authorize(self.profile, {"camera": True, "microphone": True, "meta_data": False})
         response, captured = self.post(["tu"])
         self.assertEqual(response.data["error"], "privacy_review_required")
         self.assertEqual(captured, {})

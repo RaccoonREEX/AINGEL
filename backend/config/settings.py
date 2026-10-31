@@ -160,6 +160,7 @@ REST_FRAMEWORK = {
         "chat": "6/min",
         "conversation": "12/min",
         "gloss": "30/min",
+        "consent_code": "10/hour",  # one-time codes: creation and redemption attempts
     },
 }
 SESSION_COOKIE_HTTPONLY = True

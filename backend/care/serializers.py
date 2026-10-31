@@ -4,7 +4,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from django.utils import timezone
 from rest_framework import serializers
 
-from .consent import clean_consents
+from .consent import PURPOSES, clean_consents
 from .models import Memory, Message, Profile, Routine
 
 COMMUNICATION_DEFAULTS = {
@@ -46,6 +46,11 @@ class ProfileSerializer(serializers.ModelSerializer):
     permissions = serializers.SerializerMethodField()
     caregiver_count = serializers.SerializerMethodField()
     ready = serializers.SerializerMethodField()
+    # Creation only: whether the account holder is the person (self) or sets it up for another adult, who must be
+    # 18+ (no minors in this product) and then accepts from their own account (care.consent).
+    for_self = serializers.BooleanField(write_only=True, required=False, default=False)
+    subject_adult = serializers.BooleanField(write_only=True, required=False, default=False)
+    grants = serializers.ListField(child=serializers.ChoiceField(choices=list(PURPOSES)), write_only=True, required=False, max_length=len(PURPOSES))
 
     class Meta:
         model = Profile
@@ -64,23 +69,49 @@ class ProfileSerializer(serializers.ModelSerializer):
             "ready",
             "face_recognition_enabled",
             "consents",
+            "subject_status",
+            "for_self",
+            "subject_adult",
+            "grants",
         ]
-        read_only_fields = ["face_recognition_enabled"]
+        # Decisions go through profiles/<id>/consent/ (only the person decides); the legacy flags are read-only.
+        read_only_fields = ["face_recognition_enabled", "consents", "subject_status"]
 
-    def validate_consents(self, value):
-        cleaned = clean_consents(value, self.context["request"].user)
-        if cleaned is None:
-            raise serializers.ValidationError("consents_invalid")
-        return cleaned
+    def validate(self, attrs):
+        if self.instance is None:
+            if not attrs.get("for_self") and not attrs.get("subject_adult"):
+                raise serializers.ValidationError({"subject_adult": ["subject_minor_not_supported"]})
+            if attrs.get("grants") and not attrs.get("for_self"):
+                # A caregiver cannot accept on behalf of another adult.
+                raise serializers.ValidationError({"grants": ["consent_subject_only"]})
+        else:
+            for key in ("for_self", "subject_adult", "grants"):
+                attrs.pop(key, None)
+        return attrs
+
+    def create(self, validated):
+        for_self = validated.pop("for_self", False)
+        validated.pop("subject_adult", None)
+        grants = validated.pop("grants", [])
+        validated["subject_status"] = "self" if for_self else "pending_consent"
+        profile = super().create(validated)
+        from .consent import decide
+
+        for purpose in dict.fromkeys(grants):
+            decide(profile, profile.owner, purpose, "grant", method="own_account_signup")
+        return profile
 
     def get_role(self, obj):
-        return (
-            "owner" if obj.owner_id == self.context["request"].user.id else "caregiver"
-        )
+        user_id = self.context["request"].user.id
+        if obj.owner_id == user_id:
+            return "owner"
+        return "subject" if obj.subject_user_id == user_id else "caregiver"
 
     def get_permissions(self, obj):
         if self.get_role(obj) == "owner":
             return {"configure": True, "memories": True, "manage_circle": True}
+        if self.get_role(obj) == "subject":
+            return {"configure": True, "memories": True, "manage_circle": False}
         member = obj.members.get(user=self.context["request"].user)
         return {
             "configure": member.can_configure,

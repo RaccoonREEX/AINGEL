@@ -20,8 +20,19 @@ class Profile(models.Model):
     preferences = models.JSONField(default=dict, blank=True)
     communication = models.JSONField(default=dict, blank=True)
     face_recognition_enabled = models.BooleanField(default=False)
-    # Authorizations given at sign-up (care.consent): camera, microphone, meta_data + version, time, who.
+    # Legacy sign-up authorizations (camera, microphone, meta_data), kept for history only: the granular
+    # ConsentGrant decisions of the person themselves replace them (care.consent).
     consents = models.JSONField(default=dict, blank=True)
+    # Who the data belongs to. "self": the owner account is the person; "pending_consent": created by an adult for
+    # another adult, who has not accepted yet; "subject_linked": that person accepted from their own account
+    # (subject_user); "requires_legal_review": consent cannot be given by the person and no reviewed legal basis
+    # exists yet. Only the person decides; nothing reaches Meta until they do.
+    subject_status = models.CharField(max_length=30, default="pending_consent")
+    subject_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="subject_profiles"
+    )
+    # Bumped on every revocation or decline: work started before it cannot be presented as current.
+    consent_epoch = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -164,3 +175,42 @@ class FamilyFace(models.Model):
     consent_version = models.CharField(max_length=30, default="family-face-v1")
     consented_at = models.DateTimeField(auto_now=True)
     expires_at = models.DateTimeField()
+
+
+class AccountPolicy(models.Model):
+    """Adult (18+) self-declaration of an account, required by the Meta Model API terms. Minimal data: no birth
+    date nor documents; a self-declaration is not identity verification."""
+
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="aingel_policy")
+    adult_declared_at = models.DateTimeField(null=True, blank=True)
+    terms_version = models.CharField(max_length=20, blank=True)
+    declaration = models.CharField(max_length=30, default="self_declaration")
+
+
+class ConsentGrant(models.Model):
+    """One decision of the person about one purpose (care.consent.PURPOSES). The latest row per purpose is current;
+    earlier rows are the history (who, when, version, how)."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name="consent_grants")
+    purpose = models.CharField(max_length=40)
+    status = models.CharField(max_length=20)  # granted | declined | revoked
+    version = models.CharField(max_length=20)
+    decided_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="+")
+    method = models.CharField(max_length=30, default="own_account")
+    decided_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["profile", "purpose", "decided_at"])]
+
+
+class SubjectInvite(models.Model):
+    """One-time code so the adult a profile was created for can accept or decline from their own account."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name="subject_invites")
+    code_hash = models.CharField(max_length=64, unique=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    used_at = models.DateTimeField(null=True, blank=True)

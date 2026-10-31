@@ -10,7 +10,7 @@ from django.core.cache import cache
 from websockets.asyncio.client import connect
 from websockets.exceptions import ConnectionClosed, WebSocketException
 
-from care.consent import meta_allowed, meta_user_allowed, private_media_allowed, synthetic_allowed
+from care.consent import meta_account_denial, meta_allowed, private_media_allowed, still_current, synthetic_allowed
 from care.permissions import access
 
 
@@ -22,7 +22,11 @@ class CaptionConsumer(AsyncWebsocketConsumer):
         try:
             user = self.scope["user"]
             profile = access(user, profile_id)
-            return private_media_allowed(profile, user, "audio", private_test) or meta_allowed(profile, "audio")
+            allowed = private_media_allowed(profile, user, "audio", private_test) or meta_allowed(profile, "audio")
+            if allowed:
+                # Re-checked while streaming: a revocation ends the session (receive).
+                self.consent_profile, self.consent_epoch = profile, profile.consent_epoch
+            return allowed
         except Exception:
             return False
 
@@ -33,6 +37,9 @@ class CaptionConsumer(AsyncWebsocketConsumer):
         self.lease = False
         self.ended = False
         self.bytes_sent = 0
+        self.consent_profile = None
+        self.consent_epoch = None
+        self.consent_checked = 0.0
         user = self.scope.get("user")
         if not user or not user.is_authenticated or not user.is_active:
             await self.close(code=4401)
@@ -83,6 +90,11 @@ class CaptionConsumer(AsyncWebsocketConsumer):
             ):
                 await self.fail("audio_rate_exceeded")
                 return
+            if self.consent_profile is not None and time.monotonic() - self.consent_checked > 5:
+                self.consent_checked = time.monotonic()
+                if not await database_sync_to_async(still_current)(self.consent_profile, self.consent_epoch):
+                    await self.fail("consent_changed")
+                    return
             try:
                 await self.upstream.send(bytes_data)
             except ConnectionClosed:
@@ -116,8 +128,8 @@ class CaptionConsumer(AsyncWebsocketConsumer):
         if value.get("locale") not in ["es-EC", "en-US"]:
             await self.fail("caption_language_unsupported")
             return
-        if not meta_user_allowed(self.scope.get("user")):
-            await self.fail("meta_access_denied")
+        if denial := await database_sync_to_async(meta_account_denial)(self.scope.get("user")):
+            await self.fail(denial)
             return
         # Synthetic test, or real audio of a profile that authorized microphone + Meta at sign-up.
         if not synthetic_allowed(value.get("synthetic")) and not await self.profile_allows(value.get("profile"), value.get("private_test")):

@@ -11,15 +11,19 @@ from django.middleware.csrf import get_token
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_http_methods
 
+from .consent import TERMS_VERSION, adult_declared, declare_adult
+
 
 def session_data(request):
     return {
         "user": (
-            {"id": request.user.id, "username": request.user.username}
+            {"id": request.user.id, "username": request.user.username, "adult_declared": adult_declared(request.user)}
             if request.user.is_authenticated
             else None
         ),
         "csrf": get_token(request),
+        # Current terms the 18+ declaration refers to (care.consent): clients show and send it back.
+        "terms_version": TERMS_VERSION,
         "mfa_required": bool(
             request.session.get("mfa_pending_user")
             and request.session.get("mfa_pending_until", 0) > time.time()
@@ -53,6 +57,9 @@ def authenticate_user(request, register=False):
             raise ValueError
     except (ValueError, TypeError, AttributeError):
         return JsonResponse({"error": "credentials_invalid"}, status=400)
+    if register and not adult_statement(data):
+        # Only adults (18+) may hold an account: required by the Meta Model API terms, checked here, not only in the apps.
+        return JsonResponse({"error": "adult_declaration_required"}, status=400)
     if register:
         user = get_user_model()(username=username)
         try:
@@ -60,6 +67,7 @@ def authenticate_user(request, register=False):
             validate_password(password, user)
             user.set_password(password)
             user.save()
+            declare_adult(user, TERMS_VERSION)
         except (ValidationError, IntegrityError):
             return JsonResponse({"error": "registration_invalid"}, status=400)
         login(request, user, backend="django.contrib.auth.backends.ModelBackend")
@@ -80,6 +88,27 @@ def authenticate_user(request, register=False):
     # attempt, never to a different account subsequently signed in here.
     request.session.pop("mfa_pending_user", None)
     request.session.pop("mfa_pending_until", None)
+    return JsonResponse(session_data(request))
+
+
+def adult_statement(data):
+    """An explicit «I am 18 or older» for the current terms; a self-declaration, not identity verification."""
+    return isinstance(data, dict) and data.get("adult") is True and data.get("terms_version") == TERMS_VERSION
+
+
+@csrf_protect
+@require_http_methods(["POST"])
+def declare(request):
+    """Accounts created before the age policy declare it here before using AINGEL with Meta."""
+    if not request.user.is_authenticated:
+        return JsonResponse({"error": "authentication_required"}, status=401)
+    try:
+        data = json.loads(request.body)
+    except ValueError:
+        data = None
+    if not adult_statement(data):
+        return JsonResponse({"error": "adult_declaration_required"}, status=400)
+    declare_adult(request.user, TERMS_VERSION)
     return JsonResponse(session_data(request))
 
 

@@ -10,6 +10,7 @@ from django.test import TransactionTestCase
 
 from config.asgi import application
 from care.models import Profile
+from care.testing import adult, authorize
 
 
 class FakeMeta:
@@ -40,8 +41,9 @@ class FakeMeta:
 class CaptionTests(TransactionTestCase):
     def setUp(self):
         cache.clear()
-        user = get_user_model().objects.create_user(username="caption-test")
+        user = adult(get_user_model().objects.create_user(username="caption-test"))
         self.profile = Profile.objects.create(owner=user, display_name="Owner", consents={"microphone": True, "meta_data": True})
+        authorize(self.profile, {"microphone": True, "meta_data": True})
         self.client.force_login(user)
         self.cookie = f"sessionid={self.client.cookies['sessionid'].value}".encode()
 

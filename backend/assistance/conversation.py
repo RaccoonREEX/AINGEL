@@ -17,7 +17,7 @@ from rest_framework.response import Response
 from rest_framework.throttling import UserRateThrottle
 
 from care.knowledge import KnowledgeUnavailable, best_topic
-from care.consent import meta_allowed, meta_user_allowed, synthetic_allowed
+from care.consent import meta_account_denial, meta_allowed, still_current, synthetic_allowed
 from care.permissions import access, audit
 
 from .companion import (
@@ -100,13 +100,19 @@ def support_needs(profile):
     return " ".join(line for line in lines if line.casefold().startswith(SUPPORT_LINE))[:600]
 
 
-def instructions(locale, preferences, personal=False, actions=()):
+def instructions(locale, preferences, personal=False, actions=(), personalized=None):
+    personalized = personal if personalized is None else personalized
     language = "Spanish" if locale == "es-EC" else "English"
     who = (
-        "The person authorized sharing their support needs and allergies, given as data: use them to tailor "
-        "suggestions and recommendations (for example accessible options, or avoiding their allergens), without "
-        "repeating them unless useful and without treating them as a diagnosis. You have no access to their "
-        "routines, messages or memories and must never claim to know them. "
+        (
+            "The person authorized sharing their support needs and allergies, given as data: use them to tailor "
+            "suggestions and recommendations (for example accessible options, or avoiding their allergens), without "
+            "repeating them unless useful and without treating them as a diagnosis. "
+            if personalized
+            else "The person authorized sending their questions, but not their profile: you do not know their "
+            "support needs, conditions or allergies and must not assume them. "
+        )
+        + "You have no access to their routines, messages or memories and must never claim to know them. "
         "You may use web search, only when the question needs current information, places, services, products or "
         "recommendations that the supplied excerpt does not cover; prefer official and health-authority sources. "
         if personal
@@ -152,8 +158,10 @@ def valid_action(action):
     return {"name": action["name"], "arguments": {}}
 
 
-def converse(turns, locale, preferences, profile=None, actions=()):
-    """[profile] is given only when real data is authorized (personalized answers and web search)."""
+def converse(turns, locale, preferences, profile=None, actions=(), real=None):
+    """[real]: a real question authorized by the person (web search allowed); [profile] is given only when they
+    also authorized personalization (support needs and allergies go with the question)."""
+    real = profile is not None if real is None else real
     language = "es" if locale == "es-EC" else "en"
     question = turns[-1]["text"]
     try:
@@ -183,7 +191,7 @@ def converse(turns, locale, preferences, profile=None, actions=()):
         raise CompanionUnavailable("ai_mode_invalid")
     if not os.environ.get("MODEL_API_KEY", "").strip():
         raise CompanionUnavailable("meta_not_configured")
-    data = {"conversation_history": turns[:-1], ("current_question" if profile is not None else "current_synthetic_question"): question}
+    data = {"conversation_history": turns[:-1], ("current_question" if real else "current_synthetic_question"): question}
     if profile is not None:
         data["support_needs"] = support_needs(profile)
         data["allergies"] = (profile.allergies or "").strip()[:300]
@@ -192,10 +200,10 @@ def converse(turns, locale, preferences, profile=None, actions=()):
         data["public_source_excerpt"] = source_excerpt(topic["summary"])
         data["source_excerpt_may_be_incomplete"] = len(topic["summary"]) > MAX_SOURCE_CHARS
     result = call_spark(
-        instructions(locale, preferences, personal=profile is not None, actions=actions),
+        instructions(locale, preferences, personal=real, actions=actions, personalized=profile is not None),
         json.dumps(data, ensure_ascii=False),
-        700 if profile is not None else 500,
-        web_search=profile is not None,
+        700 if real else 500,
+        web_search=real,
         functions={name: APP_ACTIONS[name] for name in actions},
     )
     result["action"] = valid_action(result.get("action"))
@@ -215,8 +223,8 @@ def converse(turns, locale, preferences, profile=None, actions=()):
 @api_view(["POST"])
 @throttle_classes([ConversationRate])
 def conversation(request, profile_id):
-    if not meta_user_allowed(request.user):
-        return Response({"error": "meta_access_denied"}, status=403)
+    if denial := meta_account_denial(request.user):
+        return Response({"error": denial}, status=403)
     profile = access(request.user, profile_id)
     data = request.data
     if not isinstance(data, dict) or "turns" not in data or set(data) - {"turns", "synthetic", "actions"}:
@@ -227,14 +235,20 @@ def conversation(request, profile_id):
     turns = valid_turns(data["turns"])
     if turns is None:
         return Response({"error": "conversation_request_invalid"}, status=400)
-    # Authorization comes from sign-up (profile consents); the synthetic declaration remains for tests.
+    # The person's own grants (care.consent); the synthetic declaration remains for tests.
     real = meta_allowed(profile, "conversation")
+    personalized = real and meta_allowed(profile, "personalization")
     if os.environ.get("AINGEL_AI_MODE", "mock") == "meta" and not real and not synthetic_allowed(data.get("synthetic")):
         return Response({"error": "privacy_review_required"}, status=400)
+    epoch = profile.consent_epoch
     try:
-        result = converse(turns, profile.locale, categorical_preferences(profile.communication), profile if real else None, tuple(actions))
+        result = converse(turns, profile.locale, categorical_preferences(profile.communication), profile if personalized else None,
+                          tuple(actions), real=real)
     except CompanionUnavailable as error:
         return Response({"error": str(error)}, status=503)
+    if real and not still_current(profile, epoch):
+        # Revoked while Meta was answering: the answer is dropped, not shown as current.
+        return Response({"error": "consent_changed"}, status=409)
     # Neither the turns nor the answer are written to the audit trail.
     audit(profile, request.user, "companion.conversation")
     return Response(result)
