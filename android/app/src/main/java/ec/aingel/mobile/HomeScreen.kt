@@ -732,6 +732,8 @@ private const val MAX_MODEL_PAIRS = 5
             }
             HomeMode.WATCH -> {
                 T(stringResource(R.string.ui_m_watch), 20, FontWeight.SemiBold, Ui.Navy, align = TextAlign.Center)
+                // Right under the title: on a small screen a refusal below the button would be out of sight.
+                notice?.let { Spacer(Modifier.height(8.dp)); Notice(it) }
                 Spacer(Modifier.height(6.dp)); T(stringResource(R.string.ui_m_watch_intro), 14, color = Ui.Text, align = TextAlign.Center, lineHeight = 1.5f)
                 Spacer(Modifier.height(6.dp)); T(stringResource(R.string.ui_vision_caution), 12, color = Ui.Muted, align = TextAlign.Center)
                 Spacer(Modifier.height(8.dp)); T(stringResource(R.string.ui_m_watch_output, AudioRoute.outputLabel(context)), 12, color = Ui.Muted, align = TextAlign.Center)
@@ -748,7 +750,6 @@ private const val MAX_MODEL_PAIRS = 5
                     // The person decides in the system screen; AINGEL never changes that permission itself.
                     try { context.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + context.packageName))) } catch (_: Exception) {}
                 }
-                notice?.let { Spacer(Modifier.height(12.dp)); Notice(it) }
                 Spacer(Modifier.weight(1f).heightIn(min = 16.dp)); LinkButton(stringResource(R.string.ui_m_finish), size = 14) { endMode() }
             }
         }
