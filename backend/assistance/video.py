@@ -103,30 +103,36 @@ def mp4_info(data):
 
 
 # --- Short temporal context (real watching only, expiring) ---------------------------------------------------------
-# Only real, authorized clips have a context, keyed by account, profile and the person's consent epoch: a revocation
-# (the epoch moves), another person or another account can never read it. The client's session id only separates
-# that person's own watching sessions; it is not what isolates them. Synthetic fixtures have no context at all, so
-# nothing real can reach a fixture payload.
+# Only real, authorized clips have a context, keyed by account and profile, and stamped with the person's consent epoch:
+# after a revocation (the epoch moves) the stored context is discarded and deleted on the next read, and another person
+# or account can never read it. The client's session id only separates that person's own watching sessions; it is not
+# what isolates them. Ending a session deletes it at once. Synthetic fixtures have no context at all, so nothing real
+# can reach a fixture payload.
 
 def context_key(user, profile, session):
-    return f"video-context:real:{user.pk}:{profile.pk}:{profile.consent_epoch}:{session}"
+    return f"video-context:real:{user.pk}:{profile.pk}:{session}"
 
 
 def sequence_key(user, profile, session):
     if profile is None:
         return f"video-seq:fixture:{user.pk}:{session}"
-    return f"video-seq:real:{user.pk}:{profile.pk}:{profile.consent_epoch}:{session}"
+    return f"video-seq:real:{user.pk}:{profile.pk}:{session}"
 
 
-def recent_events(key):
+def recent_events(key, epoch):
+    stored = cache.get(key)
+    if not isinstance(stored, dict) or stored.get("epoch") != epoch:
+        if stored is not None:
+            cache.delete(key)  # from before a revocation: never used again
+        return []
     now = time.time()
-    return [e for e in cache.get(key, []) if now - e["at"] < EVENT_TTL]
+    return [e for e in stored["events"] if now - e["at"] < EVENT_TTL]
 
 
-def remember(key, events, seq):
+def remember(key, epoch, events, seq):
     now = time.time()
-    kept = recent_events(key) + [{**e, "at": now, "seq": seq} for e in events]
-    cache.set(key, kept[-CONTEXT_EVENTS:], EVENT_TTL)
+    kept = recent_events(key, epoch) + [{**e, "at": now, "seq": seq} for e in events]
+    cache.set(key, {"epoch": epoch, "events": kept[-CONTEXT_EVENTS:]}, EVENT_TTL)
 
 
 def new_events(events, previous):
@@ -330,7 +336,7 @@ class ClipView(APIView):
                 return Response({"stale": True, "events": [], "say": ""})
             # The private history is read only on the real path, after its authorization was checked above.
             history = context_key(request.user, profile, values["session"]) if path == "real" else None
-            previous = recent_events(history) if history else []
+            previous = recent_events(history, epoch) if history else []
             preferences = (profile_preferences(profile.communication, meta_allowed(profile, "personalization"))
                            if profile is not None else synthetic.FICTIONAL_PREFERENCES)
             try:
@@ -346,7 +352,7 @@ class ClipView(APIView):
                 return Response({"error": "consent_changed"}, status=409)
             fresh = new_events(events, previous)
             if history:
-                remember(history, fresh, values["seq"])
+                remember(history, epoch, fresh, values["seq"])
             say = say if fresh else ""
             say, adjusted = vision_guard(say, values["locale"]) if say else ("", False)
         finally:

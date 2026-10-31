@@ -165,6 +165,23 @@ class VideoContextIsolationTests(Accounts, TestCase):
         self.real(self.user, self.profile, 3)
         self.assertEqual(context_of(self.wire.sent[-1]["payload"]), [])
 
+    def test_a_revoked_context_is_deleted_and_ending_the_session_after_a_revocation_still_works(self):
+        from .video import context_key
+
+        self.real(self.user, self.profile, 1)
+        key = context_key(self.user, self.profile, SESSION)
+        self.assertIsNotNone(cache.get(key))
+        decide(self.profile, self.user, "meta_video", "revoke")
+        self.profile.refresh_from_db()
+        response = self.api_for(self.user).post("/api/v1/vision/clip/end/", {"profile": str(self.profile.pk), "session": SESSION}, format="json")
+        self.assertEqual(response.status_code, 204)
+        self.assertIsNone(cache.get(key))  # the same key as before the revocation: really gone, not just unreachable
+        self.real(self.user, self.profile, 1)
+        decide(self.profile, self.user, "meta_video", "grant")
+        self.profile.refresh_from_db()
+        self.real(self.user, self.profile, 2)
+        self.assertEqual(context_of(self.wire.sent[-1]["payload"]), [])
+
     def test_ending_the_session_discards_the_context(self):
         self.real(self.user, self.profile, 1)
         response = self.api_for(self.user).post("/api/v1/vision/clip/end/", {"profile": str(self.profile.pk), "session": SESSION}, format="json")
