@@ -372,7 +372,11 @@ private const val MAX_MODEL_PAIRS = 5
             if (heard.isBlank()) silent() else { transcript = heard; silenceUntil = 0L; ask(heard) }
         }, onFailure = { error ->
             voice.stop()
-            if (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) silent()
+            // The phone's own recogniser lacked the language: the system's one needs this account's acceptance first.
+            if (error == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS && voice.needsAcceptance()) {
+                continuous = false; silenceUntil = 0L; phase = AingelOrbState.IDLE; speechAsk = { startListening() }
+            }
+            else if (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) silent()
             else if (retry && error in setOf(SpeechRecognizer.ERROR_RECOGNIZER_BUSY, SpeechRecognizer.ERROR_CLIENT, SpeechRecognizer.ERROR_SERVER_DISCONNECTED)) {
                 scope.launch { delay(600); startListening(false) }
             }
@@ -441,7 +445,8 @@ private const val MAX_MODEL_PAIRS = 5
         }, onFailure = { error ->
             voice.stop()
             if (mode == HomeMode.HEAR) {
-                if (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) again(400)
+                if (error == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS && voice.needsAcceptance()) { phase = AingelOrbState.IDLE; speechAsk = { hearListen() } }
+                else if (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) again(400)
                 else if (transientRecognizerError(error) && tries < 3) { modeJob?.cancel(); modeJob = scope.launch { delay(600); hearListen(tries + 1) } }
                 else { phase = AingelOrbState.IDLE; notice = str(R.string.ui_voice_failed) }
             }
@@ -657,6 +662,8 @@ private const val MAX_MODEL_PAIRS = 5
                 T(longDate(profile.optString("locale", "es-EC"), zoneId), 13, color = Ui.Muted)
             }
             if (!menu) { HandButton { vision = false; onSigns() }; EyesButton(vision) { toggleVision() } }
+            // With the modes menu in the corner the eyes stay one tap away too: AINGEL looks through the camera.
+            else EyesButton(vision) { toggleVision() }
         }
     }
     val stage: @Composable () -> Unit = {

@@ -8,6 +8,8 @@ import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -46,8 +48,11 @@ class VoiceInput(private val context: Context, private val accepted: () -> Boole
     private var session = 0
     private var meter: Thread? = null
     @Volatile private var metering = false
-    /** The on-device recogniser lacked this language: the system's one (and the account's acceptance) is needed. */
-    private var deviceFailed = false
+    companion object {
+        /** The phone's on-device recogniser lacked the language (e.g. no es-EC pack): remembered for the whole app, so
+         * no screen tries it again; the system's recogniser (and the account's acceptance) is used instead. */
+        @Volatile private var deviceFailed = false
+    }
     private val onDevice: Boolean get() = !deviceFailed && Build.VERSION.SDK_INT >= 31 && SpeechRecognizer.isOnDeviceRecognitionAvailable(context)
     val recognitionAvailable: Boolean get() = onDevice || SpeechRecognizer.isRecognitionAvailable(context)
     /** "device", "service" or "ask" ([recognitionMode]) for the account signed in now. */
@@ -70,15 +75,25 @@ class VoiceInput(private val context: Context, private val accepted: () -> Boole
     }
 
     /** Starts a session and returns its number, so a caller can later stop only its own ([stopIf]). */
-    @SuppressLint("InlinedApi")  // the language errors exist from API 31, the only versions with an on-device recogniser
     fun start(locale: String, onPartial: (String) -> Unit, onResult: (String) -> Unit, onFailure: (Int) -> Unit): Int {
         stop()
         val id = ++session
+        listen(id, locale, onPartial, onResult, onFailure)
+        return id
+    }
+
+    /**
+     * One listening attempt within session [id]. If the on-device recogniser lacks the language it is not reported as a
+     * failure: the same session goes on at once with the system's recogniser, which needs this account's acceptance
+     * (ERROR_INSUFFICIENT_PERMISSIONS without it, so the screen offers it, or typing).
+     */
+    @SuppressLint("InlinedApi")  // the language errors exist from API 31, the only versions with an on-device recogniser
+    private fun listen(id: Int, locale: String, onPartial: (String) -> Unit, onResult: (String) -> Unit, onFailure: (Int) -> Unit) {
         val mode = mode()
         // Callers ask first; never the vendor's service without this account's acceptance.
-        if (mode == "ask" && SpeechRecognizer.isRecognitionAvailable(context)) { onFailure(SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS); return id }
+        if (mode == "ask" && SpeechRecognizer.isRecognitionAvailable(context)) { onFailure(SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS); return }
         routeMicrophone()
-        if (!recognitionAvailable) { startMeter(); return id }
+        if (!recognitionAvailable) { startMeter(); return }
         val device = mode == "device"
         val engine = if (device && Build.VERSION.SDK_INT >= 31) SpeechRecognizer.createOnDeviceSpeechRecognizer(context) else SpeechRecognizer.createSpeechRecognizer(context)
         recognizer = engine
@@ -90,7 +105,17 @@ class VoiceInput(private val context: Context, private val accepted: () -> Boole
             override fun onEndOfSpeech() { level = 0f }
             override fun onError(error: Int) {
                 level = 0f
-                if (device && (error == SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED || error == SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE)) deviceFailed = true
+                android.util.Log.i("AINGEL-voice", "recognizer error=$error device=$device")  // the code only, never content
+                // The on-device recogniser failing for any reason other than silence (a missing language pack is
+                // reported in several ways) means the system's recogniser is used from now on, as before.
+                if (device && error != SpeechRecognizer.ERROR_NO_MATCH && error != SpeechRecognizer.ERROR_SPEECH_TIMEOUT) {
+                    deviceFailed = true
+                    // Not the person's problem: retry right away with the system's recogniser (after this callback).
+                    if (recognizer === engine) Handler(Looper.getMainLooper()).post {
+                        if (session == id && recognizer === engine) { recognizer = null; engine.destroy(); listen(id, locale, onPartial, onResult, onFailure) }
+                    }
+                    return
+                }
                 if (recognizer === engine) onFailure(error)
             }
             override fun onResults(results: Bundle?) {
@@ -105,11 +130,11 @@ class VoiceInput(private val context: Context, private val accepted: () -> Boole
         engine.startListening(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
             .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             .putExtra(RecognizerIntent.EXTRA_LANGUAGE, locale)
-            // On the phone when its language pack allows; otherwise the system recognizer may use its vendor's service.
-            .putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
+            // Offline only with the on-device recogniser. Forcing it on the system's recogniser made it demand an offline
+            // language pack the phone may not have (es-EC on the Flip 4: error 12), so voice stopped working.
+            .putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, device)
             .putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
             .putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1))
-        return id
     }
 
     /** Stops the microphone only if session [id] is still the one listening (a newer one may have started). */

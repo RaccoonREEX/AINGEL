@@ -163,8 +163,12 @@ private const val CHEVRON_PATH = "M6 9l6 6 6-6"
                 if (said.isBlank()) { result = "no-speech"; settle(AingelOrbState.CONFUSED, 3000) } else interpret(said)
             }, onFailure = { error ->
                 voice.stop()
+                // The phone's own recogniser lacked the language: the system's one needs this account's acceptance first.
+                if (error == android.speech.SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS && voice.needsAcceptance()) {
+                    listening = false; orb = AingelOrbState.IDLE; speechAsk = { listen() }
+                }
                 // Right after leaving home the microphone may still be closing: try again before giving up.
-                if (transientRecognizerError(error) && tries < 3 && listening) scope.launch { delay(600); if (listening) begin(tries + 1) }
+                else if (transientRecognizerError(error) && tries < 3 && listening) scope.launch { delay(600); if (listening) begin(tries + 1) }
                 else {
                     listening = false
                     result = if (error == android.speech.SpeechRecognizer.ERROR_NO_MATCH || error == android.speech.SpeechRecognizer.ERROR_SPEECH_TIMEOUT) "no-speech" else "unavailable"
