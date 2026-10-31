@@ -122,6 +122,8 @@
     <string name="image_required_error">Añade una foto y completa los datos necesarios.</string>
     <string name="image_size_error">Las fotos son demasiado grandes. Reduce su tamaño y vuelve a intentarlo.</string>
     <string name="face_duplicate_error">Usa fotos distintas para cada toma.</string>
+    <string name="face_disabled_error">El reconocimiento de familiares está desactivado temporalmente en el servidor. No se procesa ningún rostro; puedes consultar y retirar tus autorizaciones.</string>
+    <string name="face_consent_changed_error">Una autorización cambió mientras se procesaba la imagen: el resultado se descartó.</string>
     <string name="face_blurry_error">La foto está borrosa. Intenta con más luz y una imagen enfocada.</string>
     <string name="face_clear_error">Cada foto debe mostrar un solo rostro claro.</string>
     <string name="face_inconsistent_error">Las fotos no parecen corresponder a la misma persona. Revisa las tomas.</string>

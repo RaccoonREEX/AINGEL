@@ -9,7 +9,7 @@ from rest_framework.views import APIView
 from rest_framework.throttling import ScopedRateThrottle
 
 from care.consent import granted, meta_account_denial, meta_allowed, private_media_allowed, refused, still_current, subject_account
-from care.faces import family_matches
+from care.faces import FaceConsentChanged, FaceRecognitionDisabled, family_matches, recognition_enabled
 from care.permissions import access, audit
 
 from . import synthetic
@@ -66,8 +66,9 @@ def known_line(candidate, locale):
 
 def known_people(request, values, image):
     """Family members recognized in [image], for the owner or the person themselves, with the feature enabled and
-    the person's own «face_local» grant. Recognition failing never blocks the description."""
-    if not values["family"] or "profile" not in values:
+    the person's own «face_local» grant. Recognition failing never blocks the description. With the server switch off
+    (care.faces, hotfix) nothing is looked up or processed."""
+    if not recognition_enabled() or not values["family"] or "profile" not in values:
         return []
     profile = access(request.user, values["profile"])
     subject = subject_account(profile)
@@ -77,8 +78,8 @@ def known_people(request, values, image):
         return []
     try:
         found = family_matches(profile, image)
-    except (ValidationError, ValueError, cv2.error, InvalidToken):
-        return []
+    except (FaceRecognitionDisabled, FaceConsentChanged, ValidationError, ValueError, cv2.error, InvalidToken):
+        return []  # off, not authorized, or revoked while processing: no one is named
     audit(profile, request.user, "face.local_match_requested")
     people = {}
     for face in found:

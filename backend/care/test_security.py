@@ -1,3 +1,4 @@
+import os
 from datetime import timedelta
 import io
 import time
@@ -15,6 +16,7 @@ from rest_framework.test import APIClient
 from .crypto import decrypt, encrypt
 from .faces import candidate_match
 from .models import FamilyFace, MFADevice, Membership, Profile
+from .testing import authorize
 
 
 class MFATests(TestCase):
@@ -172,6 +174,8 @@ def photo(color="white"):
     return SimpleUploadedFile("synthetic.png", data.getvalue(), "image/png")
 
 
+# The module is off by default (care.faces hotfix); these tests cover how it behaves once switched on again.
+@patch.dict(os.environ, {"AINGEL_FACE_RECOGNITION_ENABLED": "1"})
 class FamilyFaceTests(TestCase):
     def setUp(self):
         cache.clear()
@@ -197,6 +201,8 @@ class FamilyFaceTests(TestCase):
             format="json",
         )
         self.assertEqual(response.status_code, 200)
+        # Matching also needs the person's own face_local grant, checked before any processing (hotfix 31-10-2026).
+        authorize(Profile.objects.get(pk=self.profile.pk), face_local=True)
 
     def test_default_disabled_and_caregiver_cannot_enable(self):
         self.assertFalse(self.client.get(self.base).data["enabled"])
@@ -325,6 +331,8 @@ class FamilyFaceTests(TestCase):
         self.assertEqual(self.client.get(self.base).status_code, 404)
 
 
+# The module is off by default (care.faces hotfix); these tests cover how it behaves once switched on again.
+@patch.dict(os.environ, {"AINGEL_FACE_RECOGNITION_ENABLED": "1"})
 class MultiPhotoTests(TestCase):
     setUp = FamilyFaceTests.setUp
     enable = FamilyFaceTests.enable

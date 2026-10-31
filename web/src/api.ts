@@ -29,6 +29,9 @@ export function errorKey(e: unknown, notFound: Key = "errorGeneric"): Key {
   // Not a Meta failure: the person has not allowed sending this data to Meta (decided in Personalizar).
   if (detail.includes("privacy_review_required")) return "errorPrivacy";
   if (detail.includes("mfa_")) return "mfaError";
+  // The server switch is off (care.faces hotfix): nothing was processed; consulting and withdrawing still work.
+  if (detail.includes("face_recognition_disabled")) return "faceServerOff";
+  if (detail.includes("face_consent_changed")) return "faceConsentChanged";
   if (detail.includes("face_") || detail.includes("self_enrollment")) return "faceError";
   if (detail.includes("credentials_invalid")) return "errorAuth";
   if (detail.includes("registration_invalid")) return "errorRegister";

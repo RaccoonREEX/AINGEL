@@ -122,6 +122,8 @@
     <string name="image_required_error">Add a photo and complete the required details.</string>
     <string name="image_size_error">The photos are too large. Reduce their size and try again.</string>
     <string name="face_duplicate_error">Use a different photo for each sample.</string>
+    <string name="face_disabled_error">Family recognition is temporarily turned off on the server. No face is processed; you can still review and withdraw your authorizations.</string>
+    <string name="face_consent_changed_error">An authorization changed while the image was being processed: the result was discarded.</string>
     <string name="face_blurry_error">The photo is blurry. Try better lighting and a focused image.</string>
     <string name="face_clear_error">Each photo must show one clear face.</string>
     <string name="face_inconsistent_error">The photos do not appear to show the same person. Check the samples.</string>
