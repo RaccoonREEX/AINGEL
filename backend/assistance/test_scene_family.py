@@ -23,6 +23,8 @@ def photo():
     return SimpleUploadedFile("frame.jpg", buffer.getvalue(), content_type="image/jpeg")
 
 
+# The module is off by default (care.faces hotfix); these tests cover how it behaves once switched on again.
+@patch.dict(os.environ, {"AINGEL_FACE_RECOGNITION_ENABLED": "1"})
 class SceneFamilyTests(TestCase):
     """«Qué ves» and continuous watching say which enrolled family member is in front (29-10-2026)."""
 

@@ -1,8 +1,20 @@
-"""Opt-in, one-profile family matching. No cloud calls and no face-photo persistence."""
+"""Opt-in, one-profile family matching. No cloud calls and no face-photo persistence.
+
+Hotfix 31-10-2026: the whole module sits behind the server switch AINGEL_FACE_RECOGNITION_ENABLED, off unless it is
+exactly "1". While off, nothing detects faces, computes or compares templates, or enrolls anyone: every entry point
+refuses before reading the image, and embeddings() itself refuses before loading a model. Looking at the state and
+withdrawing (turning the feature off, deleting one's own enrollment) keep working; stored templates are deleted only
+when someone asks.
+
+Matching checks the authorization before processing and again, under a row lock, after it: the profile's switch,
+the person's own face_local grant, their consent epoch and each enrolled member's epoch. Any change in between
+(a revocation while OpenCV ran) discards the result: nothing is returned, said or audited as a match.
+"""
 
 from datetime import timedelta
 import hashlib
 import json
+import os
 import threading
 
 import cv2
@@ -19,6 +31,7 @@ from rest_framework.throttling import UserRateThrottle
 from rest_framework.decorators import throttle_classes
 
 from assistance.scene import normalize_image
+from .consent import granted
 from .crypto import decrypt, encrypt
 from .models import FamilyFace, Profile
 from .permissions import access, audit
@@ -30,7 +43,29 @@ class FaceRate(UserRateThrottle):
     scope = "face"
 
 
+class FaceRecognitionDisabled(Exception):
+    pass
+
+
+class FaceConsentChanged(Exception):
+    pass
+
+
+def recognition_enabled():
+    """The server switch; off by default (hotfix 31-10-2026)."""
+    return os.environ.get("AINGEL_FACE_RECOGNITION_ENABLED", "0") == "1"
+
+
+def require_enabled():
+    if not recognition_enabled():
+        raise FaceRecognitionDisabled("face_recognition_disabled")
+
+
+DISABLED = {"error": "face_recognition_disabled"}
+
+
 def embeddings(image_bytes):
+    require_enabled()  # the last line of defence: no model is loaded and no face is detected while off
     root = settings.BASE_DIR.parent / ".local" / "face-models"
     detector_path = root / "face_detection_yunet_2023mar.onnx"
     recognizer_path = root / "face_recognition_sface_2021dec.onnx"
@@ -146,11 +181,31 @@ def enrollment_data(face):
     }
 
 
+def authorization(profile_id):
+    """What allows matching for this profile right now, read from the database (never from a request's stale copy)."""
+    profile = Profile.objects.get(pk=profile_id)
+    return {
+        "enabled": profile.face_recognition_enabled,
+        "granted": granted(profile, ("face_local",)),
+        "epoch": profile.consent_epoch,
+        "members": {
+            str(face.id): face.member.face_consent_epoch
+            for face in FamilyFace.objects.filter(member__profile=profile, expires_at__gt=timezone.now()).select_related("member")
+        },
+    }
+
+
 def family_matches(profile, image):
     """Enrolled family members found in [image] (normalized JPEG bytes), matched here with OpenCV: no cloud call.
-    Each detected face gets its box and a candidate (id, display_name, relationship) or None."""
+    Each detected face gets its box and a candidate (id, display_name, relationship) or None.
+    Raises FaceRecognitionDisabled (switch off), ValidationError face_consent_required (not authorized before
+    processing) or FaceConsentChanged (revoked while processing: the result is discarded)."""
+    require_enabled()
+    before = authorization(profile.pk)
+    if not before["enabled"] or not before["granted"]:
+        raise ValidationError("face_consent_required")  # checked before any face is detected
     faces = FamilyFace.objects.filter(
-        member__profile=profile, expires_at__gt=timezone.now()
+        pk__in=list(before["members"]), expires_at__gt=timezone.now()
     ).select_related("member__user")
     candidates = [
         {
@@ -158,25 +213,26 @@ def family_matches(profile, image):
             "display_name": face.display_name,
             "relationship": face.member.relationship,
             "samples": decode_samples(face.embedding_encrypted),
-            "consent_epoch": face.member.face_consent_epoch,
+            "consent_epoch": before["members"].get(str(face.id)),
         }
         for face in faces
     ]
     detected = embeddings(image)
     with transaction.atomic():
-        profile = Profile.objects.select_for_update().get(pk=profile.pk)
-        if not profile.face_recognition_enabled:
-            raise ValidationError("face_consent_changed")
-        current = {
-            str(face.id): face.member.face_consent_epoch
-            for face in FamilyFace.objects.filter(
-                member__profile=profile, expires_at__gt=timezone.now()
-            ).select_related("member")
-        }
+        # Serialized with every revocation (they lock the same row): a revocation committed while OpenCV ran is seen.
+        Profile.objects.select_for_update().get(pk=profile.pk)
+        after = authorization(profile.pk)
+        if (
+            not recognition_enabled()
+            or not after["enabled"]
+            or not after["granted"]
+            or after["epoch"] != before["epoch"]
+        ):
+            raise FaceConsentChanged("face_consent_changed")
         candidates = [
             candidate
             for candidate in candidates
-            if current.get(candidate["id"]) == candidate["consent_epoch"]
+            if after["members"].get(candidate["id"]) == candidate["consent_epoch"]
         ]
         results = []
         for detection in detected:
@@ -208,6 +264,8 @@ def family_faces(request, profile_id):
         ).select_related("member__user")
         return Response(
             {
+                # available: the server switch (hotfix); enabled: the profile's own setting, still visible and revocable.
+                "available": recognition_enabled(),
                 "enabled": profile.face_recognition_enabled,
                 "enrollments": [enrollment_data(x) for x in faces],
                 "can_enroll": profile.members.filter(user=request.user).exists(),
@@ -227,6 +285,8 @@ def family_faces(request, profile_id):
             FamilyFace.objects.filter(member=member).delete()
         audit(profile, request.user, "face.consent_revoked", member.id)
         return Response(status=204)
+    if not recognition_enabled():
+        return Response(DISABLED, status=503)  # no new enrollment: nothing is read or processed
     if not profile.face_recognition_enabled:
         raise ValidationError("face_feature_disabled")
     if request.data.get("consent") not in [True, "true"] or request.data.get(
@@ -269,7 +329,8 @@ def family_faces(request, profile_id):
         locked = Profile.objects.select_for_update().get(pk=profile.pk)
         current_member = locked.members.filter(pk=member.pk).first()
         if (
-            not locked.face_recognition_enabled
+            not recognition_enabled()
+            or not locked.face_recognition_enabled
             or not current_member
             or current_member.face_consent_epoch != initial_epoch
         ):
@@ -297,6 +358,8 @@ def face_consent(request, profile_id):
     enabled = request.data.get("enabled")
     if type(enabled) is not bool:
         raise ValidationError("face_consent_required")
+    if enabled and not recognition_enabled():
+        return Response(DISABLED, status=503)  # it cannot be turned on; turning it off always works
     if enabled:
         password = request.data.get("password", "")
         if (
@@ -323,6 +386,8 @@ def face_consent(request, profile_id):
 @api_view(["POST"])
 @throttle_classes([FaceRate])
 def recognize_family(request, profile_id):
+    if not recognition_enabled():
+        return Response(DISABLED, status=503)  # before the image is even read
     profile = access(request.user, profile_id, "owner")
     if not profile.face_recognition_enabled:
         raise ValidationError("face_feature_disabled")
@@ -333,6 +398,10 @@ def recognize_family(request, profile_id):
         raise ValidationError("image_required")
     try:
         results = family_matches(profile, normalize_image(image))
+    except FaceRecognitionDisabled:
+        return Response(DISABLED, status=503)
+    except FaceConsentChanged:
+        return Response({"error": "face_consent_changed"}, status=409)  # revoked meanwhile: nothing is returned
     except (ValueError, cv2.error, InvalidToken):
         raise ValidationError("face_processing_failed") from None
     audit(profile, request.user, "face.local_match_requested")

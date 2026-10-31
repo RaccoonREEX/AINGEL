@@ -171,6 +171,10 @@ export const es = {
     "No se detectó un rostro claro. Prueba con mejor iluminación y un rostro más grande.",
   faceError:
     "No se pudo procesar el rostro. Revisa el consentimiento y usa una foto clara con un solo rostro para registrarte.",
+  faceServerOff:
+    "El reconocimiento de familiares está desactivado temporalmente en el servidor. No se procesa ningún rostro; puedes consultar y retirar tus autorizaciones.",
+  faceConsentChanged:
+    "Una autorización cambió mientras se procesaba la imagen: el resultado se descartó.",
   locate: "Localizar objeto",
   objectPrompt: "Objeto que quieres encontrar",
   objectPromptHint:
@@ -568,6 +572,10 @@ const en: Record<keyof typeof es, string> = {
     "No clear face was detected. Try better lighting and a larger face.",
   faceError:
     "Could not process the face. Check consent and use a clear single-face photo for enrollment.",
+  faceServerOff:
+    "Family recognition is temporarily turned off on the server. No face is processed; you can still review and withdraw your authorizations.",
+  faceConsentChanged:
+    "An authorization changed while the image was being processed: the result was discarded.",
   locate: "Locate object",
   objectPrompt: "Object to find",
   objectPromptHint:

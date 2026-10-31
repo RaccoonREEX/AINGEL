@@ -189,6 +189,8 @@ internal fun errorMessage(error: String): Int = when (error) {
     "face_single_clear_face_required" -> R.string.face_clear_error
     "face_photos_inconsistent" -> R.string.face_inconsistent_error
     "face_models_not_installed", "face_processing_failed" -> R.string.face_processing_error
+    "face_recognition_disabled" -> R.string.face_disabled_error
+    "face_consent_changed" -> R.string.face_consent_changed_error
     "voice_unavailable" -> R.string.voice_error
     "knowledge_not_installed", "knowledge_index_invalid" -> R.string.knowledge_unavailable
     "knowledge_query_invalid" -> R.string.knowledge_query_error

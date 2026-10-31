@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import { createServer } from "vite";
 
+// Source checks read the same text whatever line endings the checkout uses.
+const source = (file) => fs.readFileSync(file, "utf8").replace(/\r\n/g, "\n");
+
 const state = (epoch, statuses) => ({
   version: "v", subject_status: "self", is_subject: true, subject_adult: true, credits_notice: "", epoch,
   purposes: Object.entries(statuses).map(([id, status]) => ({ id, status, to: "local", title: id, detail: "" })),
@@ -52,19 +55,19 @@ try {
   assert.equal(watch.stopsCapture("meta_unavailable"), false);
 
   // Every capture entry point checks first and reacts to changes (wiring checked in the source).
-  const home = fs.readFileSync("src/screens/Home.tsx", "utf8");
+  const home = source("src/screens/Home.tsx");
   assert.match(home, /if \(!\(await consent\.allowed\("camera"\)\)\)[^\n]*\n\s*setVision\(true\);\n\s*const opened = await camera\.start/);
   assert.match(home, /if \(!\(await consent\.allowed\("microphone"\)\)\)[^\n]*\n\s*const started = await speech\.start/);
   assert.match(home, /inflight\.current\.forEach\(\(control\) => control\.abort\(\)\)/);
   assert.doesNotMatch(home, /await api<(Scene|Located|ConversationReply)>/, "requests that depend on consent must be abortable");
-  const signs = fs.readFileSync("src/screens/SignTranslator.tsx", "utf8");
+  const signs = source("src/screens/SignTranslator.tsx");
   assert.match(signs, /consent\.allowed\("camera"\)/);
   assert.match(signs, /consent\.allowed\("microphone"\)/);
-  const hear = fs.readFileSync("src/Hear.tsx", "utf8");
+  const hear = source("src/Hear.tsx");
   assert.match(hear, /consent\.allowed\("microphone"\)/);
   assert.match(hear, /if \(stopsCapture\(String\(message\.code \?\? ""\)\)\) \{ revoke\(revokedText\); return; \}/);
-  assert.match(fs.readFileSync("src/components/ConsentPanel.tsx", "utf8"), /announceConsentChange\(profile\.id\)/);
-  const camera = fs.readFileSync("src/components/aingel/useCamera.ts", "utf8");
+  assert.match(source("src/components/ConsentPanel.tsx"), /announceConsentChange\(profile\.id\)/);
+  const camera = source("src/components/aingel/useCamera.ts");
   assert.match(camera, /stream\.current\?\.getTracks\(\)\.forEach\(\(t\) => t\.stop\(\)\)/, "stopping the camera ends its tracks");
   console.log("Revocation checks passed.");
 } finally {
