@@ -1,3 +1,5 @@
+import type { Key } from "./i18n";
+
 let csrf = "";
 
 export class APIError extends Error {
@@ -7,6 +9,34 @@ export class APIError extends Error {
   ) {
     super("api_error");
   }
+}
+
+/** The message for a failed request. `notFound` names what a 404 means for this task (an invitation code…). */
+export function errorKey(e: unknown, notFound: Key = "errorGeneric"): Key {
+  if (!(e instanceof APIError)) return "errorGeneric";
+  const detail = JSON.stringify(e.detail);
+  // Age and consent policy (backend care.consent): checked first, they are not Meta failures.
+  if (detail.includes("adult_declaration_required")) return "errorAdult";
+  if (detail.includes("subject_minor_not_supported")) return "errorMinor";
+  if (detail.includes("consent_subject_only")) return "errorSubjectOnly";
+  if (detail.includes("legal_review_required")) return "errorLegalReview";
+  if (detail.includes("consent_code_invalid")) return "errorConsentCode";
+  if (detail.includes("consent_not_pending")) return "errorNotPending";
+  if (detail.includes("consents_moved")) return "errorConsentsMoved";
+  if (detail.includes("consent_changed")) return "errorConsentChanged";
+  // Not a Meta failure: the person has not allowed sending this data to Meta (decided in Personalizar).
+  if (detail.includes("privacy_review_required")) return "errorPrivacy";
+  if (detail.includes("mfa_")) return "mfaError";
+  if (detail.includes("face_") || detail.includes("self_enrollment")) return "faceError";
+  if (detail.includes("credentials_invalid")) return "errorAuth";
+  if (detail.includes("registration_invalid")) return "errorRegister";
+  if (detail.includes("care_circle_full")) return "errorFull";
+  if (detail.includes("image_")) return "errorImage";
+  if (detail.includes("meta_") || detail.includes("sam_") || detail.includes("privacy_review")) return "errorMeta";
+  if (detail.includes("observation_")) return "errorFuture";
+  if (e.status === 403) return "noAccess";
+  if (e.status === 404) return notFound;
+  return "errorGeneric";
 }
 
 export async function api<T = unknown>(

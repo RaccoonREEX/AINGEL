@@ -9,7 +9,7 @@ export const es = {
   chatIntro:
     "Haz una pregunta. Puedes elegir una fuente educativa en la sección de abajo. Cada respuesta se procesa de manera independiente.",
   chatPrivacy:
-    "La pregunta, las opciones generales de comunicación y, si la eliges, una fuente pública se envían a Meta con la autorización dada al crear la cuenta. No se envían recuerdos ni notas del perfil.",
+    "La pregunta, las opciones generales de comunicación y, si la eliges, una fuente pública se envían a Meta solo si la persona lo permitió («Enviar tus preguntas a Meta», en Personalizar). No se envían recuerdos ni notas del perfil.",
   chatConsent:
     "Confirmo que mi pregunta es sintética y autorizo enviarla a Meta para esta prueba.",
   chatQuestion: "Tu pregunta",
@@ -186,6 +186,7 @@ export const es = {
   activity: "Actividad",
   owner: "Usuario principal",
   caregiver: "Familiar / cuidador",
+  subject: "Tu propio perfil",
   selectProfile: "AINGEL de",
   noProfiles: "Todavía no tienes un AINGEL vinculado.",
   createProfile: "Crear mi AINGEL",
@@ -343,6 +344,21 @@ export const es = {
   errorSession: "Tu sesión no permite esta acción. Vuelve a iniciar sesión.",
   errorFuture:
     "La fecha de observación debe estar dentro de los últimos 7 días y no puede estar en el futuro.",
+  errorAdult:
+    "AINGEL es solo para personas adultas. Esta cuenta debe declarar que tiene 18 años o más.",
+  errorMinor:
+    "AINGEL no admite perfiles de menores de 18 años, ni siquiera con la autorización de una persona adulta.",
+  errorSubjectOnly:
+    "Solo la persona puede decidir sobre sus propios datos, desde su propia cuenta.",
+  errorLegalReview:
+    "Este perfil espera una revisión legal. No se activa nada hasta entonces.",
+  errorConsentCode:
+    "El código no es válido, ya se usó o venció. Pide un código nuevo.",
+  errorNotPending: "Este perfil ya no espera la decisión de la persona.",
+  errorConsentsMoved:
+    "Las autorizaciones ahora las decide la propia persona, una por una, en Personalizar.",
+  errorConsentChanged:
+    "La autorización cambió; no se muestra la respuesta anterior.",
 } as const;
 
 const en: Record<keyof typeof es, string> = {
@@ -356,7 +372,7 @@ const en: Record<keyof typeof es, string> = {
   chatIntro:
     "Ask a question. You can choose an educational source below. Each answer is handled independently.",
   chatPrivacy:
-    "Your question, general communication settings and any selected public source are sent to Meta under the authorization given when the account was created. Profile memories and notes are not sent.",
+    "Your question, general communication settings and any selected public source are sent to Meta only if the person allowed it (“Send your questions to Meta”, in Personalize). Profile memories and notes are not sent.",
   chatConsent:
     "I confirm my question is synthetic and consent to sending it to Meta for this test.",
   chatQuestion: "Your question",
@@ -533,6 +549,7 @@ const en: Record<keyof typeof es, string> = {
   activity: "Activity",
   owner: "Primary user",
   caregiver: "Family / caregiver",
+  subject: "Your own profile",
   selectProfile: "AINGEL for",
   noProfiles: "You do not have a linked AINGEL yet.",
   createProfile: "Create my AINGEL",
@@ -688,6 +705,21 @@ const en: Record<keyof typeof es, string> = {
   errorSession: "Your session does not allow this action. Sign in again.",
   errorFuture:
     "Observation time must be within the last 7 days and cannot be in the future.",
+  errorAdult:
+    "AINGEL is for adults only. This account must declare that it is 18 or older.",
+  errorMinor:
+    "AINGEL does not support profiles for people under 18, not even with an adult's authorization.",
+  errorSubjectOnly:
+    "Only the person can decide about their own data, from their own account.",
+  errorLegalReview:
+    "This profile is awaiting legal review. Nothing is enabled until then.",
+  errorConsentCode:
+    "The code is not valid, was already used or has expired. Ask for a new code.",
+  errorNotPending: "This profile is no longer waiting for the person's decision.",
+  errorConsentsMoved:
+    "Authorizations are now decided by the person, one by one, in Personalize.",
+  errorConsentChanged:
+    "The authorization changed; the previous answer is not shown.",
 };
 export type Key = keyof typeof es;
 export type Locale = "es-EC" | "en-US";
