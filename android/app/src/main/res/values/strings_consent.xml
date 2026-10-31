@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="adult_title">Solo para personas adultas</string>
+    <string name="adult_statement">Tengo 18 años o más</string>
+    <string name="adult_explain">AINGEL usa la inteligencia artificial de Meta, cuyas condiciones exigen ser mayor de edad. Es una declaración tuya; no pedimos documentos.</string>
+    <string name="consent_title">Autorizaciones</string>
+    <string name="consent_yours">Tú decides qué puede hacer AINGEL con tus datos, una cosa a la vez. Puedes cambiarlo cuando quieras.</string>
+    <string name="consent_theirs">Estas decisiones son de la persona. Aquí solo puedes verlas.</string>
+    <string name="consent_pending_state">Esperando la decisión de la persona. Mientras tanto, AINGEL no envía nada suyo a Meta.</string>
+    <string name="consent_legal_review_state">La persona no puede dar su consentimiento ahora. No se activa nada hasta que exista una base legal revisada.</string>
+    <string name="consent_group_local">Se queda en tu teléfono</string>
+    <string name="consent_group_aingel">Se queda en AINGEL</string>
+    <string name="consent_group_meta">Se envía a Meta</string>
+    <string name="consent_granted">Permitido</string>
+    <string name="consent_declined">No permitido</string>
+    <string name="consent_revoked">Retirado</string>
+    <string name="consent_undecided">Sin decidir</string>
+    <string name="consent_listen">🔊 Escuchar</string>
+    <string name="consent_allow">Permitir</string>
+    <string name="consent_decline">No permitir</string>
+    <string name="consent_revoke">Retirar</string>
+    <string name="consent_code_intro">La persona acepta o rechaza desde su propia cuenta. Dale este código de un solo uso; ayudarle a usar la pantalla no es decidir por ella.</string>
+    <string name="consent_code_create">Crear código para la persona</string>
+    <string name="consent_code_again">Crear otro código</string>
+    <string name="consent_code_expiry">Vale 48 horas y una sola vez.</string>
+    <string name="consent_code_read">🔊 Leer el código</string>
+    <string name="consent_legal_review">La persona no puede dar su consentimiento</string>
+    <string name="consent_legal_review_explain">No se activará nada hasta que se revise una base legal documentada (por ejemplo, una representación legal). Ningún diagnóstico por sí solo significa que alguien no pueda decidir.</string>
+    <string name="consent_legal_review_confirm">Confirmar</string>
+    <string name="consent_redeem_title">Tengo un código de AINGEL</string>
+    <string name="consent_redeem_intro">Si alguien creó un perfil para ti, escribe su código de 8 números para ver y decidir tus autorizaciones.</string>
+    <string name="consent_redeem_label">Código de 8 números</string>
+    <string name="consent_redeem_go">Usar código</string>
+    <string name="consent_other_title">La persona decide</string>
+    <string name="consent_other_adult">La persona tiene 18 años o más</string>
+    <string name="consent_other_explain">Ella aceptará o rechazará desde su propia cuenta con un código que crearás en Más → Autorizaciones. Hasta entonces AINGEL no envía sus datos a Meta.</string>
+    <string name="ui_more_consent">Qué puede hacer AINGEL con tus datos</string>
+    <string name="err_adult_declaration_required">Esta cuenta debe declarar que tiene 18 años o más.</string>
+    <string name="err_consent_subject_only">Solo la persona puede decidir sobre sus datos.</string>
+    <string name="err_legal_review_required">Este perfil espera una revisión legal; no se puede activar nada.</string>
+    <string name="err_consent_code_invalid">El código no es válido o ya venció.</string>
+    <string name="err_consent_not_pending">Este perfil ya no espera una decisión.</string>
+    <string name="err_consent_changed">La autorización cambió; no se muestra la respuesta anterior.</string>
+    <string name="err_subject_minor_not_supported">AINGEL es solo para personas adultas.</string>
+</resources>

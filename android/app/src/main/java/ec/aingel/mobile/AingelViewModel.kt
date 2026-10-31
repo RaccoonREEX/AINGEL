@@ -25,7 +25,11 @@ data class MobileState(
     val mfaEnabled: Boolean = false, val circle: JSONObject? = null, val inviteCode: String? = null, val faces: JSONObject? = null,
     val captions: List<CaptionTurn> = emptyList(), val recording: Boolean = false, val captionStatus: String = "idle",
     val signStatus: String = "waiting", val signText: String? = null, val signMetadata: JSONObject? = null, val signVideo: ByteArray? = null,
-    val privateTestProfileId: String? = null
+    val privateTestProfileId: String? = null,
+    // Age and consent policy (backend care.consent): the account's 18+ declaration, the current terms, and the
+    // person's decisions for the selected profile.
+    val adultDeclared: Boolean = true, val termsVersion: String = "", val consent: JSONObject? = null,
+    val consentCode: JSONObject? = null, val purposes: JSONObject? = null, val openConsent: Boolean = false,
 )
 
 class AingelViewModel(app: Application) : AndroidViewModel(app) {
@@ -100,8 +104,10 @@ class AingelViewModel(app: Application) : AndroidViewModel(app) {
     }
     private suspend fun applySession(session: JSONObject) {
         val username = session.optJSONObject("user")?.optString("username")
-        mutable.update { it.copy(username = username, mfaRequired = session.optBoolean("mfa_required")) }
-        if (username != null) refreshProfiles()
+        val adult = session.optJSONObject("user")?.optBoolean("adult_declared", false) ?: true
+        mutable.update { it.copy(username = username, mfaRequired = session.optBoolean("mfa_required"), adultDeclared = adult,
+            termsVersion = session.optString("terms_version").ifBlank { it.termsVersion }) }
+        if (username != null && adult) refreshProfiles()
     }
     private suspend fun refreshProfiles() {
         val profiles = (api.request("profiles/") as JSONArray).rows()
@@ -117,9 +123,35 @@ class AingelViewModel(app: Application) : AndroidViewModel(app) {
     fun configureBackend(value: String) = operation { stopCaptions(); WatchService.stop(getApplication()); api.configure(value); api.request("auth/session/"); mutable.update { MobileState(busy = false) } }
     fun register(username: String, password: String, who: String, name: String) { signup = who to name.trim(); login(username, password, true) }
     fun login(username: String, password: String, register: Boolean = false) = operation {
-        val response = api.request("auth/${if (register) "register" else "login"}/", "POST", JSONObject().put("username", username).put("password", password)) as JSONObject
+        val body = JSONObject().put("username", username).put("password", password)
+        // Registration carries the explicit 18+ declaration for the current terms; the server checks it.
+        if (register) body.put("adult", true).put("terms_version", termsVersion())
+        val response = api.request("auth/${if (register) "register" else "login"}/", "POST", body) as JSONObject
         applySession(response)
     }
+    private suspend fun termsVersion(): String = mutable.value.termsVersion.ifBlank {
+        (api.request("auth/session/") as JSONObject).optString("terms_version").also { v -> mutable.update { it.copy(termsVersion = v) } }
+    }
+    fun declareAdult() = operation {
+        applySession(api.request("auth/adult/", "POST", JSONObject().put("adult", true).put("terms_version", termsVersion())) as JSONObject)
+    }
+    private fun localeQuery() = "?locale=" + (mutable.value.profile?.optString("locale")?.takeIf { it.isNotBlank() } ?: if (java.util.Locale.getDefault().language == "es") "es-EC" else "en-US")
+    fun loadPurposes() = operation { val p = api.request("consent/purposes/" + localeQuery()) as JSONObject; mutable.update { it.copy(purposes = p) } }
+    fun loadConsent() = operation { val c = api.request(path("consent/") + localeQuery()) as JSONObject; mutable.update { it.copy(consent = c) } }
+    /** Only the person decides; the server refuses anyone else (consent_subject_only). */
+    fun decideConsent(purpose: String, decision: String) = operation {
+        val c = api.request(path("consent/") + localeQuery(), "POST", JSONObject().put("purpose", purpose).put("decision", decision)) as JSONObject
+        mutable.update { it.copy(consent = c) }
+    }
+    fun createConsentCode() = operation { val code = api.request(path("consent/invite/"), "POST") as JSONObject; mutable.update { it.copy(consentCode = code) } }
+    fun requestLegalReview() = operation { val c = api.request(path("consent/legal-review/"), "POST") as JSONObject; mutable.update { it.copy(consent = c) }; refreshProfiles() }
+    fun redeemConsentCode(code: String) = operation {
+        val linked = api.request("consent/redeem/", "POST", JSONObject().put("code", code)) as JSONObject
+        refreshProfiles()
+        val profile = mutable.value.profiles.find { it.optString("id") == linked.optString("profile") }
+        mutable.update { it.copy(profile = profile ?: it.profile, consent = null, openConsent = true) }
+    }
+    fun consentOpened() { mutable.update { it.copy(openConsent = false) } }
     fun verifyMfa(code: String) = operation { applySession(api.request("auth/mfa/verify/", "POST", JSONObject().put("code", code)) as JSONObject) }
     fun logout() = operation {
         stopCaptions(); WatchService.stop(getApplication()); voice.stop()

@@ -92,6 +92,8 @@ private val Muted = Color(0xFF5A6780)
     SideEffect { Ui.highContrast(contrast) }
     // A new session (or the end of setup) always starts on the assistant, not on the last tab used.
     LaunchedEffect(s.username) { if (s.username == null) screen = "home" }
+    // A code just linked this account to a profile set up for the person: open their authorizations.
+    LaunchedEffect(s.openConsent) { if (s.openConsent) { model.consentOpened(); screen = "consent" } }
     fun navigate(target: String) { if (screen != target) { if (target == "signs") signsFrom = screen; model.resetScreen(); focus = false; screen = target } }
     BackHandler(s.username != null && s.profile != null && screen != "home") { navigate(if (screen in setOf("today", "remember", "circle", "more")) "home" else if (screen == "signs") signsFrom else "more") }
     MaterialTheme(colorScheme = lightColorScheme(primary = Ui.Navy, onPrimary = Color.White, background = Color.White,
@@ -111,6 +113,7 @@ private val Muted = Color(0xFF5A6780)
                 Box(Modifier.fillMaxSize().padding(padding)) {
                     when {
                         s.username == null -> AccessFlow(model, s)
+                        !s.adultDeclared -> AdultDeclaration(model, s)  // accounts from before the age policy
                         screen == "security" -> Legacy(R.string.security, s, { navigate(if (s.profile == null) "home" else "more") }) { SecurityScreen(model, s) }
                         s.profile == null -> SetupFlow(model, s)
                         else -> key(screen, s.profile!!.optString("id")) {
@@ -120,6 +123,7 @@ private val Muted = Color(0xFF5A6780)
                                 "today" -> TodayScreen(model, s)
                                 "more" -> MoreScreen(model, s, ::navigate)
                                 "sound" -> SoundSettingsScreen(model, s) { navigate("more") }
+                                "consent" -> ConsentScreen(model, s) { navigate("more") }
                                 "remember" -> Legacy(R.string.nav_remember, s, null) { MemoryScreen(model, s) }
                                 "circle" -> Legacy(R.string.circle, s, null) {
                                     CircleScreen(model, s)
@@ -188,6 +192,13 @@ internal fun errorMessage(error: String): Int = when (error) {
     "camera_unavailable", "microphone_unavailable" -> R.string.device_error
     "private_test_consent_required" -> R.string.private_test_missing_consent
     "privacy_review_required" -> R.string.private_test_server_denied
+    "adult_declaration_required" -> R.string.err_adult_declaration_required
+    "consent_subject_only" -> R.string.err_consent_subject_only
+    "legal_review_required" -> R.string.err_legal_review_required
+    "consent_code_invalid" -> R.string.err_consent_code_invalid
+    "consent_not_pending" -> R.string.err_consent_not_pending
+    "consent_changed" -> R.string.err_consent_changed
+    "subject_minor_not_supported" -> R.string.err_subject_minor_not_supported
     // Network and server failures (NetworkErrors.kt): specific messages instead of a generic «failed».
     else -> networkErrorMessage(error) ?: R.string.failed
 }
