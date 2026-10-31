@@ -6,6 +6,7 @@ import SignClips from "./SignClips";
 import AingelOrb from "./components/aingel/AingelOrb";
 import { analyserLevel } from "./components/aingel/useAudioLevel";
 import PrivateMediaConsent, { audioTestFields } from "./components/PrivateMediaConsent";
+import { stopsCapture, useConsentWatch } from "./consentWatch";
 
 export default function Hear({
   profile,
@@ -52,7 +53,24 @@ export default function Hear({
     },
     [],
   );
+  // A revocation (or two consent checks that cannot be made) ends captions at once: microphone tracks, audio
+  // processing and the socket are released, and nothing more is shown.
+  const revoke = (message: string) => {
+    generation.current++;
+    cleanup();
+    socket.current?.close();
+    setStatus("idle");
+    setError(message);
+  };
+  const revokedText = es ? "Se retiró una autorización: los subtítulos se detuvieron y el micrófono se apagó." : "An authorization was withdrawn: captions stopped and the microphone was turned off.";
+  const consent = useConsentWatch(profile.id, status !== "idle", (change) => {
+    if ((change.microphone || change.epoch || change.unverified) && status !== "idle") revoke(revokedText);
+  });
   const start = async () => {
+    if (!(await consent.allowed("microphone"))) {
+      setError(es ? "La persona no ha autorizado el uso del micrófono en este perfil. Puede hacerlo en Autorizaciones." : "The person has not authorized using the microphone for this profile. They can do it in Authorizations.");
+      return;
+    }
     const testFields = audioTestFields(profile, privateTest);
     setPrivateTest(false);
     const current = ++generation.current;
@@ -168,6 +186,8 @@ export default function Hear({
           });
         }
         if (message.type === "error") {
+          // The server ended captions because an authorization changed: say so, and keep the microphone off.
+          if (stopsCapture(String(message.code ?? ""))) { revoke(revokedText); return; }
           setError(t("hearError"));
           cleanup();
         }

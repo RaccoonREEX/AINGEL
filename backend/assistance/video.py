@@ -27,7 +27,7 @@ from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
-from care.consent import meta_account_denial, meta_allowed, still_current
+from care.consent import meta_account_denial, meta_allowed, refused, still_current
 from care.permissions import access, audit
 
 from . import synthetic
@@ -281,6 +281,8 @@ class ClipView(APIView):
         received = time.monotonic()
         # Decided before the clip is read: a server fixture, or the person's own grant with real video switched on.
         profile = access(request.user, values["profile"]) if "profile" in values else None
+        if refused(profile, "camera_local"):
+            return Response({"error": "camera_consent_revoked"}, status=403)
         real = (profile is not None and meta_allowed(profile, "video")
                 and os.environ.get("AINGEL_VIDEO_REAL", "0") == "1")
         path, fixture = synthetic.route(request.data, "clip", real, ("clip", "profile"))

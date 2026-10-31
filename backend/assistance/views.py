@@ -8,7 +8,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.throttling import ScopedRateThrottle
 
-from care.consent import granted, meta_account_denial, meta_allowed, private_media_allowed, still_current, subject_account
+from care.consent import granted, meta_account_denial, meta_allowed, private_media_allowed, refused, still_current, subject_account
 from care.faces import family_matches
 from care.permissions import access, audit
 
@@ -41,6 +41,8 @@ REAL_FIELDS = ("image", "profile", "family", "private_test", "object_name")
 def image_basis(request, values, kind="image"):
     """(path, fixture or error, profile): decided before any image is read or any provider request is built."""
     profile = access(request.user, values["profile"]) if "profile" in values else None
+    if refused(profile, "camera_local"):
+        return None, "camera_consent_revoked", None
     real = profile is not None and (
         private_media_allowed(profile, request.user, "image", values["private_test"]) or meta_allowed(profile, "image")
     )
@@ -99,7 +101,7 @@ class SceneView(APIView):
         values = serializer.validated_data
         path, value, profile = image_basis(request, values)
         if path is None:
-            return Response({"error": value}, status=400, headers={"Cache-Control": "no-store"})
+            return Response({"error": value}, status=403 if value == "camera_consent_revoked" else 400, headers={"Cache-Control": "no-store"})
         if path == "fixture":
             # The server's own picture and a fictitious profile; no family recognition.
             image, preferences, people = synthetic.image(value), synthetic.FICTIONAL_PREFERENCES, []
@@ -157,7 +159,7 @@ class LocateView(SceneView):
         # A fixture here names the object (assistance.synthetic.OBJECTS) in the server's shapes picture.
         path, value, profile = image_basis(request, values, "object")
         if path is None:
-            return Response({"error": value}, status=400)
+            return Response({"error": value}, status=403 if value == "camera_consent_revoked" else 400)
         if path == "fixture":
             image, prompt = synthetic.image("shapes"), synthetic.OBJECTS[value]["prompt"]
         else:

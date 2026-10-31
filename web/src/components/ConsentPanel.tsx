@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { api, errorKey } from "../api";
+import { announceConsentChange } from "../consentWatch";
 import Field from "./Field";
 import { groups, ListenButton, speak } from "./Consents";
 import type { Context, WithProfile } from "../ui";
@@ -106,6 +107,8 @@ export default function ConsentPanel({ profile, autoFocus = false, ...ctx }: Wit
   const decide = (p: Purpose, decision: Decision) => void run(async () => {
     const next = await api<ConsentState>(path, "POST", { purpose: p.id, decision });
     setState(next);
+    // Open cameras, microphones and pending requests of this profile react at once (consentWatch.ts).
+    announceConsentChange(profile.id);
     setLive(`${p.title}: ${word(next.purposes.find((x) => x.id === p.id)?.status ?? "pending")}.`);
   });
   const [otherAdult, setOtherAdult] = useState(false);

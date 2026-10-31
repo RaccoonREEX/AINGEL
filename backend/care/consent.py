@@ -189,6 +189,12 @@ def granted(profile, purposes):
     return all(states.get(p) == "granted" for p in purposes)
 
 
+def refused(profile, purpose):
+    """The person explicitly declined or revoked [purpose]: nothing of that kind is captured for them, not even for a
+    local test server. (Starting a capture also needs the grant: the clients check it before opening anything.)"""
+    return profile is not None and current_grants(profile).get(purpose) in ("declined", "revoked")
+
+
 def decide(profile, user, purpose, decision, method="own_account"):
     """Record the person's own decision. Returns an error code, or None when recorded."""
     from .models import ConsentGrant, Profile
@@ -248,6 +254,8 @@ def consent_state(profile, user, locale="es-EC"):
     return {
         "version": CONSENT_VERSION,
         "subject_status": profile.subject_status,
+        # Moves on every decline or revocation: clients compare it during active captures and stop on a change.
+        "epoch": profile.consent_epoch,
         "is_subject": subject is not None and subject.pk == user.pk,
         # Profiles from before the policy: only the owner can say whose data they hold.
         "can_confirm": profile.subject_status == "pending_confirmation" and profile.owner_id == user.pk,

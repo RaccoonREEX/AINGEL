@@ -44,6 +44,8 @@ export type ConsentState = {
   purposes: (Purpose & { status: PurposeStatus })[];
   credits_notice: string;
   can_confirm?: boolean;
+  /** Moves on every decline or revocation (care.consent): open captures compare it and stop. */
+  epoch?: number;
 };
 export type Routine = {
   id: string;

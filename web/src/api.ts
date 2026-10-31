@@ -41,14 +41,17 @@ export function errorKey(e: unknown, notFound: Key = "errorGeneric"): Key {
   return "errorGeneric";
 }
 
+/** [signal]: aborts the request (e.g. a revoked authorization); the caller gets an AbortError. */
 export async function api<T = unknown>(
   path: string,
   method = "GET",
   data?: unknown,
+  signal?: AbortSignal,
 ): Promise<T> {
   const multipart = data instanceof FormData;
   const response = await fetch("/api/v1/" + path, {
     method,
+    signal,
     credentials: "same-origin",
     cache: "no-store",
     headers: {
