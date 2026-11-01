@@ -63,4 +63,16 @@
     <string name="speech_service_on">Tu cuenta aceptó que el reconocimiento de voz del teléfono reciba tu voz. Vale solo para tu cuenta.</string>
     <string name="speech_service_off">Tu cuenta no lo ha aceptado: AINGEL te lo preguntará antes de escuchar, salvo si el teléfono reconoce la voz sin enviarla.</string>
     <string name="speech_service_withdraw">Retirar mi aceptación</string>
+    <string name="adult_title_before">Antes de continuar</string>
+    <string name="territory_question">¿Dónde estás?</string>
+    <string name="territory_outside">No estoy en ninguno de estos territorios</string>
+    <string name="territory_inside">Estoy en uno de ellos</string>
+    <string name="territory_explain">Meta no permite usar su IA en: %1$s. Es tu propia declaración; no guardamos tu país ni tu ubicación.</string>
+    <string name="territory_inside_signup">AINGEL usa la IA de Meta, así que no puede ofrecerse en esos territorios. No se creará la cuenta.</string>
+    <string name="territory_inside_account">AINGEL usa la IA de Meta, así que no puede ofrecerse en esos territorios. Tu cuenta seguirá cerrada mientras estés allí.</string>
+    <string name="territory_intro">AINGEL usa la IA de Meta. Indica si estás en alguno de los territorios donde Meta no la permite.</string>
+    <string name="territory_closed_title">AINGEL no está disponible aquí</string>
+    <string name="territory_closed_explain">Dijiste que estás en un territorio donde Meta no permite su IA. Si ya no estás allí, actualiza tu respuesta.</string>
+    <string name="err_territory_declaration_required">Antes de usar la IA de Meta, indica si estás en alguno de los territorios donde Meta no permite su servicio.</string>
+    <string name="err_territory_restricted">AINGEL no puede usar la IA de Meta desde los territorios donde Meta no permite su servicio.</string>
 </resources>

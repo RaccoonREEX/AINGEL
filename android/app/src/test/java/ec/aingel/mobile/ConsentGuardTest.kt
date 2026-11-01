@@ -73,7 +73,8 @@ class ConsentGuardTest {
 
     @Test fun refusalCodesStopCapturesButOtherFailuresRetry() {
         for (code in listOf("consent_changed", "privacy_review_required", "camera_consent_revoked", "private_test_consent_required",
-                "legal_review_required", "authentication_required", "session_changed")) assertTrue(code, stopsCapture(code))
+                "legal_review_required", "authentication_required", "session_changed",
+                "territory_declaration_required", "meta_territory_restricted")) assertTrue(code, stopsCapture(code))
         for (code in listOf("consent_subject_only", "video_busy", "server_unavailable", "throttled", "clip_invalid", "image_required", "")) assertFalse(code, stopsCapture(code))
     }
 

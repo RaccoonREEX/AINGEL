@@ -39,13 +39,15 @@ internal fun mustStop(previous: JSONObject?, current: JSONObject?, capture: Capt
  * Server answers after which a running capture stops instead of retrying: the person's decision changed while the
  * request ran (consent_changed), the grants it needs are missing (privacy_review_required,
  * private_test_consent_required), the camera was explicitly refused (camera_consent_revoked), the profile cannot be
- * used (legal_review_required, subject_confirmation_required, adult_declaration_required) or the account is no
+ * used (legal_review_required, subject_confirmation_required, adult_declaration_required, territory_declaration_required,
+ * meta_territory_restricted) or the account is no
  * longer the one that started it (authentication_required, session_changed). consent_subject_only is not here: it
  * answers someone else trying to decide, which changes nothing about a capture.
  */
 internal fun stopsCapture(errorCode: String): Boolean = errorCode in setOf(
     "consent_changed", "privacy_review_required", "private_test_consent_required", "camera_consent_revoked",
     "legal_review_required", "subject_confirmation_required", "adult_declaration_required",
+    "territory_declaration_required", "meta_territory_restricted",
     "authentication_required", "session_changed")
 
 /**

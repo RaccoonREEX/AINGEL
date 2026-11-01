@@ -118,6 +118,8 @@ private val Gutter = Modifier.padding(horizontal = 22.dp)
     var name by rememberSaveable { mutableStateOf("") }; var username by rememberSaveable { mutableStateOf("") }; var password by remember { mutableStateOf("") }
     var who by rememberSaveable { mutableStateOf("other") }
     var adult by rememberSaveable { mutableStateOf(false) }
+    var territory by rememberSaveable { mutableStateOf<String?>(null) }
+    LaunchedEffect(Unit) { if (s.territoryVersion.isBlank()) model.loadTerritories() }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 24.dp, end = 24.dp, top = 14.dp, bottom = 18.dp), verticalArrangement = Arrangement.spacedBy(13.dp)) {
         BackChevron(onBack)
         T(stringResource(R.string.register), 26, FontWeight.SemiBold, Ui.Navy)
@@ -133,9 +135,11 @@ private val Gutter = Modifier.padding(horizontal = 22.dp)
         // AINGEL uses Meta's AI, whose terms require adults: an explicit, separate self-declaration (no ID asked).
         Choice((if (adult) "✓  " else "") + stringResource(R.string.adult_statement), adult, Modifier.fillMaxWidth(), start = true) { adult = !adult }
         T(stringResource(R.string.adult_explain), 11, color = Ui.Muted, lineHeight = 1.45f)
+        TerritoryChoice(territory, { territory = it }, restrictedList(s.restrictedTerritories, java.util.Locale.getDefault().language == "es"), account = false)
         Spacer(Modifier.weight(1f))
         ErrorText(s)
-        PrimaryButton(if (s.busy) stringResource(R.string.loading) else stringResource(R.string.setup_continue), enabled = !s.busy && adult && username.isNotBlank() && password.length >= 10) {
+        PrimaryButton(if (s.busy) stringResource(R.string.loading) else stringResource(R.string.setup_continue),
+            enabled = !s.busy && adult && territory == TERRITORY_OUTSIDE && s.territoryVersion.isNotBlank() && username.isNotBlank() && password.length >= 10) {
             model.register(username.trim(), password, who, name); password = ""
         }
     }

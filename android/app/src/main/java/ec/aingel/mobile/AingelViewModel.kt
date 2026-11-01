@@ -31,6 +31,9 @@ data class MobileState(
     // Age and consent policy (backend care.consent): the account's 18+ declaration, the current terms, and the
     // person's decisions for the selected profile.
     val adultDeclared: Boolean = true, val termsVersion: String = "", val consent: JSONObject? = null,
+    // Meta's Restricted Territories (Territory.kt): the account's answer ("" until it answers), the policy version
+    // and Meta's list, from the session.
+    val territory: String = TERRITORY_OUTSIDE, val territoryVersion: String = "", val restrictedTerritories: JSONObject? = null,
     val consentCode: JSONObject? = null, val purposes: JSONObject? = null, val openConsent: Boolean = false,
     // This account's own acceptance that the phone's speech service may receive its voice (only from the session payload).
     val speechService: Boolean = false, val speechServiceVersion: String = "",
@@ -138,10 +141,13 @@ class AingelViewModel(app: Application) : AndroidViewModel(app) {
     private suspend fun applySession(session: JSONObject) {
         val username = session.optJSONObject("user")?.optString("username")
         val adult = session.optJSONObject("user")?.optBoolean("adult_declared", false) ?: true
+        val territory = territoryOf(session)
         mutable.update { it.copy(username = username, mfaRequired = session.optBoolean("mfa_required"), adultDeclared = adult,
             termsVersion = session.optString("terms_version").ifBlank { it.termsVersion }, speechService = speechServiceOf(session),
-            speechServiceVersion = session.optString("speech_service_version").ifBlank { it.speechServiceVersion }) }
-        if (username != null && adult) refreshProfiles()
+            speechServiceVersion = session.optString("speech_service_version").ifBlank { it.speechServiceVersion },
+            territory = territory, territoryVersion = session.optString("territory_version").ifBlank { it.territoryVersion },
+            restrictedTerritories = session.optJSONObject("restricted_territories") ?: it.restrictedTerritories) }
+        if (username != null && adult && territory == TERRITORY_OUTSIDE) refreshProfiles()
     }
     private suspend fun refreshProfiles() {
         val profiles = (api.request("profiles/") as JSONArray).rows()
@@ -162,13 +168,23 @@ class AingelViewModel(app: Application) : AndroidViewModel(app) {
     fun register(username: String, password: String, who: String, name: String) { signup = who to name.trim(); login(username, password, true) }
     fun login(username: String, password: String, register: Boolean = false) = operation {
         val body = JSONObject().put("username", username).put("password", password)
-        // Registration carries the explicit 18+ declaration for the current terms; the server checks it.
-        if (register) body.put("adult", true).put("terms_version", termsVersion())
+        // Registration carries the explicit 18+ declaration for the current terms and the answer about Meta's
+        // Restricted Territories (only «outside» can create an account); the server checks both.
+        if (register) territoryFields(body.put("adult", true).put("terms_version", termsVersion()), TERRITORY_OUTSIDE, territoryVersion())
         val response = api.request("auth/${if (register) "register" else "login"}/", "POST", body) as JSONObject
         applySession(response)
     }
     private suspend fun termsVersion(): String = mutable.value.termsVersion.ifBlank {
         (api.request("auth/session/") as JSONObject).optString("terms_version").also { v -> mutable.update { it.copy(termsVersion = v) } }
+    }
+    private suspend fun territoryVersion(): String = mutable.value.territoryVersion.ifBlank {
+        (api.request("auth/session/") as JSONObject).let { session ->
+            session.optString("territory_version").also { v -> mutable.update { it.copy(territoryVersion = v, restrictedTerritories = session.optJSONObject("restricted_territories")) } }
+        }
+    }
+    fun loadTerritories() = operation { territoryVersion() }
+    fun declareTerritory(answer: String) = operation {
+        applySession(api.request("auth/territory/", "POST", territoryFields(JSONObject(), answer, territoryVersion())) as JSONObject)
     }
     fun declareAdult() = operation {
         applySession(api.request("auth/adult/", "POST", JSONObject().put("adult", true).put("terms_version", termsVersion())) as JSONObject)

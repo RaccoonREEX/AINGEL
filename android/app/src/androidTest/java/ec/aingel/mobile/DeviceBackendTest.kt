@@ -28,8 +28,10 @@ class DeviceBackendTest {
         api.configure("http://127.0.0.1:8010/")
         val username = "aingel.mobile.test.$suffix"
         val password = "Synthetic-Test!" + UUID.randomUUID().toString()
-        api.request("auth/session/")
-        val credentials = JSONObject().put("username", username).put("password", password)
+        val session = api.request("auth/session/") as JSONObject
+        // Registration declares 18+ and the answer about Meta's Restricted Territories, as the app does.
+        val credentials = territoryFields(JSONObject().put("username", username).put("password", password).put("adult", true)
+            .put("terms_version", session.getString("terms_version")), TERRITORY_OUTSIDE, session.getString("territory_version"))
         val registration = api.request("auth/register/", "POST", credentials) as JSONObject
         assertEquals(username, registration.getJSONObject("user").getString("username"))
         val profile = api.request("profiles/", "POST", JSONObject().put("display_name", "Synthetic Android test").put("locale", "es-EC")) as JSONObject
