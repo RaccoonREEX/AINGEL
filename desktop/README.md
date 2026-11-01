@@ -13,6 +13,8 @@ móvil.
 | Ctrl+Alt+Q | Capturar la ventana activa y escribir una pregunta sobre ella. Intro envía y Escape descarta. |
 | Ctrl+Alt+M | Explorar a fondo la última imagen (seguimiento, 3 pasos) |
 | Ctrl+Alt+F | Leer el elemento con el foco del teclado. Es local, no envía nada y nunca lee contraseñas. |
+| Ctrl+Alt+O | Abrir un documento PDF o una foto de página (fase 3) |
+| Ctrl+Alt+C | Subtítulos del audio del equipo: reuniones, vídeos (fase 4) |
 | Ctrl+Alt+S | Detener la voz |
 | Ctrl+Alt+A | Mostrar u ocultar AINGEL |
 
@@ -37,6 +39,23 @@ NVDA) ni Ctrl+Alt con las flechas (navegación de tablas de NVDA).
   Windows ficticia que él mismo dibuja.
 - **Sesión:** se guarda cifrada con DPAPI para tu usuario de Windows en `%LOCALAPPDATA%\AINGEL\Desktop`. «Cerrar
   sesión» la borra.
+
+## Subtítulos del audio del equipo
+
+- **Qué se captura:** WASAPI *loopback* del dispositivo de salida predeterminado, es decir, lo que suena por los
+  altavoces, nunca el micrófono.
+- **Envío:** el audio se convierte a 24 kHz mono y se envía al servidor de AINGEL, y de ahí a Meta Voice Transcribe.
+  Se transcribe solo mientras la ventana de subtítulos está en marcha, con un punto rojo y el título
+  «● Subtitulando».
+- **Confirmación:** cada inicio pide confirmar. Si se oyen otras personas, deben saber y aceptar que sus voces se
+  transcriben con IA.
+- **Permisos:** el servidor exige «Usar el micrófono» y «Enviar voz a Meta», o la prueba privada con audio propio.
+  Los vuelve a comprobar cada 5 segundos.
+- **Transcripción:**
+  - Solo se muestra; AINGEL no la guarda.
+  - Se ve en letra grande y ajustable, y cada frase puede anunciarse al lector de pantalla.
+  - Quien habla solo se nombra si el servicio lo informa: AINGEL no lo adivina.
+- **Sesiones:** se renuevan solas antes del límite de 10 minutos del servidor.
 
 ## Accesibilidad
 

@@ -35,6 +35,7 @@ static class Program
         Voices();
         Jpeg();
         Capture();
+        AudioChecks.Run(Check);
         Cookies();
         await Multipart();
         var backend = Environment.GetEnvironmentVariable("AINGEL_TEST_BACKEND");
@@ -197,6 +198,9 @@ static class Program
         await api.CloseDocument(scannedToken);
     }
 
+    const string MeetingScript = "Buenos días a todos. Empezamos la reunión del lunes. Primero revisamos el presupuesto del proyecto. " +
+        "Después Carla enviará el informe. La próxima reunión será el jueves a las tres de la tarde.";
+
     /// <summary>A local AINGEL server in test mode (AINGEL_AI_MODE=mock): sign-in with CSRF, profiles, a capture, a
     /// follow-up, the synthetic screen and closing the session. Nothing reaches Meta.</summary>
     static async Task LocalServer(string backend)
@@ -210,6 +214,16 @@ static class Program
         var profiles = await api.Profiles();
         Check(profiles.Count > 0, "profiles listed");
         var profile = profiles[0];
+        if (Environment.GetEnvironmentVariable("AINGEL_TEST_CAPTIONS") == "1")
+        {
+            // Test G only: the server runs in Meta mode with the private test for this local profile's own audio, so
+            // the synthetic-fixture checks below do not apply.
+            var finals = await AudioChecks.SyntheticMeeting(api, profile, privateTest: true, MeetingScript);
+            Console.WriteLine("captions: " + string.Join(" | ", finals));
+            Check(finals.Count > 0, "synthetic meeting captioned");
+            await api.Logout();
+            return;
+        }
         using var bitmap = new Bitmap(640, 400);
         using (var graphics = Graphics.FromImage(bitmap)) graphics.Clear(Color.White);
         var described = await api.Vision(ScreenCapture.Jpeg(bitmap), VisionFields.Screen(profile, false, "¿Qué ves?", "brief"));

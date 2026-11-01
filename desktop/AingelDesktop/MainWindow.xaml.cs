@@ -50,6 +50,7 @@ public partial class MainWindow : Window
         ReadFocusButton.Content = $"{T("read_focus")}  ({Hotkeys.Label(Command.ReadFocus)})";
         StopButton.Content = $"{T("stop_speech")}  ({Hotkeys.Label(Command.StopSpeech)})";
         OpenDocumentButton.Content = $"{T("open_document")}  ({Hotkeys.Label(Command.OpenDocument)})";
+        CaptionsButton.Content = $"{T("open_captions")}  ({Hotkeys.Label(Command.Captions)})";
         LevelLabel.Content = "_" + T("level");
         // Labels do not name their controls for UI Automation in WPF: each input gets its name here (NVDA reads it).
         AutomationProperties.SetName(Level, T("level"));
@@ -115,6 +116,7 @@ public partial class MainWindow : Window
             case Command.StopSpeech: speech.Stop(); break;
             case Command.ShowHide: ShowHide(); break;
             case Command.OpenDocument: ShowWindow(); _ = OpenDocument(); break;
+            case Command.Captions: OpenCaptions(); break;
         }
     }
 
@@ -298,6 +300,22 @@ public partial class MainWindow : Window
     // --- Buttons and options --------------------------------------------------------------------------------------
 
     async void OnOpenDocument(object sender, RoutedEventArgs e) => await OpenDocument();
+
+    CaptionsWindow? captions;
+
+    void OnCaptions(object sender, RoutedEventArgs e) => OpenCaptions();
+
+    /// <summary>One captions window; it captures nothing until the person starts it there.</summary>
+    void OpenCaptions()
+    {
+        if (captions == null)
+        {
+            captions = new CaptionsWindow(app, profile) { Owner = this };
+            captions.Closed += (_, _) => captions = null;
+        }
+        captions.Show();
+        captions.Activate();
+    }
 
     /// <summary>A PDF or a page photo chosen by the person (or, in the synthetic test, a server document).</summary>
     async Task OpenDocument()

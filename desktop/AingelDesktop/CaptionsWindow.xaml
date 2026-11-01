@@ -1,0 +1,29 @@
+<Window x:Class="Aingel.Desktop.CaptionsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Width="720" Height="520" MinWidth="420" MinHeight="300" Topmost="True"
+        Background="White" Foreground="{StaticResource Navy}" FontFamily="Segoe UI">
+    <DockPanel Margin="16">
+        <StackPanel DockPanel.Dock="Top">
+            <StackPanel Orientation="Horizontal">
+                <!-- Visible while system audio is being captured. -->
+                <Ellipse x:Name="LiveDot" Width="14" Height="14" Fill="#C0392B" Margin="0,0,8,0" Visibility="Collapsed"/>
+                <TextBlock x:Name="Status" FontSize="15" FontWeight="Medium" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite"/>
+            </StackPanel>
+            <WrapPanel Margin="0,8,0,0">
+                <Button x:Name="StartButton" Margin="0,4,8,4" Click="OnStart"/>
+                <Button x:Name="StopButton" Margin="0,4,8,4" Click="OnStop" IsEnabled="False"/>
+                <Button x:Name="SmallerButton" Margin="0,4,8,4" Click="OnSmaller"/>
+                <Button x:Name="LargerButton" Margin="0,4,8,4" Click="OnLarger"/>
+                <Button x:Name="ClearButton" Margin="0,4,8,4" Click="OnClear"/>
+            </WrapPanel>
+            <CheckBox x:Name="AnnounceBox"/>
+            <CheckBox x:Name="PrivateBox" Checked="OnPrivate" Unchecked="OnPrivate"/>
+            <TextBlock x:Name="Note" TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource Muted}" Margin="0,8,0,0"/>
+        </StackPanel>
+        <!-- The sentence being heard now, large; finished sentences go to the transcript below. -->
+        <TextBlock x:Name="Partial" DockPanel.Dock="Bottom" TextWrapping="Wrap" FontSize="28" FontWeight="SemiBold" Margin="0,12,0,0" MinHeight="40"/>
+        <TextBox x:Name="Transcript" IsReadOnly="True" IsReadOnlyCaretVisible="True" TextWrapping="Wrap" AcceptsReturn="True"
+                 VerticalScrollBarVisibility="Auto" FontSize="22" Margin="0,10,0,0"/>
+    </DockPanel>
+</Window>
