@@ -17,6 +17,9 @@ export function errorKey(e: unknown, notFound: Key = "errorGeneric"): Key {
   const detail = JSON.stringify(e.detail);
   // Age and consent policy (backend care.consent): checked first, they are not Meta failures.
   if (detail.includes("adult_declaration_required")) return "errorAdult";
+  // Meta's Restricted Territories (backend care.territory), before the generic Meta failure below.
+  if (detail.includes("territory_declaration_required")) return "errorTerritoryDeclare";
+  if (detail.includes("territory_restricted")) return "errorTerritory";
   if (detail.includes("subject_minor_not_supported")) return "errorMinor";
   if (detail.includes("consent_subject_only")) return "errorSubjectOnly";
   if (detail.includes("legal_review_required")) return "errorLegalReview";

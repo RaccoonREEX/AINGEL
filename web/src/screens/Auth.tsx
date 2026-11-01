@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import AingelOrb from "../components/aingel/AingelOrb";
 import type { translator, Locale } from "../i18n";
+import type { Territory } from "../types";
 
 export type Who = "me" | "other";
 type Props = {
@@ -13,7 +14,87 @@ type Props = {
   onLogin: (data: Record<string, FormDataEntryValue>) => void;
   onRegister: (data: Record<string, FormDataEntryValue | boolean>, extra: { name: string; who: Who }) => void;
   onMfa: (code: string) => void;
+  /** Meta's Restricted Territories from the server's session (backend care.territory): version and list. */
+  territories: TerritoryPolicy;
 };
+export type TerritoryPolicy = { version: string; list: Record<string, string> };
+
+/** The fields the server expects for the account's answer about Meta's Restricted Territories. */
+export function territoryFields(answer: Territory, version: string) {
+  return { territory: answer, territory_version: version };
+}
+
+/**
+ * Meta does not allow its AI to be offered to people located in some territories (backend care.territory). The
+ * person answers; only the answer is kept, never the country. A radio group so both choices are read aloud.
+ */
+export function TerritoryChoice({ value, onChange, es, list, account = false }: {
+  value: Territory | null; onChange: (v: Territory) => void; es: boolean; list: string; account?: boolean;
+}) {
+  const name = useId();
+  const hint = useId();
+  const option = (answer: Territory, label: string) => (
+    <label className="consent-row">
+      <input type="radio" name={name} required checked={value === answer} onChange={() => onChange(answer)} aria-describedby={hint} />
+      <span><b>{label}</b></span>
+    </label>
+  );
+  return (
+    <fieldset className="adult-check territory-check">
+      <legend><b>{es ? "¿Dónde estás?" : "Where are you?"}</b></legend>
+      {option("outside_restricted", es ? "No estoy en ninguno de estos territorios" : "I am not in any of these territories")}
+      {option("inside_restricted", es ? "Estoy en uno de ellos" : "I am in one of them")}
+      <small id={hint}>{es
+        ? `Meta no permite usar su IA en: ${list}. Es tu propia declaración; no guardamos tu país ni tu ubicación.`
+        : `Meta does not allow its AI to be used in: ${list}. It is your own declaration; we do not keep your country or location.`}</small>
+      {value === "inside_restricted" && (
+        <p role="alert" className="form-error">{es
+          ? `AINGEL usa la IA de Meta, así que no puede ofrecerse en esos territorios. ${account ? "Tu cuenta seguirá cerrada mientras estés allí." : "No se creará la cuenta."}`
+          : `AINGEL uses Meta's AI, so it cannot be offered in those territories. ${account ? "Your account stays closed while you are there." : "The account will not be created."}`}</p>
+      )}
+    </fieldset>
+  );
+}
+
+/**
+ * Accounts from before the territory policy answer once; someone who declared being in one of those territories
+ * sees why AINGEL is closed and can update the answer when they are no longer there.
+ */
+export function TerritoryDeclaration({ t, locale, setLocale, busy, error, username, current, territories, onDeclare, onLogout }: Pick<Props, "t" | "locale" | "setLocale" | "busy" | "error" | "territories"> & {
+  username: string; current: Territory | null; onDeclare: (answer: Territory) => void; onLogout: () => void;
+}) {
+  const es = locale === "es-EC";
+  const [answer, setAnswer] = useState<Territory | null>(null);
+  const title = useRef<HTMLHeadingElement>(null);
+  useEffect(() => title.current?.focus(), []);
+  const inside = current === "inside_restricted";
+  return (
+    <main id="main" className="gate">
+      <div className="auth-top">
+        <Brand />
+        <label className="auth-locale">
+          <span className="sr-only">{t("language")}</span>
+          <select value={locale} onChange={(e) => setLocale(e.target.value as Locale)}>
+            <option value="es-EC">Español</option>
+            <option value="en-US">English</option>
+          </select>
+        </label>
+      </div>
+      <form className="auth-form gate-card" onSubmit={(e) => { e.preventDefault(); if (answer) onDeclare(answer); }}>
+        <div className="auth-heading">
+          <h1 ref={title} tabIndex={-1}>{inside ? (es ? "AINGEL no está disponible aquí" : "AINGEL is not available here") : (es ? "Antes de continuar" : "Before you continue")}</h1>
+          <p>{inside
+            ? (es ? "Dijiste que estás en un territorio donde Meta no permite su IA. Si ya no estás allí, actualiza tu respuesta." : "You said you are in a territory where Meta does not allow its AI. If you are no longer there, update your answer.")
+            : (es ? "AINGEL usa la IA de Meta. Indica si estás en alguno de los territorios donde Meta no la permite." : "AINGEL uses Meta's AI. Say whether you are in one of the territories where Meta does not allow it.")}</p>
+        </div>
+        <TerritoryChoice value={answer} onChange={setAnswer} es={es} account list={territories.list[locale] ?? territories.list["es-EC"] ?? ""} />
+        {error && <p role="alert" className="form-error">{error}</p>}
+        <button className="btn btn-primary btn-lg" disabled={busy || !answer || !territories.version}>{busy ? t("working") : es ? "Guardar y continuar" : "Save and continue"}</button>
+        <button type="button" className="auth-link" onClick={onLogout}>{t("logout")} · {username}</button>
+      </form>
+    </main>
+  );
+}
 
 export function Brand({ size = 32 }: { size?: number }) {
   return (
@@ -86,14 +167,17 @@ export default function Auth(props: Props) {
   const [show, setShow] = useState(false);
   const [forgot, setForgot] = useState(false);
   const [adult, setAdult] = useState(false);
+  const [territory, setTerritory] = useState<Territory | null>(null);
   const register = mode === "register";
+  // Only someone outside Meta's Restricted Territories can create an account (the server checks it too).
+  const eligible = adult && territory === "outside_restricted" && !!props.territories.version;
   const submit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const data = Object.fromEntries(new FormData(e.currentTarget));
     if (register) {
-      if (!adult) return;
+      if (!eligible) return;
       const { name, ...rest } = data;
-      props.onRegister({ ...rest, adult: true }, { name: String(name || "").trim(), who });
+      props.onRegister({ ...rest, adult: true, ...territoryFields("outside_restricted", props.territories.version) }, { name: String(name || "").trim(), who });
     } else props.onLogin(data);
   };
   const disclaimer = <p className="auth-disclaimer">{t("prototype")}</p>;
@@ -164,6 +248,7 @@ export default function Auth(props: Props) {
                   {whoCard("other", es ? "Para alguien a quien cuido" : "For someone I care for", es ? "Seré su familiar o cuidador" : "I am their family or caregiver")}
                 </div>
                 <AdultCheck checked={adult} onChange={setAdult} es={es} />
+                <TerritoryChoice value={territory} onChange={setTerritory} es={es} list={props.territories.list[locale] ?? props.territories.list["es-EC"] ?? ""} />
               </>
             ) : (
               <>
@@ -172,7 +257,7 @@ export default function Auth(props: Props) {
               </>
             )}
             {error && <p role="alert" className="form-error">{error}</p>}
-            <button className="btn btn-primary btn-lg" disabled={busy || (register && !adult)}>
+            <button className="btn btn-primary btn-lg" disabled={busy || (register && !eligible)}>
               {busy ? t("working") : register ? (es ? "Crear cuenta y configurar AINGEL" : "Create account and set up AINGEL") : (es ? "Entrar" : "Sign in")}
             </button>
             {register ? (

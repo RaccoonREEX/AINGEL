@@ -382,6 +382,10 @@ export const es = {
     "La fecha de observación debe estar dentro de los últimos 7 días y no puede estar en el futuro.",
   errorAdult:
     "AINGEL es solo para personas adultas. Esta cuenta debe declarar que tiene 18 años o más.",
+  errorTerritoryDeclare:
+    "Antes de usar la IA de Meta, indica si estás en alguno de los territorios donde Meta no permite su servicio.",
+  errorTerritory:
+    "AINGEL no puede usar la IA de Meta desde los territorios donde Meta no permite su servicio.",
   errorMinor:
     "AINGEL no admite perfiles de menores de 18 años, ni siquiera con la autorización de una persona adulta.",
   errorSubjectOnly:
@@ -781,6 +785,10 @@ const en: Record<keyof typeof es, string> = {
     "Observation time must be within the last 7 days and cannot be in the future.",
   errorAdult:
     "AINGEL is for adults only. This account must declare that it is 18 or older.",
+  errorTerritoryDeclare:
+    "Before using Meta's AI, say whether you are in one of the territories where Meta does not allow its service.",
+  errorTerritory:
+    "AINGEL cannot use Meta's AI from the territories where Meta does not allow its service.",
   errorMinor:
     "AINGEL does not support profiles for people under 18, not even with an adult's authorization.",
   errorSubjectOnly:

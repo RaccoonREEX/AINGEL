@@ -15,7 +15,8 @@
     "test:vision": "node scripts/test-vision.mjs",
     "test:documents": "node scripts/test-documents.mjs",
     "test:sign-registry": "node scripts/test-sign-registry.mjs",
-    "test:desktop-download": "node scripts/test-desktop-download.mjs"
+    "test:desktop-download": "node scripts/test-desktop-download.mjs",
+    "test:territory": "node scripts/test-territory.mjs"
   },
   "dependencies": {
     "react": "^19.3.1",
