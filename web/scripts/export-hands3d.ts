@@ -3,6 +3,7 @@
  * native Android renderer (Hands3D.kt), so web and Android sign exactly the same data.
  * Run: npm run export:android-hands  →  android/app/src/main/assets/hands3d/signs3d.json
  */
+import { createHash } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { S } from "../src/components/aingel/signData";
 import { ensureSign } from "../src/components/aingel/hands3d/convert";
@@ -11,6 +12,7 @@ import { library } from "../src/components/aingel/hands3d/library.js";
 // @ts-expect-error untyped engine module from the AINGEL hands package
 import { DIM, HAND_SCALE } from "../src/components/aingel/hands3d/handRig.js";
 import listenEar from "../src/components/aingel/hands3d/listen_ear.json";
+import { fingerprints } from "../src/components/aingel/signFingerprint";
 
 Object.keys(S).forEach((id) => ensureSign(id));
 
@@ -39,4 +41,9 @@ const out = {
 const dir = new URL("../../android/app/src/main/assets/hands3d/", import.meta.url);
 mkdirSync(dir, { recursive: true });
 writeFileSync(new URL("signs3d.json", dir), JSON.stringify(out));
-console.log(`signs3d.json: ${Object.keys(out.signs).length} signs, ${Object.keys(out.poses).length} poses`);
+// Fingerprints of what each sign looks like (signFingerprint.ts), for the sign registry's validations.
+const prints = fingerprints((text) => createHash("sha256").update(text, "utf8").digest("hex"));
+const printsJson = JSON.stringify(prints, null, 1) + "\n";
+writeFileSync(new URL("signFingerprints.json", dir), printsJson);
+writeFileSync(new URL("../src/components/aingel/signFingerprints.json", import.meta.url), printsJson);
+console.log(`signs3d.json: ${Object.keys(out.signs).length} signs, ${Object.keys(out.poses).length} poses; ${Object.keys(prints).length} fingerprints`);

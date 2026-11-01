@@ -795,3 +795,12 @@ details summary { cursor: pointer; font-weight: 600; min-height: 44px; }
 .code-input { font-size: 24px; letter-spacing: .2em; max-width: 260px; font-variant-numeric: tabular-nums; }
 .subject-note { max-width: 560px; text-align: left; }
 .setup-activate .subject-code .actions { justify-content: flex-start; }
+
+/* Validated signs only (AINGEL 3.0 §16): the illustrative choice and corrections for LSEC signers. */
+.illustrative-toggle { display: flex; gap: 10px; align-items: flex-start; max-width: 640px; margin: 12px auto; font-size: 14px; line-height: 1.4; }
+.illustrative-toggle input { margin-top: 3px; width: 18px; height: 18px; flex: none; }
+.sign-captions { font-size: 20px; line-height: 1.5; }
+.sign-feedback { max-width: 640px; margin: 12px auto; font-size: 14px; }
+.sign-feedback summary { cursor: pointer; padding: 8px 0; font-weight: 600; }
+.sign-feedback form { display: grid; gap: 10px; }
+.sign-feedback label { display: grid; gap: 4px; }

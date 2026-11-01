@@ -34,6 +34,9 @@ data class MobileState(
     val consentCode: JSONObject? = null, val purposes: JSONObject? = null, val openConsent: Boolean = false,
     // This account's own acceptance that the phone's speech service may receive its voice (only from the session payload).
     val speechService: Boolean = false, val speechServiceVersion: String = "",
+    // Signs validated by LSEC signers for this app's animations (care.sign_registry), and whether the person also
+    // wants AINGEL's own unvalidated designs shown as illustrations.
+    val validatedSigns: Set<String> = emptySet(), val illustrativeSigns: Boolean = false,
 )
 
 class AingelViewModel(app: Application) : AndroidViewModel(app) {
@@ -49,6 +52,10 @@ class AingelViewModel(app: Application) : AndroidViewModel(app) {
     private var lastSignPhrase: SignPhrase? = null
     private var activeSpeechTurn: String? = null
     private val retiredSpeechTurns = mutableSetOf<String>()
+    private val signPrefs = app.getSharedPreferences("aingel-signs", android.content.Context.MODE_PRIVATE)
+    private val signFingerprints: Map<String, String> by lazy {
+        try { app.assets.open("hands3d/signFingerprints.json").bufferedReader().use { fingerprintsFrom(it.readText()) } } catch (_: Exception) { emptyMap() }
+    }
     private val captionClient = CaptionClient(api, viewModelScope,
         onTurns = { turns ->
             val epoch = captionEpoch.get()
@@ -88,6 +95,19 @@ class AingelViewModel(app: Application) : AndroidViewModel(app) {
         private set
     /** The orb follows AINGEL's voice (word ranges, or a pulse while a routed phrase plays). */
     fun speechLevel(): Float = voice.level()
+    init { mutable.update { it.copy(illustrativeSigns = signPrefs.getBoolean("illustrative", false)) } }
+    /** The registry from the server; without it (offline, an old server) no sign counts as validated. */
+    fun loadSignRegistry() {
+        viewModelScope.launch {
+            val registry = try { api.request("signs/registry/") as? JSONObject } catch (e: CancellationException) { throw e } catch (_: Exception) { null }
+            mutable.update { it.copy(validatedSigns = validatedSigns(registry, signFingerprints)) }
+        }
+    }
+    fun setIllustrativeSigns(on: Boolean) {
+        signPrefs.edit().putBoolean("illustrative", on).apply()
+        mutable.update { it.copy(illustrativeSigns = on) }
+    }
+    internal fun signPlan(seq: List<String>) = planSigns(seq, state.value.validatedSigns, state.value.illustrativeSigns)
     init {
         operation {
             val session = api.request("auth/session/") as JSONObject

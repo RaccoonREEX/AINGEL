@@ -176,6 +176,7 @@ REST_FRAMEWORK = {
         "face": "6/min",
         "mfa": "6/min",
         "sign": "30/min",
+        "sign_feedback": "30/hour",
         "chat": "6/min",
         "conversation": "12/min",
         "gloss": "30/min",

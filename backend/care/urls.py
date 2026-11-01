@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import auth, consent_views, views, mfa, faces, knowledge, signs
+from . import auth, consent_views, views, mfa, faces, knowledge, sign_registry, signs
 from assistance.companion import chat
 from assistance.conversation import conversation
 from assistance.gloss import gloss
@@ -34,6 +34,8 @@ urlpatterns = [
     path("vision/clip/", ClipView.as_view()),
     path("vision/clip/end/", ClipSessionEndView.as_view()),
     path("consent/purposes/", consent_views.purposes),
+    path("signs/registry/", sign_registry.registry),
+    path("signs/feedback/", sign_registry.feedback),
     path("profiles/<uuid:profile_id>/signs/catalog/", signs.catalog),
     path("profiles/<uuid:profile_id>/signs/lookup/", signs.lookup),
     path("profiles/<uuid:profile_id>/signs/gloss/", gloss),

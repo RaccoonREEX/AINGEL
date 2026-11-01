@@ -133,7 +133,16 @@ private const val CHEVRON_PATH = "M6 9l6 6 6-6"
     }
 
     fun settle(state: AingelOrbState, ms: Long) { moodJob?.cancel(); orb = state; moodJob = scope.launch { delay(ms); orb = AingelOrbState.IDLE } }
-    fun sign(ids: List<String>) { moodJob?.cancel(); orb = AingelOrbState.IDLE; seq = ids; current = -1; playKey++ }
+    var blocked by remember { mutableStateOf<SignPlan.Blocked?>(null) }
+    LaunchedEffect(Unit) { model.loadSignRegistry() }
+    /** Animates [ids] only if all are validated in LSEC, or the person chose illustrations (returns false otherwise). */
+    fun sign(ids: List<String>): Boolean {
+        moodJob?.cancel(); orb = AingelOrbState.IDLE
+        val plan = model.signPlan(ids)
+        if (plan is SignPlan.Blocked) { seq = emptyList(); blocked = plan; return false }
+        blocked = null; seq = ids; current = -1; playKey++
+        return true
+    }
     fun onSign(i: Int) {
         current = i
         // Expression of the sign being made; happy once the phrase is signed ("Entendido").
@@ -146,11 +155,11 @@ private const val CHEVRON_PATH = "M6 9l6 6 6-6"
             // By meaning first (Meta); the word-by-word rule when Meta is not available.
             val meant = model.signsFor(value)
             if (heard != value) return@launch  // a newer sentence came in meanwhile
-            if (!meant.isNullOrEmpty()) { byMeaning = true; result = "signing"; sign(meant); return@launch }
+            if (!meant.isNullOrEmpty()) { byMeaning = true; result = if (sign(meant)) "signing" else "not-validated"; return@launch }
             val b = buildSentence(value)
             built = b?.words ?: emptyList()
             if (b == null) { result = "unsupported"; settle(AingelOrbState.CONFUSED, 3500); return@launch }
-            result = "signing"; sign(b.seq)
+            result = if (sign(b.seq)) "signing" else "not-validated"
         }
     }
     fun micBlocked() = !mayStart(model.state.value.consent, Capture.MICROPHONE) || voice.needsAcceptance()
@@ -223,6 +232,8 @@ private const val CHEVRON_PATH = "M6 9l6 6 6-6"
         result == "camera-consent" -> str(R.string.capture_camera_not_authorized)
         result == "mic-stopped" -> str(R.string.capture_microphone_stopped)
         result == "camera-stopped" -> str(R.string.capture_camera_stopped)
+        mode.signsOut && result == "not-validated" -> blocked?.takeIf { it.partial }?.let { context.getString(R.string.ui_signs_partial, it.validated, it.total) }
+            ?: str(R.string.ui_signs_unavailable_lsec)
         mode.signsOut -> str(when (result) {
             "signing" -> if (current >= 0) R.string.ui_signs_signing else R.string.ui_signs_done
             "thinking" -> R.string.ui_signs_thinking; "unsupported" -> R.string.ui_signs_none_found; "no-speech" -> R.string.ui_signs_no_speech; "unavailable" -> R.string.ui_signs_voice_unavailable
@@ -270,9 +281,10 @@ private const val CHEVRON_PATH = "M6 9l6 6 6-6"
                         T((if (speed == 1f) "1" else speed.toString().removePrefix("0")) + "×", 13, FontWeight.SemiBold, Ui.Navy)
                     }
                 }
-                Box(Modifier.clip(RoundedCornerShape(50)).background(Color(0xFFFDF3DF)).padding(horizontal = 10.dp, vertical = 4.dp)) {
-                    T(stringResource(R.string.ui_signs_design), 11, FontWeight.SemiBold, Color(0xFF7A5410), align = TextAlign.Center)
-                }
+                val signState by model.state.collectAsState()
+                DesignBadge(signState.illustrativeSigns, signState.validatedSigns.size)
+                IllustrativeSwitch(model, signState.illustrativeSigns)
+                if (!mode.signsOut && blocked != null) T(stringResource(R.string.ui_signs_board_unvalidated), 13, color = Ui.Muted, align = TextAlign.Center)
             }
         }
         // "Traducir" button with AINGEL's eyes: unfolds the four modes downwards.

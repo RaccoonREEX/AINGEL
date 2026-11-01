@@ -26,6 +26,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.runtime.*
@@ -476,6 +477,15 @@ private const val MAX_MODEL_PAIRS = 5
     }
     var onHandsDone: () -> Unit = {}  // set below, once «Escuchar y traducir» exists
     fun sign(seq: List<String>) {
+        // Only validated LSEC signs move the hands (or AINGEL's designs, if the person chose illustrations): otherwise
+        // the heard text stays on screen, the gap is said, and listening goes on.
+        val plan = model.signPlan(seq)
+        if (seq.isNotEmpty() && plan is SignPlan.Blocked) {
+            phase = AingelOrbState.IDLE; signSeq = emptyList(); signing = false; signKey++
+            notice = if (plan.partial) context.getString(R.string.ui_signs_partial, plan.validated, plan.total) else str(R.string.ui_signs_unavailable_lsec)
+            if (mode == HomeMode.HEAR) onHandsDone()
+            return
+        }
         phase = AingelOrbState.IDLE; signSeq = seq; signing = seq.isNotEmpty(); signKey++
         signGuard?.cancel()
         if (mode == HomeMode.HEAR && signing) {
@@ -766,13 +776,13 @@ private const val MAX_MODEL_PAIRS = 5
                 T(stringResource(if (signing) R.string.ui_m_signing_mic_paused else if (phase == AingelOrbState.LISTENING) R.string.ui_st_listening else R.string.ui_st_idle), 18, FontWeight.Medium, Ui.Navy,
                     align = TextAlign.Center, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
                 if (heard.isNotBlank()) { Spacer(Modifier.height(6.dp)); T("«$heard»", 15, color = Ui.Muted, align = TextAlign.Center) }
-                Spacer(Modifier.height(10.dp)); DesignBadge()
+                Spacer(Modifier.height(10.dp)); DesignBadge(s.illustrativeSigns, s.validatedSigns.size)
                 notice?.let { Spacer(Modifier.height(12.dp)); Notice(it) }
                 Spacer(Modifier.weight(1f).heightIn(min = 20.dp)); StopButton { endMode() }
             }
             HomeMode.WRITE -> {
                 if (signing) T(stringResource(R.string.ui_m_signing), 18, FontWeight.Medium, Ui.Navy, align = TextAlign.Center, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
-                DesignBadge()
+                DesignBadge(s.illustrativeSigns, s.validatedSigns.size)
                 Spacer(Modifier.weight(1f).heightIn(min = 20.dp))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FieldInput(stringResource(R.string.ui_m_write_here), typedSigns, { typedSigns = it.take(200) }, Modifier.weight(1f), height = 52.dp)
@@ -929,9 +939,19 @@ private const val MAX_MODEL_PAIRS = 5
     }
 }
 
-@Composable private fun DesignBadge() {
+@Composable internal fun DesignBadge(illustrative: Boolean, validated: Int) {
     Box(Modifier.clip(RoundedCornerShape(50)).background(Color(0xFFFDF3DF)).padding(horizontal = 10.dp, vertical = 4.dp)) {
-        T(stringResource(R.string.ui_signs_design), 11, FontWeight.SemiBold, Color(0xFF7A5410), align = TextAlign.Center)
+        T(if (illustrative) stringResource(R.string.ui_signs_illustrative) else stringResource(R.string.ui_signs_validated_only, validated),
+            11, FontWeight.SemiBold, Color(0xFF7A5410), align = TextAlign.Center)
+    }
+}
+
+/** The person's choice to also see AINGEL's unvalidated sign designs, as illustrations. */
+@Composable internal fun IllustrativeSwitch(model: AingelViewModel, on: Boolean) {
+    Row(Modifier.fillMaxWidth().padding(top = 8.dp).toggleable(value = on, role = Role.Switch, onValueChange = { model.setIllustrativeSigns(it) }),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        T(stringResource(R.string.ui_signs_show_illustrative), 13, color = Ui.Text, lineHeight = 1.4f, modifier = Modifier.weight(1f))
+        Switch(checked = on, onCheckedChange = null)
     }
 }
 

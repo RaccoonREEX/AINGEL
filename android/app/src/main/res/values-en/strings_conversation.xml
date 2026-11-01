@@ -185,4 +185,10 @@
     <string name="ui_vision_more">More detail</string>
     <string name="ui_vision_deep">Explore in depth</string>
     <string name="ui_vision_session_expired">I no longer have that picture. Take another one to keep asking.</string>
+    <string name="ui_signs_unavailable_lsec">Sign interpretation not available: these signs aren\'t validated in LSEC yet. The full text is shown.</string>
+    <string name="ui_signs_partial">Sign interpretation only partial: just %1$d of %2$d signs are validated in LSEC. I don\'t show an incomplete translation; the full text is shown.</string>
+    <string name="ui_signs_illustrative">Illustrative · AINGEL design, not a validated LSEC translation</string>
+    <string name="ui_signs_validated_only">Validated LSEC signs only (%1$d)</string>
+    <string name="ui_signs_show_illustrative">Also show AINGEL\'s own sign designs that aren\'t validated yet (illustrative, not a translation)</string>
+    <string name="ui_signs_board_unvalidated">This sign isn\'t validated in LSEC yet: it isn\'t animated. Your message stays as text.</string>
 </resources>

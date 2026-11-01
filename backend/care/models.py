@@ -221,3 +221,22 @@ class SubjectInvite(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField()
     used_at = models.DateTimeField(null=True, blank=True)
+
+
+class SignFeedback(models.Model):
+    """A Deaf user's or an expert's correction of one sign as AINGEL animates it (care.sign_registry). Reviewers read
+    these before recording reviews; they never change a sign's status by themselves."""
+
+    VERDICTS = [("correct", "correct"), ("incorrect", "incorrect"), ("unclear", "unclear"), ("regional_variant", "regional_variant")]
+    ROLES = [("deaf_signer", "deaf_signer"), ("interpreter", "interpreter"), ("hearing_signer", "hearing_signer"),
+             ("learner", "learner"), ("other", "other")]
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="+")
+    sign = models.CharField(max_length=40)
+    language = models.CharField(max_length=10, default="lsec")
+    fingerprint = models.CharField(max_length=64, blank=True)
+    verdict = models.CharField(max_length=20, choices=VERDICTS)
+    role = models.CharField(max_length=20, choices=ROLES)
+    region = models.CharField(max_length=100, blank=True)
+    comment = models.CharField(max_length=500, blank=True)

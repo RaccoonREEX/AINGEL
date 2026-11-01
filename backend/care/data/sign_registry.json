@@ -1,0 +1,655 @@
+{
+ "version": 1,
+ "language": "lsec",
+ "grammar_rules": [],
+ "signs": {
+  "a": {
+   "kind": "letter",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "agua": {
+   "kind": "word",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "ayer": {
+   "kind": "word",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "ayuda": {
+   "kind": "word",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "ayudar": {
+   "kind": "word",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "b": {
+   "kind": "letter",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "bano": {
+   "kind": "word",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "beber": {
+   "kind": "word",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "bien": {
+   "kind": "word",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "c": {
+   "kind": "letter",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "caminar": {
+   "kind": "word",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "casa": {
+   "kind": "word",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "comer": {
+   "kind": "word",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "comida": {
+   "kind": "word",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "d": {
+   "kind": "letter",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "doctor": {
+   "kind": "word",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "dolor": {
+   "kind": "word",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "dormir": {
+   "kind": "word",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "e": {
+   "kind": "letter",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "esperar": {
+   "kind": "word",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "f": {
+   "kind": "letter",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "familia": {
+   "kind": "word",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "g": {
+   "kind": "letter",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "gracias": {
+   "kind": "word",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "h": {
+   "kind": "letter",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "hija": {
+   "kind": "word",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "hijo": {
+   "kind": "word",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "hola": {
+   "kind": "word",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "hoy": {
+   "kind": "word",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "i": {
+   "kind": "letter",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "ir": {
+   "kind": "word",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "j": {
+   "kind": "letter",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "jugar": {
+   "kind": "word",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "k": {
+   "kind": "letter",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "l": {
+   "kind": "letter",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "leer": {
+   "kind": "word",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "libro": {
+   "kind": "word",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "llamar": {
+   "kind": "word",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "m": {
+   "kind": "letter",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "mal": {
+   "kind": "word",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "mama": {
+   "kind": "word",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "manana": {
+   "kind": "word",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "medicina": {
+   "kind": "word",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "n": {
+   "kind": "letter",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "n0": {
+   "kind": "number",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "n1": {
+   "kind": "number",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "n10": {
+   "kind": "number",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "n2": {
+   "kind": "number",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "n3": {
+   "kind": "number",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "n4": {
+   "kind": "number",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "n5": {
+   "kind": "number",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "n6": {
+   "kind": "number",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "n7": {
+   "kind": "number",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "n8": {
+   "kind": "number",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "n9": {
+   "kind": "number",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "necesitar": {
+   "kind": "word",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "no": {
+   "kind": "word",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "o": {
+   "kind": "letter",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "p": {
+   "kind": "letter",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "papa": {
+   "kind": "word",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "parque": {
+   "kind": "word",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "pelota": {
+   "kind": "word",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "porfavor": {
+   "kind": "word",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "pregunta": {
+   "kind": "word",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "q": {
+   "kind": "letter",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "querer": {
+   "kind": "word",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "r": {
+   "kind": "letter",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "s": {
+   "kind": "letter",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "si": {
+   "kind": "word",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "t": {
+   "kind": "letter",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "tener": {
+   "kind": "word",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "tu": {
+   "kind": "word",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "u": {
+   "kind": "letter",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "v": {
+   "kind": "letter",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "venir": {
+   "kind": "word",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "w": {
+   "kind": "letter",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "x": {
+   "kind": "letter",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "y": {
+   "kind": "letter",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "yo": {
+   "kind": "word",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "z": {
+   "kind": "letter",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  },
+  "ñ": {
+   "kind": "letter",
+   "source": "Diseño propio de AINGEL (AINGEL_Manos_y_Senas v1.0.0, catálogo de señas v1.5.0)",
+   "license": "Obra propia de AINGEL; sin validación lingüística",
+   "region": null,
+   "non_manual": null,
+   "reviews": []
+  }
+ }
+}

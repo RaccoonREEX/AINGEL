@@ -13,7 +13,8 @@
     "test:browser-speech": "node scripts/test-browser-speech.mjs",
     "test:revocation": "node scripts/test-revocation.mjs",
     "test:vision": "node scripts/test-vision.mjs",
-    "test:documents": "node scripts/test-documents.mjs"
+    "test:documents": "node scripts/test-documents.mjs",
+    "test:sign-registry": "node scripts/test-sign-registry.mjs"
   },
   "dependencies": {
     "react": "^19.3.1",

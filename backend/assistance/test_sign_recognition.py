@@ -72,7 +72,9 @@ class SignRecognitionTests(TestCase):
         with patch.dict(os.environ, REAL), patch("assistance.sign_recognition.httpx.Client", wire):
             response = self.post(count=5)
         self.assertEqual(response.status_code, 200, response.data)
-        self.assertEqual(response.data["signs"], [{"id": "hola", "certainty": "likely"}, {"id": "gracias", "certainty": "uncertain"}])
+        # No sign is validated by LSEC signers yet (care.sign_registry): each one says so.
+        self.assertEqual(response.data["signs"], [{"id": "hola", "certainty": "likely", "validated": False},
+                                                {"id": "gracias", "certainty": "uncertain", "validated": False}])
         self.assertEqual((response.data["names"], response.data["experimental"]), (["hola", "gracias"], True))
         (payload,) = wire.sent
         images = [part for part in payload["input"][0]["content"] if part["type"] == "input_image"]

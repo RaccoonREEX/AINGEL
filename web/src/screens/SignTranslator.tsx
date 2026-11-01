@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import AingelOrb, { type OrbState } from "../components/aingel/AingelOrb";
 import AingelSigner from "../components/aingel/AingelSigner";
 import AingelHands3D from "../components/aingel/AingelHands3D";
@@ -6,6 +6,8 @@ import { HANDS_SPEED } from "../components/aingel/signData";
 import { HandIcon } from "../components/aingel/HandIcon";
 import { BOARD, GLOSS_VOCABULARY, PICTOGRAM, buildSentence, glossSeq, signName, type Built, type SignId } from "../components/aingel/signLexicon";
 import { api } from "../api";
+import SignFeedbackForm from "../components/SignFeedbackForm";
+import { planSigns, readIllustrative, saveIllustrative, validatedSigns, type Registry, type SignPlan } from "../components/aingel/signRegistry";
 import { useSpeechInput, type SpeechOutcome } from "../components/aingel/useSpeechInput";
 import BrowserSpeechConsent, { BrowserSpeechRevoke, micPrivacyLine } from "../components/BrowserSpeechConsent";
 import { useConsentWatch } from "../consentWatch";
@@ -76,7 +78,14 @@ export default function SignTranslator({ profile, locale, speech: speechConsent,
   const [heard, setHeard] = useState("");
   const [typed, setTyped] = useState("");
   const [orb, setOrb] = useState<OrbState>("idle");
-  const [result, setResult] = useState<"" | "thinking" | "signing" | "unsupported" | "no-speech" | "unavailable">("");
+  const [result, setResult] = useState<"" | "thinking" | "signing" | "unsupported" | "no-speech" | "unavailable" | "not-validated">("");
+  // Signs validated by LSEC signers (backend care.sign_registry); none until the registry arrives.
+  const [registry, setRegistry] = useState<Registry | null>(null);
+  const validated = useMemo(() => validatedSigns(registry), [registry]);
+  const [illustrative, setIllustrative] = useState(readIllustrative);
+  const [blocked, setBlocked] = useState<Extract<SignPlan, { play: false }> | null>(null);
+  const [asked, setAsked] = useState<SignId[]>([]);
+  useEffect(() => { void api<Registry>("signs/registry/").then(setRegistry).catch(() => setRegistry(null)); }, []);
   const [message, setMessage] = useState<SignId[]>([]);
   const [text, setText] = useState("");
   const [shown, setShown] = useState(false);
@@ -90,7 +99,15 @@ export default function SignTranslator({ profile, locale, speech: speechConsent,
   useEffect(() => { latest.current = ""; if (signsOut) camera.stop(); speech.cancel(); setShown(false); setSeq([]); setBuilt([]); setByMeaning(false); setHeard(""); setResult(""); setOrb("idle"); }, [mode]);
 
   const settle = (state: OrbState, ms: number) => { setOrb(state); clearTimeout(timer.current); timer.current = window.setTimeout(() => setOrb("idle"), ms); };
-  const sign = (ids: SignId[]) => { clearTimeout(timer.current); setOrb("idle"); setSeq(ids); setCurrent(-1); setPlayKey((k) => k + 1); };
+  /** Animates [ids] only if all are validated in LSEC, or the person chose AINGEL's illustrative designs; otherwise
+   * nothing moves and the full text stays (returns false). */
+  const sign = (ids: SignId[]) => {
+    clearTimeout(timer.current); setOrb("idle"); setAsked(ids);
+    const plan = planSigns(ids, validated, illustrative);
+    if (!plan.play) { setSeq([]); setBlocked(plan); return false; }
+    setBlocked(null); setSeq(ids); setCurrent(-1); setPlayKey((k) => k + 1);
+    return true;
+  };
   const onSign = (i: number) => {
     setCurrent(i);
     // Expression of the sign being made; happy at the end of the phrase ("Entendido").
@@ -114,11 +131,11 @@ export default function SignTranslator({ profile, locale, speech: speechConsent,
     // By meaning first (Meta); the word-by-word rule when Meta is not available.
     const meant = await signsByMeaning(value);
     if (latest.current !== value) return; // a newer sentence came in meanwhile
-    if (meant?.length) { setByMeaning(true); setResult("signing"); sign(meant); return; }
+    if (meant?.length) { setByMeaning(true); setResult(sign(meant) ? "signing" : "not-validated"); return; }
     const b = buildSentence(value);
     setBuilt(b?.words ?? []);
     if (!b) { setResult("unsupported"); settle("confused", 3500); return; }
-    setResult("signing"); sign(b.seq);
+    setResult(sign(b.seq) ? "signing" : "not-validated");
   };
   const onHeard = (outcome: SpeechOutcome) => {
     if (outcome.kind === "heard") { interpret(outcome.text); return; }
@@ -153,6 +170,9 @@ export default function SignTranslator({ profile, locale, speech: speechConsent,
     if (signsOut) {
       if (result === "signing") return current >= 0 ? L("AINGEL lo dice en señas", "AINGEL is signing it") : L("Listo. Toca ↻ para verlo otra vez.", "Done. Tap ↻ to see it again.");
       if (result === "thinking") return L("Entendiendo la frase…", "Understanding the sentence…");
+      if (result === "not-validated" && blocked) return blocked.reason === "partial"
+        ? L(`Interpretación en señas parcial: solo ${blocked.validated} de ${blocked.total} señas están validadas en LSEC. No muestro una traducción incompleta; abajo está el texto completo.`, `Sign interpretation only partial: just ${blocked.validated} of ${blocked.total} signs are validated in LSEC. I don't show an incomplete translation; the full text is below.`)
+        : L("Interpretación en señas no disponible: estas señas aún no están validadas en LSEC. Abajo está el texto completo.", "Sign interpretation not available: these signs aren't validated in LSEC yet. The full text is below.");
       if (result === "unsupported") return L("No encontré palabras para signar", "I found no words to sign");
       if (result === "no-speech") return L("No escuché nada. Toca para intentarlo otra vez.", "I heard nothing. Tap to try again.");
       if (result === "unavailable") return L("El reconocimiento de voz no está disponible aquí", "Speech recognition isn't available here");
@@ -196,7 +216,9 @@ export default function SignTranslator({ profile, locale, speech: speechConsent,
             <div className="sign-controls">
               <button type="button" className="round-btn" aria-label={L("Repetir señas", "Repeat signs")} title={L("Repetir", "Repeat")} disabled={!seq.length} onClick={() => sign(seq)}>↻</button>
               <button type="button" className="speed-btn" aria-label={L("Velocidad", "Speed")} onClick={() => setSpeed(SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length])}>{speed}×</button>
-              <span className="validation validation--illustrative">{L("Diseño AINGEL · pendiente de validar en LSEC", "AINGEL design · pending LSEC validation")}</span>
+              <span className="validation validation--illustrative">{illustrative
+                ? L("Ilustrativo · diseño AINGEL, no es una traducción validada en LSEC", "Illustrative · AINGEL design, not a validated LSEC translation")
+                : L(`Solo señas validadas en LSEC (${validated.size} de ${registry?.summary.total ?? "—"})`, `Validated LSEC signs only (${validated.size} of ${registry?.summary.total ?? "—"})`)}</span>
             </div>
           </>
         )}
@@ -244,6 +266,17 @@ export default function SignTranslator({ profile, locale, speech: speechConsent,
           )}
         </section>
       )}
+      {signsOut && result === "not-validated" && heard && (
+        <p className="heard sign-captions" aria-live="polite"><span className="chip">{L("Texto completo", "Full text")}</span> {heard}</p>
+      )}
+      <label className="illustrative-toggle">
+        <input type="checkbox" checked={illustrative} onChange={(e) => { setIllustrative(e.target.checked); saveIllustrative(e.target.checked); setBlocked(null); }} />
+        {L("Mostrar también las señas de diseño AINGEL que aún no están validadas (ilustrativas, no son traducción)", "Also show AINGEL's own sign designs that aren't validated yet (illustrative, not a translation)")}
+      </label>
+      {!signsOut && blocked && (
+        <p className="home-notice" role="status">{L("Esta seña aún no está validada en LSEC: no se anima. Tu mensaje sigue en texto.", "This sign isn't validated in LSEC yet: it isn't animated. Your message stays as text.")}</p>
+      )}
+      <SignFeedbackForm es={es} signs={seq.length ? seq : asked} name={name} />
       {signsOut && byMeaning && seq.length > 0 && (
         <p className="sign-words"><small>{L("Señas elegidas por el sentido de la frase (Meta), con el vocabulario de AINGEL.", "Signs chosen from the meaning of the sentence (Meta), with AINGEL's vocabulary.")}</small></p>
       )}

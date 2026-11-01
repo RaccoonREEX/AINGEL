@@ -186,4 +186,10 @@
     <string name="ui_vision_more">Más detalle</string>
     <string name="ui_vision_deep">Explorar a fondo</string>
     <string name="ui_vision_session_expired">Ya no tengo esa imagen. Toma otra foto para seguir preguntando.</string>
+    <string name="ui_signs_unavailable_lsec">Interpretación en señas no disponible: estas señas aún no están validadas en LSEC. Se muestra el texto completo.</string>
+    <string name="ui_signs_partial">Interpretación en señas parcial: solo %1$d de %2$d señas están validadas en LSEC. No muestro una traducción incompleta; se muestra el texto completo.</string>
+    <string name="ui_signs_illustrative">Ilustrativo · diseño AINGEL, no es una traducción validada en LSEC</string>
+    <string name="ui_signs_validated_only">Solo señas validadas en LSEC (%1$d)</string>
+    <string name="ui_signs_show_illustrative">Mostrar también las señas de diseño AINGEL que aún no están validadas (ilustrativas, no son traducción)</string>
+    <string name="ui_signs_board_unvalidated">Esta seña aún no está validada en LSEC: no se anima. Tu mensaje sigue en texto.</string>
 </resources>

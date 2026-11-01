@@ -24,6 +24,7 @@ from rest_framework.response import Response
 from rest_framework.throttling import UserRateThrottle
 
 from care.consent import meta_account_denial, meta_allowed, private_media_allowed, refused, still_current
+from care.sign_registry import validated_ids
 from care.permissions import access, audit
 
 from . import usage
@@ -185,6 +186,9 @@ def recognize_signs(request, profile_id):
         return Response({"error": "consent_changed"}, status=409)  # revoked while Meta looked: nothing is shown
     audit(profile, request.user, "signs.recognize")  # never the frames nor the signs
     spanish = profile.locale == "es-EC" if request.data.get("locale") not in ("es-EC", "en-US") else request.data.get("locale") == "es-EC"
+    # Recognition compares with AINGEL's own sign designs: each sign says whether people who sign LSEC validated it.
+    validated = validated_ids()
+    signs = [{**sign, "validated": sign["id"] in validated} for sign in signs]
     return Response({
         "mode": "meta", "model": "muse-spark-1.3", "experimental": True, "ai_generated": True, "signs": signs,
         "names": [VOCABULARY[s["id"]][0 if spanish else 1] for s in signs], "observed": observed, "latency_ms": latency,
