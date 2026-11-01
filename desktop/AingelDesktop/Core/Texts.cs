@@ -69,6 +69,8 @@ public static class Texts
         ["e_consent_changed"] = ("Tus permisos cambiaron mientras AINGEL miraba: descarté la respuesta y la imagen.", "Your permissions changed while AINGEL was looking: I discarded the answer and the image."),
         ["e_meta_access_denied"] = ("Esta cuenta no tiene acceso a Meta en este servidor.", "This account has no Meta access on this server."),
         ["e_adult_declaration_required"] = ("Esta cuenta debe confirmar que es mayor de edad en la web o el móvil.", "This account must confirm it is an adult on the web or phone."),
+        ["e_territory_declaration_required"] = ("Antes de usar la IA de Meta, indica en la web o el móvil si estás en un territorio donde Meta no la permite.", "Before using Meta's AI, say on the web or phone whether you are in a territory where Meta does not allow it."),
+        ["e_meta_territory_restricted"] = ("AINGEL no puede usar la IA de Meta desde los territorios donde Meta no permite su servicio.", "AINGEL cannot use Meta's AI from the territories where Meta does not allow its service."),
         ["e_visual_session_expired"] = ("Ya no tengo esa imagen. Describe la ventana otra vez para seguir preguntando.", "I no longer have that image. Describe the window again to keep asking."),
         ["e_synthetic_tests_disabled"] = ("Este servidor no tiene activadas las pruebas sintéticas.", "This server does not have synthetic tests turned on."),
         ["e_private_test_consent_required"] = ("La prueba privada solo está disponible en tu propio perfil.", "The private test is only available on your own profile."),
