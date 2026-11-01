@@ -13,7 +13,11 @@ from websockets.exceptions import ConnectionClosed, WebSocketException
 
 from care.consent import meta_account_denial, meta_allowed, private_media_allowed, still_current
 from care.permissions import access
+from . import usage
 from .meta_quota import MetaQuotaError, reserve_meta_call
+
+VOICE = "muse-voice-transcribe-1.0"
+BYTES_PER_SECOND = 48000  # PCM16 mono at 24 kHz, as declared to Meta (audioEncoding)
 
 
 class CaptionConsumer(AsyncWebsocketConsumer):
@@ -41,6 +45,8 @@ class CaptionConsumer(AsyncWebsocketConsumer):
         self.lease = False
         self.ended = False
         self.bytes_sent = 0
+        self.bytes_forwarded = 0
+        self.billed_kind = None
         self.consent_profile = None
         self.consent_epoch = None
         self.consent_checked = 0.0
@@ -101,6 +107,7 @@ class CaptionConsumer(AsyncWebsocketConsumer):
                     return
             try:
                 await self.upstream.send(bytes_data)
+                self.bytes_forwarded += len(bytes_data)
             except ConnectionClosed:
                 await self.fail("transcription_unavailable")
             return
@@ -153,10 +160,11 @@ class CaptionConsumer(AsyncWebsocketConsumer):
             await self.fail("meta_not_configured")
             return
         try:
-            # Counted for this account (assistance.meta_quota), not only for the platform.
+            # Counted for this account (assistance.meta_quota), not only for the platform, and within its budget.
             account = self.scope["user"].pk
+            await database_sync_to_async(usage.admit)(account)
             await sync_to_async(lambda: reserve_meta_call(account=account), thread_sensitive=False)()
-        except MetaQuotaError as error:
+        except (MetaQuotaError, usage.BudgetExhausted) as error:
             await self.fail(str(error))
             return
         if self.timer:
@@ -174,7 +182,7 @@ class CaptionConsumer(AsyncWebsocketConsumer):
                     {
                         "authorization": {"accessToken": f"Bearer {key}"},
                         "audioEncoding": "PCM_24KHZ",
-                        "model": "muse-voice-transcribe-1.0",
+                        "model": VOICE,
                         "mode": "ENDPOINTING",
                         "partialMode": "CUMULATIVE",
                         "languageBias": [
@@ -184,6 +192,9 @@ class CaptionConsumer(AsyncWebsocketConsumer):
                     }
                 )
             )
+            # From here Meta may bill the audio sent, so the session is recorded when it ends (disconnect).
+            self.billed_kind = kind
+            self.billed_started = time.monotonic()
             ack = json.loads(await asyncio.wait_for(self.upstream.recv(), 15))
             if not isinstance(ack, dict) or "sessionId" not in ack:
                 await self.fail("transcription_unavailable")
@@ -199,7 +210,7 @@ class CaptionConsumer(AsyncWebsocketConsumer):
             text_data=json.dumps(
                 {
                     "type": "ready",
-                    "model": "muse-voice-transcribe-1.0",
+                    "model": VOICE,
                     "sample_rate": 24000,
                 }
             )
@@ -253,5 +264,17 @@ class CaptionConsumer(AsyncWebsocketConsumer):
                     await task
         if self.upstream:
             await self.upstream.close()
+        if self.billed_kind:
+            await self.bill()
         if self.lease:
             await cache.adelete(self.lease_key)
+
+    async def bill(self):
+        """One ledger row per stream, for the account of this connection: the seconds of audio AINGEL forwarded to
+        Meta (Meta bills audio processed in whole seconds, rounded down). No audio or transcript is kept."""
+        kind, self.billed_kind = self.billed_kind, None
+        await database_sync_to_async(usage.record)(
+            "captions_system" if kind == "meeting_audio" else "captions", VOICE, "", None,
+            round((time.monotonic() - self.billed_started) * 1000), kind, "completed" if self.ended else "closed",
+            self.scope["user"], audio_seconds=self.bytes_forwarded // BYTES_PER_SECOND,
+        )

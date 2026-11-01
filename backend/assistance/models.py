@@ -17,5 +17,9 @@ class MetaUsage(models.Model):
     cached_tokens = models.PositiveIntegerField(default=0)
     output_tokens = models.PositiveIntegerField(default=0)
     reasoning_tokens = models.PositiveIntegerField(default=0)
+    # Units Meta bills outside tokens (dev.meta.ai pricing): SAM images, Voice seconds of audio, web searches.
+    images = models.PositiveIntegerField(default=0)
+    audio_seconds = models.PositiveIntegerField(default=0)
+    web_searches = models.PositiveIntegerField(default=0)
     latency_ms = models.PositiveIntegerField(null=True, blank=True)
     cost_usd = models.DecimalField(max_digits=12, decimal_places=6, default=0)

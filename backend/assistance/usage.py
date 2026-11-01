@@ -1,8 +1,16 @@
-"""Meta usage ledger and credit budget. Tokens and latency only: no content is stored or logged.
+"""Meta usage ledger and credit budget. Billed units and latency only: no content is stored or logged.
 
-Prices are Meta's published list prices for muse-spark-1.3 (docs/META_MODELS.md), in USD per million tokens;
-reasoning tokens are billed as output. The budget (AINGEL_META_BUDGET_USD) is a stop only when set: the ledger
-starts empty, so calls made before it existed are not counted, and quality is never lowered to save credits.
+Prices are Meta's Standard pay-as-you-go list prices (dev.meta.ai/docs/pricing-rate-limits, checked 2026-10-31):
+- muse-spark-1.3: per million tokens (input, cached input, output; reasoning tokens are billed as output), plus
+  web search grounding per 1,000 queries;
+- sam-3.1: per image segmented (AINGEL sends one image per request);
+- muse-voice-transcribe-1.0: per hour of audio processed, in whole seconds rounded down.
+
+This is AINGEL's own estimate, not Meta's invoice. It counts what a response reports (tokens, web searches) and what
+AINGEL itself sent (images, seconds of audio forwarded). A request that fails before Meta returns a response (network
+error, timeout) cannot be counted, so the limits below are partial protection; Meta's billing console is the
+authority. The budget (AINGEL_META_BUDGET_USD) is a stop only when set: the ledger starts empty, so calls made before
+it existed are not counted, and quality is never lowered to save credits.
 """
 
 import os
@@ -11,6 +19,9 @@ from decimal import Decimal
 from django.db.models import Count, Sum
 
 PRICES = {"muse-spark-1.3": {"input": Decimal("1.25"), "cached": Decimal("0.15"), "output": Decimal("4.25")}}
+WEB_SEARCH = Decimal("2.50") / 1000  # per query, on top of the request's tokens
+SAM_IMAGE = Decimal("2.50") / 1000  # sam-3.1, per image segmented
+VOICE_SECOND = Decimal("0.18") / 3600  # muse-voice-transcribe-1.0, per second of audio processed
 MILLION = Decimal(1_000_000)
 
 
@@ -35,13 +46,19 @@ def tokens(usage):
     }
 
 
-def cost(model, counts):
-    price = PRICES.get(model)
-    if price is None:
-        return Decimal(0)
-    fresh = max(counts["input_tokens"] - counts["cached_tokens"], 0)
-    total = fresh * price["input"] + counts["cached_tokens"] * price["cached"] + counts["output_tokens"] * price["output"]
-    return (total / MILLION).quantize(Decimal("0.000001"))
+def cost(model, counts, images=0, audio_seconds=0, web_searches=0):
+    """USD for one call: tokens for Spark (plus its web searches), images for SAM, seconds of audio for Voice. A model
+    without a known price costs 0 here; test_meta_modality keeps the models in use to the priced ones."""
+    total = Decimal(0)
+    if price := PRICES.get(model):
+        fresh = max(counts["input_tokens"] - counts["cached_tokens"], 0)
+        billed = fresh * price["input"] + counts["cached_tokens"] * price["cached"] + counts["output_tokens"] * price["output"]
+        total = billed / MILLION + web_searches * WEB_SEARCH
+    elif model == "sam-3.1":
+        total = images * SAM_IMAGE
+    elif model == "muse-voice-transcribe-1.0":
+        total = audio_seconds * VOICE_SECOND
+    return total.quantize(Decimal("0.000001"))
 
 
 def billed_account(user=None):
@@ -53,17 +70,20 @@ def billed_account(user=None):
     return user.pk if getattr(user, "is_authenticated", False) else bound_account()
 
 
-def record(feature, model, effort, usage, latency_ms=None, basis="", status="", user=None):
-    """Store one call's usage for its account (billed_account); returns its counters and cost. Never raises: losing a
-    ledger row must not lose the answer the person is waiting for."""
+def record(feature, model, effort, usage, latency_ms=None, basis="", status="", user=None, images=0, audio_seconds=0,
+           web_searches=0):
+    """Store one call's billed units for its account (billed_account); returns its counters and cost. Never raises:
+    losing a ledger row must not lose the answer the person is waiting for."""
     from .models import MetaUsage
 
     counts = tokens(usage)
-    price = cost(model, counts)
+    units = {"images": max(int(images), 0), "audio_seconds": max(int(audio_seconds), 0),
+             "web_searches": max(int(web_searches), 0)}
+    price = cost(model, counts, **units)
     try:
         MetaUsage.objects.create(
             feature=feature, model=model, effort=effort or "", basis=basis or "", status=status or "",
-            latency_ms=latency_ms, cost_usd=price, user_id=billed_account(user), **counts,
+            latency_ms=latency_ms, cost_usd=price, user_id=billed_account(user), **counts, **units,
         )
     except Exception:
         pass
@@ -92,9 +112,10 @@ def account_budget():
         return None
 
 
-def admit():
-    """Raises BudgetExhausted when the platform's budget is reached, or, when AINGEL_META_USER_DAILY_USD is set, the
-    request's account spent that much today (UTC): one account cannot use up the credits everyone shares."""
+def admit(account=None):
+    """Raises BudgetExhausted when the platform's budget is reached, or, when AINGEL_META_USER_DAILY_USD is set,
+    [account] (by default the request's bound account) spent that much today (UTC): one account cannot use up the
+    credits everyone shares. Partial protection: see the module docstring."""
     from django.utils import timezone
 
     from .meta_quota import bound_account
@@ -103,7 +124,7 @@ def admit():
     limit = budget()
     if limit is not None and spent() >= limit:
         raise BudgetExhausted("meta_budget_exhausted")
-    daily, account = account_budget(), bound_account()
+    daily, account = account_budget(), account if account is not None else bound_account()
     if daily is not None and account is not None:
         since = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
         today = MetaUsage.objects.filter(user_id=account, created_at__gte=since).aggregate(total=Sum("cost_usd"))["total"] or Decimal(0)

@@ -133,8 +133,9 @@ def locate_object(image: bytes, prompt: str, allowed):
                     if len(raw) > 4 * 1024 * 1024:
                         raise SceneUnavailable("sam_output_too_large")
         data = json.loads(raw)
+        # SAM is billed per image segmented: the one image of this request.
         usage.record("locate", "sam-3.1", "", data.get("usage"), round((time.monotonic() - started) * 1000), allowed,
-                     data.get("status"))
+                     data.get("status"), images=1)
         if data.get("status") != "completed":
             raise SceneUnavailable("sam_incomplete")
         text = "\n".join(

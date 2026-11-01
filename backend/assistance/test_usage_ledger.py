@@ -2,15 +2,20 @@
 the account comes from the authenticated request on the server (care.consent.meta_account_denial), never from the
 client. Requests to Meta are intercepted at the HTTP client; the MetaUsage rows checked are the real ones."""
 
+import asyncio
 import json
 import os
 from decimal import Decimal
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
+from channels.db import database_sync_to_async
+from channels.testing import WebsocketCommunicator
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from django.test import TestCase
+from django.test import TestCase, TransactionTestCase
 from rest_framework.test import APIClient
+
+from config.asgi import application
 
 from care.models import Profile
 from care.testing import adult, authorize
@@ -18,6 +23,7 @@ from care.testing import adult, authorize
 from . import usage
 from .meta_quota import bind_account
 from .models import MetaUsage
+from .test_captions import FakeMeta as FakeVoice
 
 # The server's own synthetic fixtures with Meta, as on a synthetic test server (no personal content).
 SYNTHETIC = {"AINGEL_AI_MODE": "meta", "MODEL_API_KEY": "synthetic-key", "AINGEL_SYNTHETIC_TESTS_ONLY": "1",
@@ -163,3 +169,88 @@ class BilledAccountTests(TestCase):
         usage.record("scene", "muse-spark-1.3", "minimal", TOKENS)
         self.assertEqual(MetaUsage.objects.get().user_id, other.pk)
         self.assertEqual(MetaUsage.objects.get().cost_usd, Decimal("0.002100"))
+
+
+class BillingTests(TestCase):
+    """Meta's Standard prices (dev.meta.ai/docs/pricing-rate-limits, checked 2026-10-31)."""
+
+    def test_each_model_is_priced_in_the_unit_meta_bills(self):
+        counts = usage.tokens(TOKENS)
+        self.assertEqual(usage.cost("muse-spark-1.3", counts), Decimal("0.002100"))  # 1000 x 1.25 + 200 x 4.25 per M
+        self.assertEqual(usage.cost("muse-spark-1.3", counts, web_searches=2), Decimal("0.007100"))  # + 2 x 2.50 per 1000
+        self.assertEqual(usage.cost("sam-3.1", counts, images=1), Decimal("0.002500"))  # per image, not per token
+        self.assertEqual(usage.cost("sam-3.1", counts), Decimal(0))
+        self.assertEqual(usage.cost("muse-voice-transcribe-1.0", usage.tokens(None), audio_seconds=3600), Decimal("0.180000"))
+        self.assertEqual(usage.cost("muse-voice-transcribe-1.0", usage.tokens(None), audio_seconds=59), Decimal("0.002950"))
+
+
+@patch.dict(os.environ, SYNTHETIC)
+class BilledUnitsThroughEndpointsTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.user, self.profile, self.client = account("ledger-units")
+
+    def tearDown(self):
+        bind_account(None)
+
+    def test_locate_bills_one_sam_image(self):
+        sam = FakeMeta(output=[{"type": "message", "content": [{"type": "output_text", "text": ""}]}])
+        with patch("assistance.locate.httpx.Client", sam):
+            self.client.post("/api/v1/locate/", {"locale": "es-EC", "fixture": "blue_square"}, format="multipart")
+        row = MetaUsage.objects.get(feature="locate")
+        self.assertEqual((row.user_id, row.images, row.cost_usd), (self.user.pk, 1, Decimal("0.002500")))
+
+    def test_conversation_bills_its_web_searches(self):
+        output = [{"type": "web_search_call", "status": "completed"},
+                  {"type": "message", "content": [{"type": "output_text", "text": "Respuesta."}]}]
+        with patch("assistance.companion.httpx.Client", FakeMeta(output=output)):
+            response = self.client.post(f"/api/v1/profiles/{self.profile.pk}/conversation/", {"fixture": "greeting"}, format="json")
+        self.assertEqual(response.status_code, 200, response.data)
+        row = MetaUsage.objects.get(feature="companion")
+        self.assertEqual((row.user_id, row.web_searches, row.cost_usd), (self.user.pk, 1, Decimal("0.004600")))
+
+
+PUBLIC = {"AINGEL_AI_MODE": "meta", "MODEL_API_KEY": "test-key", "AINGEL_REAL_DATA": "1",
+          "AINGEL_SYNTHETIC_TESTS_ONLY": "0", "AINGEL_PRIVATE_OWN_MEDIA_TEST": "0"}
+
+
+@patch.dict(os.environ, PUBLIC)
+class CaptionBillingTests(TransactionTestCase):
+    """Live captions are billed by seconds of audio: one ledger row per stream, for the connection's account."""
+
+    def setUp(self):
+        cache.clear()
+        self.user = adult(get_user_model().objects.create_user(username="ledger-voice"))
+        self.profile = authorize(Profile.objects.create(owner=self.user, display_name="Voz"), {"microphone": True, "meta_data": True})
+        self.client.force_login(self.user)
+        self.cookie = f"sessionid={self.client.cookies['sessionid'].value}".encode()
+
+    def socket(self):
+        return WebsocketCommunicator(application, "/ws/captions/", headers=[(b"origin", b"http://127.0.0.1:5173"), (b"cookie", self.cookie)])
+
+    async def test_seconds_of_audio_forwarded_are_billed_to_the_account(self):
+        meta = FakeVoice()
+        with patch("assistance.captions.connect", new=AsyncMock(return_value=meta)):
+            ws = self.socket()
+            self.assertTrue((await ws.connect())[0])
+            await ws.send_json_to({"type": "start", "locale": "es-EC", "profile": str(self.profile.pk)})
+            self.assertEqual((await ws.receive_json_from())["type"], "ready")
+            for _ in range(16):  # 16 x 9600 bytes = 3.2 s of PCM16 at 24 kHz
+                await ws.send_to(bytes_data=b"\x00\x00" * 4800)
+            await ws.send_json_to({"type": "stop"})
+            await asyncio.sleep(0.05)
+            await ws.disconnect()
+        row = await database_sync_to_async(MetaUsage.objects.get)()
+        self.assertEqual((row.user_id, row.model, row.audio_seconds, row.status), (self.user.pk, "muse-voice-transcribe-1.0", 3, "completed"))
+        self.assertEqual(row.cost_usd, Decimal("0.000150"))  # 3 s x 0.18 per hour, whole seconds rounded down
+
+    async def test_an_account_over_its_daily_cap_cannot_start_captions(self):
+        await database_sync_to_async(MetaUsage.objects.create)(feature="scene", model="muse-spark-1.3", user=self.user, cost_usd=Decimal("1"))
+        with patch.dict(os.environ, {"AINGEL_META_USER_DAILY_USD": "0.50"}), patch("assistance.captions.connect", new=AsyncMock(return_value=FakeVoice())) as connect:
+            ws = self.socket()
+            self.assertTrue((await ws.connect())[0])
+            await ws.send_json_to({"type": "start", "locale": "es-EC", "profile": str(self.profile.pk)})
+            self.assertEqual((await ws.receive_json_from())["code"], "meta_account_budget_exhausted")
+            await ws.disconnect()
+        connect.assert_not_called()
+        self.assertEqual(await database_sync_to_async(MetaUsage.objects.count)(), 1)  # nothing billed
