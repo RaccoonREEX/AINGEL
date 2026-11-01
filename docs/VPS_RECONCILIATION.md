@@ -63,7 +63,12 @@ AINGEL_META_USER_LIMIT_PER_MINUTE=12
 AINGEL_META_USER_LIMIT_PER_DAY=300
 AINGEL_META_USER_DAILY_USD=2.00   # opcional; ajustar a los créditos
 AINGEL_META_BUDGET_USD=140        # opcional; deja margen sobre los 150 USD
+# AINGEL_GEO_COUNTRY_HEADER=X-AINGEL-Country   # solo si Caddy añade el país desde una fuente GeoIP de confianza
 ```
+
+Los topes monetarios son una estimación parcial; la referencia es la consola de facturación de Meta (ver
+`docs/PUBLIC_ACCESS.md`, «Registro de consumo»). Tras el despliegue, **todas las cuentas existentes responden una vez
+a la pregunta de territorio** en la web o en Android antes de volver a usar Meta.
 
 ## 6. Despliegue, coordinado y después de la revisión
 
@@ -72,9 +77,11 @@ AINGEL_META_BUDGET_USD=140        # opcional; deja margen sobre los 150 USD
 3. Construir la imagen nueva, reproducible y etiquetada con el commit.
 4. Ejecutar `migrate`. Migraciones nuevas desde `25d964c`:
    - `assistance.0001_initial`: consumo de Meta;
-   - `care.0009_sign_feedback`: correcciones de señas.
+   - `care.0009_sign_feedback`: correcciones de señas;
+   - `assistance.0002_metausage_billed_units`: imágenes, segundos de audio y búsquedas facturadas;
+   - `care.0010_account_territory`: respuesta sobre territorios restringidos.
 
-   **Ninguna borra datos.**
+   **Todas solo añaden; ninguna borra datos.**
 5. Cambiar las variables del paso 5 y reiniciar solo el servicio backend; los demás servicios del VPS no se tocan.
 6. Hacer una prueba de humo con una cuenta nueva.
 
@@ -83,4 +90,5 @@ AINGEL_META_BUDGET_USD=140        # opcional; deja margen sobre los 150 USD
 1. Volver a la etiqueta de imagen anterior y a las variables anteriores.
 2. **Base de datos:** las tablas nuevas pueden quedar, porque el código anterior no las usa. Si hace falta, ejecutar
    `migrate care 0008` y `migrate assistance zero`, después de exportar las correcciones de señas.
+   Para revertir solo este PR basta con `migrate care 0009` y `migrate assistance 0001`.
 3. **Sesiones en caché:** caducan solas (15 min y 2 h).

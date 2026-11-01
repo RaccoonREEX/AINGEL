@@ -54,8 +54,12 @@ ni verificada.
 - **Territorios restringidos:** no ofrecer el servicio a personas ubicadas en territorios restringidos (§3 de la
   política geográfica): Afganistán, Bielorrusia, Camboya, China (incluidos Hong Kong y Macao), Cuba, Eritrea,
   Etiopía, Haití, Irán, Irak, Libia, Myanmar, Nicaragua, Corea del Norte, Pakistán, Rusia, Somalia, Siria, Crimea,
-  Donetsk y Luhansk, Venezuela y Sáhara Occidental. **Hoy AINGEL no lo verifica:** ver «Riesgos» en
-  `docs/PUBLIC_ACCESS.md`.
+  Donetsk y Luhansk, Venezuela y Sáhara Occidental. **Cómo lo aplica AINGEL:**
+  - una autodeclaración obligatoria en el registro y para las cuentas existentes, con bloqueo en el servidor;
+  - un control opcional por el país de la conexión.
+
+  Detalles y límites en «Territorios restringidos» de `docs/PUBLIC_ACCESS.md`.
+- **Disponibilidad por modelo (§2.2):** Muse Image no está disponible en India. AINGEL no usa Muse Image.
 - **Política de uso aceptable** de Meta Model API: cumplirla.
 - **Contenido generado con IA:** etiquetarlo cuando la ley lo exija. Las respuestas de AINGEL ya se marcan como
   generadas por IA.

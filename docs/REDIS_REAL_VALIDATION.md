@@ -1,6 +1,6 @@
 # Validación de cuotas con Redis real: pendiente, a cargo de Astra en el VPS
 
-**Estado (31-10-2026):** en local, `manage.py test` ejecuta 297 pruebas: **290 correctas y 7 omitidas**. Las 7 omitidas necesitan un
+**Estado (1-11-2026):** en local, `manage.py test` ejecuta 321 pruebas: **314 correctas y 7 omitidas**. Las 7 omitidas necesitan un
 Redis real desechable. La auditoría de código del PR #12 se aprueba con ellas pendientes.
 
 **Condición obligatoria:** deben pasar en un entorno aislado **antes de activar el acceso público multiusuario en
@@ -56,7 +56,7 @@ En el comando de prueba no aparecen `--env-file`, `MODEL_API_KEY`, `AINGEL_ENV=p
 
 **Resultado esperado:** `OK`, sin pruebas omitidas en ese módulo; las 7 de `RealRedisTests` aparecen como `ok`.
 
-Opcionalmente, la suite completa en el mismo contenedor debe dar **297 correctas y 0 omitidas**:
+Opcionalmente, la suite completa en el mismo contenedor debe dar **321 correctas y 0 omitidas**:
 `python manage.py test`.
 
 ## Registro del resultado
