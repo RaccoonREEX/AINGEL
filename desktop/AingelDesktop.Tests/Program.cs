@@ -36,6 +36,7 @@ static class Program
         Voices();
         Jpeg();
         Capture();
+        PrivacyChecks.Run(Check);
         AudioChecks.Run(Check);
         InstallerChecks.Run(Check);
         Cookies();

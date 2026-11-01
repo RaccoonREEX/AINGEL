@@ -7,6 +7,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows.Forms;
+using System.Windows.Interop;
 
 namespace Aingel.Desktop.Core;
 
@@ -50,6 +51,23 @@ public static class ScreenCapture
 
     /// <summary>Keeps [hwnd] (AINGEL's window) out of every screen capture, AINGEL's own included.</summary>
     public static bool ExcludeFromCapture(IntPtr hwnd) => SetWindowDisplayAffinity(hwnd, WdaExcludeFromCapture);
+
+    /// <summary>Fail closed unless all visible AINGEL windows can be excluded before any screen capture.</summary>
+    internal static void ExcludeOwnWindows()
+    {
+        var application = System.Windows.Application.Current ?? throw new ApiFailure("capture_failed");
+        foreach (System.Windows.Window window in application.Windows)
+        {
+            if (!window.IsVisible) continue;
+            var handle = new WindowInteropHelper(window).Handle;
+            RequireExclusion(handle);
+        }
+    }
+
+    internal static void RequireExclusion(IntPtr handle)
+    {
+        if (handle == IntPtr.Zero || !ExcludeFromCapture(handle)) throw new ApiFailure("capture_failed");
+    }
 
     /// <summary>The visible bounds of [hwnd] in physical pixels, or null when minimized or hidden.</summary>
     public static Rectangle? Bounds(IntPtr hwnd)

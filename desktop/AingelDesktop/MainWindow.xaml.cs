@@ -192,7 +192,7 @@ public partial class MainWindow : Window
             var target = tracker.Target();
             if (target == IntPtr.Zero) { Fail("window_not_visible"); return; }
             SetState(OrbState.Capturing, T("capturing", ScreenCapture.Title(target)));
-            try { shot = wholeScreen ? ScreenCapture.Monitor(target) : ScreenCapture.Window(target); }
+            try { ScreenCapture.ExcludeOwnWindows(); shot = wholeScreen ? ScreenCapture.Monitor(target) : ScreenCapture.Window(target); }
             catch (ApiFailure failure) { Fail(failure.Code); return; }
             catch (Exception e) when (e is ExternalException or ArgumentException or InvalidOperationException) { Fail("capture_failed"); return; }
         }
@@ -243,7 +243,7 @@ public partial class MainWindow : Window
         if (!synthetic)
         {
             var target = tracker.Target();
-            try { pending = ScreenCapture.Window(target); }
+            try { ScreenCapture.ExcludeOwnWindows(); pending = ScreenCapture.Window(target); }
             catch (ApiFailure failure) { Fail(failure.Code); return; }
             catch (Exception e) when (e is ExternalException or ArgumentException or InvalidOperationException) { Fail("capture_failed"); return; }
         }
