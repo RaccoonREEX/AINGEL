@@ -63,6 +63,10 @@ class AgeAndConsentTests(TestCase):
         self.assertEqual(client.post("/api/v1/auth/adult/", {"adult": True}, format="json").status_code, 400)
         declared = client.post("/api/v1/auth/adult/", {"adult": True, "terms_version": TERMS_VERSION}, format="json")
         self.assertTrue(declared.json()["user"]["adult_declared"])
+        # An account from before the territory policy also declares where it is (care.territory).
+        self.assertEqual(self.ask(legacy, profile.pk).data, {"error": "territory_declaration_required"})
+        located = client.post("/api/v1/auth/territory/", {"territory": "outside_restricted", "territory_version": "2026-10-12"}, format="json")
+        self.assertEqual(located.json()["user"]["territory"], "outside_restricted")
         self.assertEqual(self.ask(legacy, profile.pk).status_code, 200)
 
     def test_profiles_for_minors_are_not_supported_and_a_caregiver_cannot_accept_for_another_adult(self):

@@ -192,6 +192,11 @@ class AccountPolicy(models.Model):
     # vendor (care.consent.SPEECH_SERVICE_VERSION). Their voice, so their account: never inherited by another one.
     speech_service_accepted_at = models.DateTimeField(null=True, blank=True)
     speech_service_version = models.CharField(max_length=20, blank=True, default="", db_default="")
+    # Meta's Restricted Territories (care.territory): only whether the account declared being located in one of them,
+    # for the policy version it answered. Never the country nor a location.
+    territory = models.CharField(max_length=20, blank=True, default="", db_default="")
+    territory_version = models.CharField(max_length=20, blank=True, default="", db_default="")
+    territory_declared_at = models.DateTimeField(null=True, blank=True)
 
 
 class ConsentGrant(models.Model):

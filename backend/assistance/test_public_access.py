@@ -14,6 +14,7 @@ from django.test import TestCase, override_settings
 from PIL import Image
 from rest_framework.test import APIClient
 
+from care import territory
 from care.consent import TERMS_VERSION
 
 from . import synthetic
@@ -38,11 +39,13 @@ def photo():
 class Person:
     """A brand-new account going through sign-up, its own profile and its own decisions, as a client does."""
 
-    def __init__(self, username, adult=True):
+    def __init__(self, username, adult=True, located=territory.OUTSIDE):
         self.client = APIClient()
         body = {"username": username, "password": "Una-clave-de-prueba-larga-2026"}
         if adult:
             body |= {"adult": True, "terms_version": TERMS_VERSION}
+        if located:
+            body |= {"territory": located, "territory_version": territory.POLICY_VERSION}
         self.signup = self.client.post("/api/v1/auth/register/", body, format="json")
 
     def own_profile(self):

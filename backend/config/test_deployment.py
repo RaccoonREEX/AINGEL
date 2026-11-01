@@ -82,10 +82,12 @@ class ProductionSettingsTests(SimpleTestCase):
         self.assertEqual(self.import_settings(public).returncode, 0)
         self.assertEqual(self.import_settings({**public, "AINGEL_PRIVATE_OWN_MEDIA_TEST": "1"}).returncode, 0)
         self.assertEqual(self.import_settings({**public, "AINGEL_META_ACCESS": "allowlist", "AINGEL_META_ALLOWED_USER_IDS": "3"}).returncode, 0)
+        self.assertEqual(self.import_settings({**public, "AINGEL_GEO_COUNTRY_HEADER": "X-AINGEL-Country"}).returncode, 0)
         for change in ({"AINGEL_REAL_DATA": "0", "AINGEL_PRIVATE_OWN_MEDIA_TEST": "1"},
                        {"AINGEL_SYNTHETIC_TESTS_ONLY": "1"}, {"AINGEL_AI_MODE": "mock"}, {"MODEL_API_KEY": ""},
                        {"AINGEL_META_ACCESS": "everyone"}, {"AINGEL_META_ACCESS": "allowlist"},
-                       {"AINGEL_META_ACCESS": "allowlist", "AINGEL_META_ALLOWED_USER_IDS": "*"}):
+                       {"AINGEL_META_ACCESS": "allowlist", "AINGEL_META_ALLOWED_USER_IDS": "*"},
+                       {"AINGEL_GEO_COUNTRY_HEADER": "X-Country: VE"}):
             with self.subTest(change=change):
                 self.assertNotEqual(self.import_settings({**public, **change}).returncode, 0)
 

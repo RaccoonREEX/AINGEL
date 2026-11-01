@@ -13,6 +13,7 @@ from websockets.exceptions import ConnectionClosed, WebSocketException
 
 from care.consent import meta_account_denial, meta_allowed, private_media_allowed, still_current
 from care.permissions import access
+from care.territory import country_from_scope
 from . import usage
 from .meta_quota import MetaQuotaError, reserve_meta_call
 
@@ -139,7 +140,8 @@ class CaptionConsumer(AsyncWebsocketConsumer):
         if value.get("locale") not in ["es-EC", "en-US"]:
             await self.fail("caption_language_unsupported")
             return
-        if denial := await database_sync_to_async(meta_account_denial)(self.scope.get("user")):
+        country = country_from_scope(self.scope.get("headers"))
+        if denial := await database_sync_to_async(meta_account_denial)(self.scope.get("user"), country):
             await self.fail(denial)
             return
         # Only the person's own authorization (microphone + voice to Meta). A client calling its audio synthetic proves

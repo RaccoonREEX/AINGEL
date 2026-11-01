@@ -158,14 +158,25 @@ def meta_user_allowed(user):
     return str(user.pk) in allowed
 
 
-def meta_account_denial(user):
+def meta_account_denial(user, country=None):
     """Why this account may not use a Meta endpoint at all (synthetic tests included), or None. It also names the
-    account responsible for this request's Meta calls, for the per-account quotas (assistance.meta_quota)."""
+    account responsible for this request's Meta calls, for the per-account quotas (assistance.meta_quota).
+    [country]: the proxy's country code for a websocket (HTTP requests bind it in care.territory.RequestCountry)."""
     from assistance.meta_quota import bind_account
 
+    from . import territory
+
     bind_account(user if user is not None and getattr(user, "is_authenticated", False) else None)
-    if os.environ.get("AINGEL_AI_MODE", "mock") == "meta" and not adult_declared(user):
-        return "adult_declaration_required"
+    if os.environ.get("AINGEL_AI_MODE", "mock") == "meta":
+        if not adult_declared(user):
+            return "adult_declaration_required"
+        # Meta's Restricted Territories (care.territory): the account's own declaration, and the connection's country
+        # when the reverse proxy provides it.
+        answer = territory.declared(user)
+        if answer is None:
+            return "territory_declaration_required"
+        if answer == territory.INSIDE or territory.restricted_country(country or territory.bound_country()):
+            return "meta_territory_restricted"
     if not meta_user_allowed(user):
         return "meta_access_denied"
     return None

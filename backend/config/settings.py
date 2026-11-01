@@ -89,6 +89,9 @@ if PRODUCTION:
         raise ImproperlyConfigured("AINGEL_META_ACCESS must be public or allowlist")
     if meta_access == "allowlist" and not [item for item in os.environ.get("AINGEL_META_ALLOWED_USER_IDS", "").split(",") if item.strip().isdigit()]:
         raise ImproperlyConfigured("AINGEL_META_ACCESS=allowlist needs AINGEL_META_ALLOWED_USER_IDS")
+    geo_header = os.environ.get("AINGEL_GEO_COUNTRY_HEADER", "").strip()
+    if geo_header and not re.fullmatch(r"[A-Za-z][A-Za-z0-9-]{0,63}", geo_header):
+        raise ImproperlyConfigured("AINGEL_GEO_COUNTRY_HEADER must be a header name set by the reverse proxy")
     if ai_mode == "meta":
         if real_data == "0" and (os.environ.get("AINGEL_META_SYNTHETIC_TEST_ACK") != "1" or synthetic_only != "1"):
             raise ImproperlyConfigured("Meta synthetic tests require explicit opt-in")
@@ -117,6 +120,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "care.auth.PrivateAPIResponses",
     "assistance.meta_quota.AccountScope",
+    "care.territory.RequestCountry",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
