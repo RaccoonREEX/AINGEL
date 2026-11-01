@@ -36,8 +36,8 @@ diff -ru --exclude=__pycache__ /tmp/aingel-pr12/backend /tmp/aingel-running/app 
    producción.
 2. Ejecutar:
    - `python manage.py test`;
-   - las pruebas de Redis real: `AINGEL_TEST_REDIS_URL=rediss://<redis de pruebas>` con
-     `AINGEL_TEST_REDIS_ISOLATED=1`;
+   - las 7 pruebas de Redis real, en un contenedor aislado sin clave de Meta ni base de producción, según
+     `docs/REDIS_REAL_VALIDATION.md`. **Es obligatorio antes de activar el acceso público multiusuario.**
    - `python manage.py migrate --plan`.
 3. En la web y la APK contra staging, repetir:
    - usuario nuevo;

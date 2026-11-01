@@ -83,7 +83,8 @@ deciden en la misma pantalla de permisos.
 
 ## Pruebas
 
-- **Backend:** `manage.py test` da **297 correctas** y 7 omitidas. Las omitidas necesitan Redis real; con
+- **Backend:** `manage.py test` ejecuta 297 pruebas: **290 correctas** y 7 omitidas. Las omitidas necesitan Redis real
+  (pendientes de validar en el VPS por Astra, ver `docs/REDIS_REAL_VALIDATION.md`); con
   `AINGEL_TEST_REDIS_URL` y `AINGEL_TEST_REDIS_ISOLATED=1` las ejecuta Astra, incluida la nueva
   `test_meta_quota_per_account_on_real_redis`, que prueba varias cuentas.
 - **Pruebas obligatorias** en `assistance/test_public_access.py`, con cuentas nuevas y por las rutas reales:
@@ -123,6 +124,7 @@ Gradle precargada con `--offline`.
 2. **Subtítulos con terceros:** el aviso y la finalidad lo explican, pero AINGEL no puede comprobar que los demás
    estén informados.
 3. **Retención en Meta:** no hay retención cero contratada.
-4. **Cuotas con Redis real:** escritas y probadas con Redis simulado. **Falta ejecutarlas contra el Redis real**:
-   Astra.
+4. **Cuotas con Redis real:** las 7 pruebas están escritas y probadas con Redis simulado. **Falta ejecutarlas contra
+   un Redis real aislado**, a cargo de Astra en el VPS, **antes de activar el acceso público en producción**. El
+   procedimiento, sin créditos de Meta ni datos de usuarios, está en `docs/REDIS_REAL_VALIDATION.md`.
 5. **Código que corre en el VPS:** `docs/VPS_RECONCILIATION.md` explica cómo reconciliarlo sin tocar producción.
