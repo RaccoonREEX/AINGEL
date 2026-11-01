@@ -57,6 +57,7 @@ static class AudioChecks
             var root = start.RootElement;
             check(root.GetProperty("type").GetString() == "start" && root.GetProperty("profile").GetString() == "p1"
                   && !root.TryGetProperty("private_test", out _) && !root.TryGetProperty("synthetic", out _), "start message without declaration");
+            check(root.GetProperty("source").GetString() == "system", "the computer's audio is declared as such (meeting audio purpose)");
         }
         check(CaptionsClient.StartMessage(own, true).Contains("\"private_test\":true"), "private test only when chosen");
         check(Throws(() => CaptionsClient.StartMessage(own with { Role = "caregiver" }, true)), "private test only on the own profile");

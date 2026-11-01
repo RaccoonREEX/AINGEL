@@ -108,7 +108,7 @@ static class Program
 
     static void Texts()
     {
-        Check(Core.Texts.Error("es-EC", "privacy_review_required").Contains("Enviar fotos a Meta"), "privacy message");
+        Check(Core.Texts.Error("es-EC", "privacy_review_required").Contains("Enviar capturas de tu pantalla a Meta"), "privacy message names the screen permission");
         Check(Core.Texts.Error("en-US", "meta_unavailable") == Core.Texts.Get("en-US", "e_other"), "unknown codes are generic");
         Check(Core.Texts.Get("es-EC", "capturing", "Bloc de notas") == "Capturando: Bloc de notas", "formatted text");
         foreach (var command in Enum.GetValues<Command>()) Check(Core.Texts.Get("es-EC", "shortcuts").Contains(Hotkeys.Label(command)), "shortcut listed " + command);

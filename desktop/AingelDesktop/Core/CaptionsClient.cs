@@ -26,14 +26,16 @@ public sealed class CaptionsClient : IAsyncDisposable
     /// <summary>The session ended: null when closed normally, else the server's error code.</summary>
     public event Action<string?>? Ended;
 
-    /// <summary>The start message: the person's profile and, only when they chose it, the private test declaration.
+    /// <summary>The start message: «source: system» (the computer's audio, which may hold other people's voices and has
+    /// its own purpose, care.consent.meta_meeting_audio), the person's profile and, only when they chose it, the
+    /// private test declaration.
     /// Never «synthetic» or «fixture»: the server refuses captions that are not the person's own authorized audio.</summary>
     internal static string StartMessage(Profile profile, bool privateTest)
     {
         if (privateTest && !VisionFields.PrivateTestAllowed(profile)) throw new ApiFailure("private_test_consent_required");
         return privateTest
-            ? JsonSerializer.Serialize(new { type = "start", locale = profile.Locale, profile = profile.Id, private_test = true })
-            : JsonSerializer.Serialize(new { type = "start", locale = profile.Locale, profile = profile.Id });
+            ? JsonSerializer.Serialize(new { type = "start", locale = profile.Locale, profile = profile.Id, source = "system", private_test = true })
+            : JsonSerializer.Serialize(new { type = "start", locale = profile.Locale, profile = profile.Id, source = "system" });
     }
 
     internal static Uri Endpoint(Uri api) => new($"{(api.Scheme == Uri.UriSchemeHttps ? "wss" : "ws")}://{api.Authority}/ws/captions/");
