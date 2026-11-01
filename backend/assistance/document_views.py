@@ -14,6 +14,7 @@ from care.consent import capture_refusal, meta_account_denial, meta_allowed, pri
 from care.permissions import access
 
 from . import documents, synthetic
+from .meta_quota import MetaQuotaError, meta_slot
 from .persona import profile_preferences
 from .views import basis_for
 from .vision import VisionUnavailable
@@ -183,9 +184,12 @@ class TranscribeView(Session):
             return refusal
         try:
             picture = documents.render(documents.pdf_bytes(state), number)
-            result = documents.transcribe(picture, state["locale"], basis, preferences, request.user)
+            with meta_slot():
+                result = documents.transcribe(picture, state["locale"], basis, preferences, request.user)
         except documents.DocumentError as error:
             return refuse(str(error), 400)
+        except MetaQuotaError as error:
+            return refuse(str(error), 429)
         except VisionUnavailable as error:
             return refuse(str(error), 503)
         if refusal := self.changed(token, state, profile):
@@ -241,9 +245,12 @@ class AskView(Session):
             else:
                 pages = [(number, state["transcribed"].get(str(number)) or documents.page_text(data, number))]
                 picture = documents.render(data, number)
-            result = documents.ask(values["action"], state["locale"], basis, pages, picture, question, preferences, request.user)
+            with meta_slot():
+                result = documents.ask(values["action"], state["locale"], basis, pages, picture, question, preferences, request.user)
         except documents.DocumentError as error:
             return refuse(str(error), 400)
+        except MetaQuotaError as error:
+            return refuse(str(error), 429)
         except VisionUnavailable as error:
             return refuse(str(error), 503)
         if refusal := self.changed(token, state, profile):

@@ -76,11 +76,31 @@ def spent():
     return MetaUsage.objects.aggregate(total=Sum("cost_usd"))["total"] or Decimal(0)
 
 
+def account_budget():
+    value = os.environ.get("AINGEL_META_USER_DAILY_USD", "").strip()
+    try:
+        return Decimal(value) if value else None
+    except ArithmeticError:
+        return None
+
+
 def admit():
-    """Raises BudgetExhausted when a budget is set and the recorded spending reached it."""
+    """Raises BudgetExhausted when the platform's budget is reached, or, when AINGEL_META_USER_DAILY_USD is set, the
+    request's account spent that much today (UTC): one account cannot use up the credits everyone shares."""
+    from django.utils import timezone
+
+    from .meta_quota import bound_account
+    from .models import MetaUsage
+
     limit = budget()
     if limit is not None and spent() >= limit:
         raise BudgetExhausted("meta_budget_exhausted")
+    daily, account = account_budget(), bound_account()
+    if daily is not None and account is not None:
+        since = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        today = MetaUsage.objects.filter(user_id=account, created_at__gte=since).aggregate(total=Sum("cost_usd"))["total"] or Decimal(0)
+        if today >= daily:
+            raise BudgetExhausted("meta_account_budget_exhausted")
 
 
 def summary():

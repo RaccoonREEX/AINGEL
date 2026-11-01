@@ -16,6 +16,7 @@ from . import synthetic, vision
 from .persona import profile_preferences
 from .scene import SceneUnavailable, describe_scene, normalize_image
 from .locate import locate_object
+from .meta_quota import MetaQuotaError, meta_slot
 
 
 def health(request):
@@ -298,8 +299,12 @@ class VisionView(APIView):
         plan = vision.plan(question, values.get("detail_level"), values.get("visual_task"), values.get("focus_region"),
                            values["source_kind"], previous)
         try:
-            result = vision.describe(image, plan, values["locale"], basis, preferences, question, turns,
-                                     values["source_kind"], request.user)
+            # One description per account at a time (a deep one is three Meta calls): repeated taps wait, not pile up.
+            with meta_slot():
+                result = vision.describe(image, plan, values["locale"], basis, preferences, question, turns,
+                                         values["source_kind"], request.user)
+        except MetaQuotaError as error:
+            return Response({"error": str(error)}, status=429, headers=NO_STORE)
         except vision.VisionUnavailable as error:
             return Response({"error": str(error)}, status=503, headers=NO_STORE)
         if profile is not None and not still_current(profile, epoch):
