@@ -47,3 +47,6 @@ datasets/
 desktop/**/bin/
 desktop/**/obj/
 desktop/dist/
+desktop/obj-installer/
+desktop/dist-installer/
+web/public/downloads/

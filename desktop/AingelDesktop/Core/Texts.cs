@@ -134,6 +134,7 @@ public static class Texts
         ["captions_consent_changed"] = ("Tus permisos cambiaron: los subtítulos se detuvieron.", "Your permissions changed: captions stopped."),
         ["captions_no_audio"] = ("No pude acceder al audio del equipo. Comprueba que haya un dispositivo de salida activo.", "I couldn't access the computer's audio. Check that an output device is active."),
         ["captions_failed"] = ("El servicio de transcripción no está disponible ahora. Inténtalo de nuevo.", "The transcription service is not available right now. Please try again."),
+        ["update_available"] = ("Hay una versión nueva de AINGEL Desktop ({0}). Descárgala desde {1}, en «AINGEL para tu computadora», y comprueba su SHA-256 antes de instalarla. Tus preferencias se conservan.", "A new version of AINGEL Desktop ({0}) is available. Download it from {1}, in «AINGEL for your computer», and check its SHA-256 before installing it. Your preferences are kept."),
         ["e_other"] = ("No pude analizar la pantalla ahora. Inténtalo de nuevo.", "I couldn't analyse the screen right now. Please try again."),
     };
 

@@ -77,7 +77,11 @@ Hace falta el SDK de .NET 8 o posterior. No se descarga ningún paquete NuGet.
 ```
 
 Compila, ejecuta las comprobaciones (`AingelDesktop.Tests`) y publica en `desktop\dist`. Para ejecutarlo hace falta
-el **.NET 8 Desktop Runtime** de Microsoft. Todavía no hay instalador: es la fase 6.
+el **.NET 8 Desktop Runtime** de Microsoft.
+
+**Instalador:** `.\desktop\Build-Installer.ps1` crea `desktop\dist-installer\AINGEL-Desktop-Setup-<versión>.exe` y
+`manifest.json`. Es por usuario, sin administrador, y verifica su SHA-256. Los detalles y el proceso de publicación
+están en `docs/AINGEL3_PHASE6_INSTALLER.md`.
 
 Para probar contra un servidor local en modo de prueba, se ejecutan las comprobaciones de API así:
 

@@ -79,6 +79,7 @@ public partial class MainWindow : Window
         AutomationProperties.SetLiveSetting(announcer, AutomationLiveSetting.Polite);
         SetState(OrbState.Idle, T("idle"));
         SourceInitialized += OnSourceInitialized;
+        Loaded += async (_, _) => await CheckForUpdate();
         Closed += OnClosed;
     }
 
@@ -102,6 +103,14 @@ public partial class MainWindow : Window
         app.Store.SaveSettings(app.Settings);
         if (session is { } open) await app.Api!.CloseVision(open.Token);
         if (!signingOut) app.Shutdown();
+    }
+
+    /// <summary>Says when the server's download page has a newer version; installing it stays the person's choice.</summary>
+    async Task CheckForUpdate()
+    {
+        var current = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0";
+        var latest = await app.Api!.LatestRelease();
+        if (ApiClient.Newer(latest, current)) ShortcutsNote.Text = T("update_available", latest!, app.Api.Base.GetLeftPart(UriPartial.Authority)) + "\n\n" + ShortcutsNote.Text;
     }
 
     void OnCommand(Command command)

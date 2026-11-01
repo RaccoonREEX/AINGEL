@@ -804,3 +804,12 @@ details summary { cursor: pointer; font-weight: 600; min-height: 44px; }
 .sign-feedback summary { cursor: pointer; padding: 8px 0; font-weight: 600; }
 .sign-feedback form { display: grid; gap: 10px; }
 .sign-feedback label { display: grid; gap: 4px; }
+
+/* «AINGEL para tu computadora» (AINGEL 3.0 §19). */
+.desktop-download { display: grid; gap: 10px; justify-items: start; }
+.desktop-download .sha, .code-block code { font-family: ui-monospace, Consolas, monospace; word-break: break-all; }
+.code-block { background: #f4f6fa; border: 1px solid #c9d2e0; border-radius: 10px; padding: 12px; overflow-x: auto; }
+.desktop-shots { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); align-items: start; }
+.desktop-shots figure { margin: 0; }
+.desktop-shots img { width: 100%; height: auto; border: 1px solid #c9d2e0; border-radius: 10px; }
+.desktop-shots figcaption { font-size: 14px; margin-top: 6px; }

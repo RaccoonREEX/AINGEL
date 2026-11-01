@@ -24,6 +24,14 @@
             <Setter Property="MinHeight" Value="40"/>
             <Setter Property="FontSize" Value="15"/>
             <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <!-- Long labels wrap instead of being cut off; the content stays a string, so its accessible name is unchanged. -->
+            <Setter Property="ContentTemplate">
+                <Setter.Value>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding}" TextWrapping="Wrap"/>
+                    </DataTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
         <Style TargetType="CheckBox">
             <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}"/>

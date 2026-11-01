@@ -25,8 +25,9 @@ static class Program
         else { failures++; Console.WriteLine("FAIL " + name); }
     }
 
-    static async Task<int> Main()
+    static async Task<int> Main(string[] args)
     {
+        if (args.Length == 2 && args[0] == "--screenshots") { Screenshots.Run(args[1]); return 0; }
         BackendUrls();
         Fields();
         Focus();
@@ -36,6 +37,7 @@ static class Program
         Jpeg();
         Capture();
         AudioChecks.Run(Check);
+        InstallerChecks.Run(Check);
         Cookies();
         await Multipart();
         var backend = Environment.GetEnvironmentVariable("AINGEL_TEST_BACKEND");

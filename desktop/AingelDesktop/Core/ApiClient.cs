@@ -137,6 +137,26 @@ public sealed class ApiClient : IDisposable
         try { await Send(HttpMethod.Delete, $"vision/sessions/{session}/", () => null, token); } catch (ApiFailure) { }
     }
 
+    // --- Updates ---------------------------------------------------------------------------------------------------
+
+    /// <summary>The version published on the same server's download page (downloads/manifest.json, written by
+    /// Build-Installer.ps1), or null. AINGEL only tells the person: it never downloads or runs an update itself.</summary>
+    public async Task<string?> LatestRelease(CancellationToken token = default)
+    {
+        try
+        {
+            using var response = await http.GetAsync(new Uri(Base, "downloads/manifest.json"), token);
+            if (!response.IsSuccessStatusCode) return null;
+            using var manifest = JsonDocument.Parse(await response.Content.ReadAsStringAsync(token));
+            return manifest.RootElement.TryGetProperty("version", out var version) && version.ValueKind == JsonValueKind.String ? version.GetString() : null;
+        }
+        catch (Exception e) when (e is HttpRequestException or JsonException or TaskCanceledException) { return null; }
+    }
+
+    /// <summary>True when [published] is a higher dotted version than [current].</summary>
+    public static bool Newer(string? published, string current) =>
+        System.Version.TryParse(published, out var latest) && System.Version.TryParse(current, out var installed) && latest > installed;
+
     // --- Documents (backend assistance.documents) ----------------------------------------------------------------
 
     /// <summary>Opens a PDF or a page photo ([file] named [name]), or a server fixture when [file] is null.</summary>

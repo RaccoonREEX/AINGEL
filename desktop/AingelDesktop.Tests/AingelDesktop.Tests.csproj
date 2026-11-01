@@ -13,6 +13,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\AingelDesktop\AingelDesktop.csproj" />
+    <ProjectReference Include="..\AingelSetup\AingelSetup.csproj" />
   </ItemGroup>
 
 </Project>

@@ -1,3 +1,4 @@
+import DesktopDownload from "./components/DesktopDownload";
 import { speakLocally } from "./components/aingel/browserSpeech";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { WithProfile } from "./ui";
@@ -37,9 +38,10 @@ type Tab =
   | "activity"
   | "tools"
   | "signs"
+  | "desktop"
   | "more";
 const primaryTabs: Tab[] = ["ask", "dashboard", "signs", "see", "hear", "memory", "messages", "circle"];
-const accountTabs: Tab[] = ["settings", "security", "familyFaces", "tools", "activity"];
+const accountTabs: Tab[] = ["settings", "security", "familyFaces", "tools", "desktop", "activity"];
 const mobileTabs: Tab[] = ["ask", "dashboard", "memory", "circle", "more"];
 type Task = () => Promise<void>;
 
@@ -164,7 +166,7 @@ export default function App() {
     window.scrollTo({ top: 0 });
   };
   const label = (x: Tab) =>
-    x === "ask" ? L("Asistente", "Assistant") : x === "more" ? L("Más", "More") : x === "tools" ? L("Conversación IA", "AI chat") : x === "signs" ? L("Traductor de señas", "Sign translator") : t(x);
+    x === "ask" ? L("Asistente", "Assistant") : x === "more" ? L("Más", "More") : x === "tools" ? L("Conversación IA", "AI chat") : x === "signs" ? L("Traductor de señas", "Sign translator") : x === "desktop" ? L("AINGEL para tu computadora", "AINGEL for your computer") : t(x);
   const visible = (x: Tab) =>
     (x !== "activity" || profile?.role === "owner") &&
     !(x === "see" && profile?.preferences.visual_assistance === false) &&
@@ -262,7 +264,7 @@ export default function App() {
         ) : tab === "dashboard" ? (
           <div className="page page--wide"><Routines key={profile.id} {...context} profile={profile} version={version} onAsk={(q) => go("ask", q)} /></div>
         ) : tab === "more" ? (
-          <MorePage tabs={([...primaryTabs.filter((x) => !mobileTabs.includes(x)), "familyFaces", "tools"] as Tab[]).filter(visible)} account={["settings", "security", "activity"].filter((x) => visible(x as Tab)) as Tab[]} label={label} es={es} onGo={go} onSupport={() => setSupportOpen(true)} t={t} locale={locale} setLocale={setLocale} onLogout={logout} />
+          <MorePage tabs={([...primaryTabs.filter((x) => !mobileTabs.includes(x)), "familyFaces", "tools", "desktop"] as Tab[]).filter(visible)} account={["settings", "security", "activity"].filter((x) => visible(x as Tab)) as Tab[]} label={label} es={es} onGo={go} onSupport={() => setSupportOpen(true)} t={t} locale={locale} setLocale={setLocale} onLogout={logout} />
         ) : (
           <Page title={label(tab)} subtitle={`${profile.display_name} · ${t(profile.role)}`} badge={profile.ready ? undefined : t("draft")}>
             {!profile.ready && tab === "circle" && <p className="callout">{t("incomplete")}</p>}
@@ -393,6 +395,8 @@ function ProfileContent(props: WithProfile & { tab: Tab; version: number; focusC
       return <Memories {...props} />;
     case "tools":
       return <Ask {...props} />;
+    case "desktop":
+      return <DesktopDownload locale={props.locale} />;
     case "see":
       return <See {...props} />;
     case "hear":
