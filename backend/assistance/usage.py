@@ -44,9 +44,18 @@ def cost(model, counts):
     return (total / MILLION).quantize(Decimal("0.000001"))
 
 
+def billed_account(user=None):
+    """The account a Meta call is billed to: [user] when the server passes the authenticated request user, otherwise
+    the account bound for this request by care.consent.meta_account_denial from request.user. Never an ID sent by the
+    client."""
+    from .meta_quota import bound_account
+
+    return user.pk if getattr(user, "is_authenticated", False) else bound_account()
+
+
 def record(feature, model, effort, usage, latency_ms=None, basis="", status="", user=None):
-    """Store one call's usage; returns its counters and cost. Never raises: losing a ledger row must not lose the
-    answer the person is waiting for."""
+    """Store one call's usage for its account (billed_account); returns its counters and cost. Never raises: losing a
+    ledger row must not lose the answer the person is waiting for."""
     from .models import MetaUsage
 
     counts = tokens(usage)
@@ -54,8 +63,7 @@ def record(feature, model, effort, usage, latency_ms=None, basis="", status="", 
     try:
         MetaUsage.objects.create(
             feature=feature, model=model, effort=effort or "", basis=basis or "", status=status or "",
-            latency_ms=latency_ms, cost_usd=price, user=user if getattr(user, "is_authenticated", False) else None,
-            **counts,
+            latency_ms=latency_ms, cost_usd=price, user_id=billed_account(user), **counts,
         )
     except Exception:
         pass
