@@ -1,6 +1,6 @@
 # AINGEL: acceso público con consentimiento (31-10-2026)
 
-Rama `feat/aingel3-public-access`, PR #12, apilada sobre #11. No está fusionada ni desplegada.
+Rama `feat/aingel3-public-access`, PR #12, apilada sobre #11 (todos los PR apuntan a `main`). No está fusionada ni desplegada.
 
 ## Política
 
