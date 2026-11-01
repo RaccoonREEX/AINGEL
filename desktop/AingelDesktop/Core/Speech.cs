@@ -38,6 +38,11 @@ public sealed class Speech : IDisposable
 
     public bool Available => voice != null;
 
+    /// <summary>A voice that says nothing: with AINGEL's voice off, a screen reader reads the text instead.</summary>
+    public static Speech Silent { get; } = new();
+
+    Speech() { }
+
     /// <summary>Windows reports a screen reader (NVDA, JAWS, Narrator) running.</summary>
     public static bool ScreenReaderRunning()
     {

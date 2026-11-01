@@ -137,10 +137,48 @@ public sealed class ApiClient : IDisposable
         try { await Send(HttpMethod.Delete, $"vision/sessions/{session}/", () => null, token); } catch (ApiFailure) { }
     }
 
-    internal static MultipartFormDataContent Multipart(byte[]? jpeg, IReadOnlyDictionary<string, string> fields)
+    // --- Documents (backend assistance.documents) ----------------------------------------------------------------
+
+    /// <summary>Opens a PDF or a page photo ([file] named [name]), or a server fixture when [file] is null.</summary>
+    public Task<JsonElement> OpenDocument(byte[]? file, string name, IReadOnlyDictionary<string, string> fields, CancellationToken token = default)
+    {
+        var type = name.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase) ? "application/pdf" : "image/jpeg";
+        return Send(HttpMethod.Post, "documents/", () => Multipart(file, fields, "file", name, type), token);
+    }
+
+    public Task<JsonElement> DocumentPage(string document, int page, CancellationToken token = default) =>
+        Send(HttpMethod.Get, $"documents/{Segment(document)}/pages/{page}/", () => null, token);
+
+    public Task<JsonElement> TranscribePage(string document, int page, CancellationToken token = default) =>
+        Send(HttpMethod.Post, $"documents/{Segment(document)}/pages/{page}/transcribe/", () => Json(new { }), token);
+
+    public Task<JsonElement> SearchDocument(string document, string query, CancellationToken token = default) =>
+        Send(HttpMethod.Get, $"documents/{Segment(document)}/search/?q={Uri.EscapeDataString(query)}", () => null, token);
+
+    /// <summary>Explain, summarize, figures or a question; only a question carries typed text.</summary>
+    public Task<JsonElement> AskDocument(string document, string action, int page, string scope, string? question, CancellationToken token = default)
+    {
+        var body = new Dictionary<string, object> { ["action"] = action, ["page"] = page, ["scope"] = scope };
+        if (action == "question" && !string.IsNullOrWhiteSpace(question)) body["question"] = question.Length > 600 ? question[..600] : question;
+        return Send(HttpMethod.Post, $"documents/{Segment(document)}/ask/", () => Json(body), token);
+    }
+
+    public async Task CloseDocument(string document, CancellationToken token = default)
+    {
+        try { await Send(HttpMethod.Delete, $"documents/{Segment(document)}/", () => null, token); } catch (ApiFailure) { }
+    }
+
+    /// <summary>A server token as one URL segment, never an arbitrary path.</summary>
+    internal static string Segment(string value) =>
+        value.Length is >= 16 and <= 64 && value.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_') ? value : throw new ApiFailure("document_expired");
+
+    internal static MultipartFormDataContent Multipart(byte[]? jpeg, IReadOnlyDictionary<string, string> fields) =>
+        Multipart(jpeg, fields, "image", "screen.jpg", "image/jpeg");
+
+    internal static MultipartFormDataContent Multipart(byte[]? file, IReadOnlyDictionary<string, string> fields, string partName, string fileName, string type)
     {
         var form = new MultipartFormDataContent();
-        // Fields first, so the server can refuse before reading the picture.
+        // Fields first, so the server can refuse before reading the file.
         foreach (var (name, value) in fields)
         {
             var part = new StringContent(value, Encoding.UTF8);
@@ -148,12 +186,14 @@ public sealed class ApiClient : IDisposable
             part.Headers.ContentDisposition = new ContentDispositionHeaderValue("form-data") { Name = $"\"{name}\"" };
             form.Add(part);
         }
-        if (jpeg != null)
+        if (file != null)
         {
-            var image = new ByteArrayContent(jpeg);
-            image.Headers.ContentType = new MediaTypeHeaderValue("image/jpeg");
-            image.Headers.ContentDisposition = new ContentDispositionHeaderValue("form-data") { Name = "\"image\"", FileName = "\"screen.jpg\"" };
-            form.Add(image);
+            var content = new ByteArrayContent(file);
+            content.Headers.ContentType = new MediaTypeHeaderValue(type);
+            // Quotes, backslashes and control characters would break the header: they are left out of the name.
+            var safe = new string(fileName.Where(c => c >= ' ' && c != '"' && c != '\\').ToArray());
+            content.Headers.ContentDisposition = new ContentDispositionHeaderValue("form-data") { Name = $"\"{partName}\"", FileName = $"\"{safe}\"" };
+            form.Add(content);
         }
         return form;
     }

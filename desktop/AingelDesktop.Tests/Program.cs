@@ -99,6 +99,8 @@ static class Program
         Check(ApiClient.ErrorCode(403, null, "<h1>Forbidden (403)</h1><p>CSRF verification failed.</p>") == ApiClient.CsrfFailed, "Django CSRF page");
         Check(ApiClient.ErrorCode(429, Json("{\"detail\":\"Request was throttled.\"}"), "") == "throttled", "throttled");
         Check(ApiClient.ErrorCode(502, null, "<html>") == "server_error", "server error");
+        Check(ApiClient.Segment("abcdefghijklmnop-_12") == "abcdefghijklmnop-_12", "document token segment");
+        Check(Throws(() => ApiClient.Segment("../../auth/logout")) == "document_expired", "no path in a token");
     }
 
     static void Texts()
@@ -172,6 +174,29 @@ static class Program
         Check(text.Contains("¿Qué ves?") && text.Contains("filename=\"screen.jpg\"") && text.Contains("image/jpeg"), "multipart content");
     }
 
+    /// <summary>Documents on the local server: the synthetic book read locally, search, an explanation and a scanned
+    /// page (test answers only), and closing.</summary>
+    static async Task Documents(ApiClient api, Profile profile)
+    {
+        var book = await api.OpenDocument(null, "", DocumentWindow.OpenFields(profile, false, "book_pdf"));
+        var token = book.GetProperty("document").GetString()!;
+        Check(book.GetProperty("pages").GetInt32() == 4 && book.GetProperty("outline").GetArrayLength() == 3, "book opened with its chapters");
+        var page = await api.DocumentPage(token, 2);
+        Check(page.GetProperty("text").GetString()!.Contains("plantas del jardín y saludaba"), "page text read and joined");
+        var found = await api.SearchDocument(token, "gorriones");
+        Check(found.GetProperty("results")[0].GetProperty("page").GetInt32() == 4, "search finds the page");
+        var explained = await api.AskDocument(token, "explain", 2, "page", null);
+        Check(explained.GetProperty("mode").GetString() == "mock", "explanation in test mode");
+        Check(Throws(() => api.AskDocument(token, "question", 2, "page", "texto libre").GetAwaiter().GetResult()) == "synthetic_fixture_only", "no free text with a synthetic document");
+        await api.CloseDocument(token);
+        Check(Throws(() => api.DocumentPage(token, 1).GetAwaiter().GetResult()) == "document_expired", "closed document is gone");
+        var scanned = await api.OpenDocument(null, "", DocumentWindow.OpenFields(profile, false, "scanned_pdf"));
+        var scannedToken = scanned.GetProperty("document").GetString()!;
+        Check(!(await api.DocumentPage(scannedToken, 1)).GetProperty("has_text").GetBoolean(), "scanned page has no text");
+        Check((await api.TranscribePage(scannedToken, 1)).GetProperty("mode").GetString() == "mock", "transcription in test mode");
+        await api.CloseDocument(scannedToken);
+    }
+
     /// <summary>A local AINGEL server in test mode (AINGEL_AI_MODE=mock): sign-in with CSRF, profiles, a capture, a
     /// follow-up, the synthetic screen and closing the session. Nothing reaches Meta.</summary>
     static async Task LocalServer(string backend)
@@ -197,6 +222,7 @@ static class Program
         Check(Throws(() => api.Vision(null, new Dictionary<string, string>(VisionFields.Fixture("es-EC", null)) { ["question"] = "texto libre" }).GetAwaiter().GetResult()) == "synthetic_fixture_only", "no free text with a fixture");
         await api.CloseVision(token);
         Check(Throws(() => api.Vision(null, VisionFields.FollowUp(profile.Locale, token, "¿Sigue ahí?", null)).GetAwaiter().GetResult()) == "visual_session_expired", "closed session is gone");
+        await Documents(api, profile);
         await api.Logout();
         Check(Throws(() => api.Profiles().GetAwaiter().GetResult()) is "authentication_required" or "permission_denied", "signed out");
     }

@@ -11,3 +11,5 @@ cryptography>=50,<51
 opencv-python-headless>=4.12,<5
 psycopg[binary]>=3.2.10,<3.3
 redis>=6.4,<7
+pypdf>=6,<7
+pypdfium2>=4.30,<5

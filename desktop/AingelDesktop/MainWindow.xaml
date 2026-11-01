@@ -34,6 +34,7 @@
             <Button x:Name="MoreDetailButton" Click="OnMoreDetail"/>
             <Button x:Name="ReadFocusButton" Click="OnReadFocus"/>
             <Button x:Name="StopButton" Click="OnStop"/>
+            <Button x:Name="OpenDocumentButton" Click="OnOpenDocument"/>
 
             <Label x:Name="LevelLabel" Target="{Binding ElementName=Level}" Padding="0,10,0,2"/>
             <ComboBox x:Name="Level"/>

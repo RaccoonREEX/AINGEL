@@ -54,8 +54,13 @@ OBJECTS = {
     "blue_square": {"es-EC": "Cuadrado azul", "en-US": "Blue square", "prompt": "blue square"},
     "red_circle": {"es-EC": "Círculo rojo", "en-US": "Red circle", "prompt": "red circle"},
 }
+# Documents (AINGEL 3.0, phase 3): a digital book with chapters and a figure, and a scanned PDF without text.
+DOCUMENTS = {
+    "book_pdf": {"es-EC": "Libro ficticio en PDF (4 páginas, 3 capítulos)", "en-US": "Fictitious PDF book (4 pages, 3 chapters)"},
+    "scanned_pdf": {"es-EC": "PDF escaneado ficticio (2 páginas, sin texto)", "en-US": "Fictitious scanned PDF (2 pages, no text)"},
+}
 CLIPS = {"moving_square": {"es-EC": "Un cuadrado azul cruza la mesa", "en-US": "A blue square crosses the table"}}
-CATALOG = {"question": QUESTIONS, "image": IMAGES, "object": OBJECTS, "clip": CLIPS}
+CATALOG = {"question": QUESTIONS, "image": IMAGES, "object": OBJECTS, "clip": CLIPS, "document": DOCUMENTS}
 
 
 def enabled():
@@ -305,6 +310,123 @@ def image(fixture):
     }[fixture]()
 
 
+def _pdf_text(value):
+    """A PDF literal string in WinAnsi (Helvetica's encoding), which covers Spanish accents."""
+    escaped = value.encode("cp1252").replace(b"\\", b"\\\\").replace(b"(", b"\\(").replace(b")", b"\\)")
+    return b"(" + escaped + b")"
+
+
+def _pdf_title(value):
+    """A PDF text string in UTF-16 with its byte-order mark (outline titles and metadata)."""
+    return b"<FEFF" + value.encode("utf-16-be").hex().upper().encode() + b">"
+
+
+def _pdf(pages, outline, title):
+    """A small PDF written by hand: [pages] are content streams, [outline] (title, page index) the bookmarks."""
+    count = len(pages)
+    page_ids = [5 + 2 * i for i in range(count)]
+    outline_root = 5 + 2 * count
+    items = list(range(outline_root + 1, outline_root + 1 + len(outline)))
+    info = outline_root + len(outline) + 1
+    objects = {
+        1: b"<< /Type /Catalog /Pages 2 0 R /Outlines %d 0 R /PageMode /UseOutlines >>" % outline_root,
+        2: b"<< /Type /Pages /Kids [" + b" ".join(b"%d 0 R" % i for i in page_ids) + b"] /Count %d >>" % count,
+        3: b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
+        4: b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>",
+        outline_root: b"<< /Type /Outlines /First %d 0 R /Last %d 0 R /Count %d >>" % (items[0], items[-1], len(items)),
+        info: b"<< /Title " + _pdf_title(title) + b" /Producer (AINGEL synthetic fixture) >>",
+    }
+    for index, stream in enumerate(pages):
+        page, content = page_ids[index], page_ids[index] + 1
+        objects[page] = (b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents %d 0 R "
+                         b"/Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> >>" % content)
+        objects[content] = b"<< /Length %d >>\nstream\n" % len(stream) + stream + b"\nendstream"
+    for position, (label, page_index) in enumerate(outline):
+        links = b""
+        if position > 0:
+            links += b" /Prev %d 0 R" % items[position - 1]
+        if position < len(items) - 1:
+            links += b" /Next %d 0 R" % items[position + 1]
+        objects[items[position]] = (b"<< /Title " + _pdf_title(label) + b" /Parent %d 0 R" % outline_root + links
+                                    + b" /Dest [%d 0 R /Fit] >>" % page_ids[page_index])
+    output = bytearray(b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n")
+    offsets = {}
+    for number in sorted(objects):
+        offsets[number] = len(output)
+        output += b"%d 0 obj\n" % number + objects[number] + b"\nendobj\n"
+    xref = len(output)
+    output += b"xref\n0 %d\n0000000000 65535 f \n" % (info + 1)
+    for number in range(1, info + 1):
+        output += b"%010d 00000 n \n" % offsets[number]
+    output += b"trailer\n<< /Size %d /Root 1 0 R /Info %d 0 R >>\nstartxref\n%d\n" % (info + 1, info, xref) + b"%%EOF\n"
+    return bytes(output)
+
+
+def _lines(font, size, x, y, lines):
+    """Text lines from (x, y) downwards, in points."""
+    body = b"0 g BT /%s %d Tf %d TL %d %d Td " % (font.encode(), size, round(size * 1.45), x, y)
+    return body + b" T* ".join(_pdf_text(line) + b" Tj" for line in lines) + b" ET\n"
+
+
+def book_pdf():
+    """A fictitious book: a title page with a contents list and three chapters, the second with a bar chart. The
+    first chapter splits «jardín» across two lines with a hyphen (the reader must join it)."""
+    def footer(number):
+        return _lines("F1", 10, 290, 40, [str(number)])
+
+    cover = (_lines("F2", 28, 72, 720, ["El jardín de Rosa"])
+             + _lines("F1", 14, 72, 685, ["Un libro ficticio para las pruebas de AINGEL"])
+             + _lines("F2", 16, 72, 600, ["Índice"])
+             + _lines("F1", 13, 72, 570, ["Capítulo 1. La casa ........ 2", "Capítulo 2. El patio ........ 3",
+                                          "Capítulo 3. La fuente ........ 4"])
+             + footer(1))
+    first = (_lines("F2", 20, 72, 760, ["Capítulo 1. La casa"])
+             + _lines("F1", 13, 72, 720, [
+                 "La casa de Rosa estaba al final de la calle, junto a un parque con dos",
+                 "limoneros grandes. Antes de ir al mercado, Rosa regaba las plantas del jar-",
+                 "dín y saludaba a los vecinos de la esquina.",
+                 "",
+                 "Las ventanas eran azules y la puerta, de madera clara, crujía un poco al abrirse.",
+             ])
+             + footer(2))
+    axes = b"0 0 0 RG 1 w 100 470 m 520 470 l S 100 470 m 100 650 l S\n"
+    bars = b"0.16 0.43 0.75 rg " + b" ".join(
+        b"%d 470 50 %d re f" % (110 + i * 80, height) for i, height in enumerate((80, 120, 100, 160, 140))) + b"\n"
+    second = (_lines("F2", 20, 72, 760, ["Capítulo 2. El patio"])
+              + _lines("F1", 13, 72, 720, [
+                  "En el patio había macetas con geranios rojos y una mesa pequeña.",
+                  "Rosa anotaba cuántos vasos de agua tomaba cada semana.",
+              ])
+              + axes + bars
+              + b"".join(_lines("F1", 11, 127 + i * 80, 452, [f"S{i + 1}"]) for i in range(5))
+              + _lines("F1", 12, 100, 420, ["Figura 1. Vasos de agua por semana (4, 6, 5, 8 y 7)."])
+              + footer(3))
+    third = (_lines("F2", 20, 72, 760, ["Capítulo 3. La fuente"])
+             + _lines("F1", 13, 72, 720, [
+                 "En el centro del patio estaba una fuente redonda.",
+                 "Los vecinos contaban que el agua sonaba como lluvia y que por eso",
+                 "los gorriones llegaban temprano.",
+             ])
+             + footer(4))
+    return _pdf([cover, first, second, third],
+                [("Capítulo 1. La casa", 1), ("Capítulo 2. El patio", 2), ("Capítulo 3. La fuente", 3)],
+                "El jardín de Rosa")
+
+
+def scanned_pdf():
+    """Two pages that are only pictures, as a scanner makes them: the book page and the bar chart, no text layer."""
+    from PIL import Image
+
+    pages = [Image.open(io.BytesIO(maker())).convert("RGB") for maker in (document_page, bar_chart)]
+    output = io.BytesIO()
+    pages[0].save(output, format="PDF", save_all=True, append_images=pages[1:], resolution=150)
+    return output.getvalue()
+
+
+def document(fixture):
+    return {"book_pdf": book_pdf, "scanned_pdf": scanned_pdf}[fixture]()
+
+
 def clip(fixture):
     return {"moving_square": moving_square_clip}[fixture]()
 
@@ -321,5 +443,6 @@ def catalog(request):
         "images": items(IMAGES),
         "objects": items(OBJECTS),
         "clips": items(CLIPS),
+        "documents": items(DOCUMENTS),
         "captions": False,  # no server-held synthetic speech: live captions need the person's authorization
     })

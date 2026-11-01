@@ -49,6 +49,7 @@ public partial class MainWindow : Window
         MoreDetailButton.Content = $"{T("more_detail")}  ({Hotkeys.Label(Command.MoreDetail)})";
         ReadFocusButton.Content = $"{T("read_focus")}  ({Hotkeys.Label(Command.ReadFocus)})";
         StopButton.Content = $"{T("stop_speech")}  ({Hotkeys.Label(Command.StopSpeech)})";
+        OpenDocumentButton.Content = $"{T("open_document")}  ({Hotkeys.Label(Command.OpenDocument)})";
         LevelLabel.Content = "_" + T("level");
         // Labels do not name their controls for UI Automation in WPF: each input gets its name here (NVDA reads it).
         AutomationProperties.SetName(Level, T("level"));
@@ -113,6 +114,7 @@ public partial class MainWindow : Window
             case Command.MoreDetail: _ = MoreDetail(); break;
             case Command.StopSpeech: speech.Stop(); break;
             case Command.ShowHide: ShowHide(); break;
+            case Command.OpenDocument: ShowWindow(); _ = OpenDocument(); break;
         }
     }
 
@@ -294,6 +296,41 @@ public partial class MainWindow : Window
     }
 
     // --- Buttons and options --------------------------------------------------------------------------------------
+
+    async void OnOpenDocument(object sender, RoutedEventArgs e) => await OpenDocument();
+
+    /// <summary>A PDF or a page photo chosen by the person (or, in the synthetic test, a server document).</summary>
+    async Task OpenDocument()
+    {
+        if (busy) return;
+        string? fixture = null;
+        byte[]? file = null;
+        var name = "";
+        if (synthetic)
+        {
+            var choice = MessageBox.Show(this, T("doc_pick_fixture"), T("open_document"), MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+            if (choice == MessageBoxResult.Cancel) return;
+            fixture = choice == MessageBoxResult.Yes ? "book_pdf" : "scanned_pdf";
+        }
+        else
+        {
+            var dialog = new Microsoft.Win32.OpenFileDialog { Title = T("open_document"), Filter = T("doc_filter") };
+            if (dialog.ShowDialog(this) != true) return;
+            try { file = await System.IO.File.ReadAllBytesAsync(dialog.FileName); }
+            catch (System.IO.IOException) { Fail("document_invalid"); return; }
+            name = System.IO.Path.GetFileName(dialog.FileName);
+        }
+        busy = true;
+        SetState(OrbState.Thinking, T("thinking"));
+        try
+        {
+            var opened = await app.Api!.OpenDocument(file, name, DocumentWindow.OpenFields(profile, privateTest, fixture));
+            SetState(OrbState.Idle, T("idle"));
+            new DocumentWindow(app, profile, VoiceBox.IsChecked == true ? speech : Speech.Silent, opened) { Owner = this }.Show();
+        }
+        catch (ApiFailure failure) { Fail(failure.Code); }
+        finally { busy = false; }
+    }
 
     async void OnDescribeWindow(object sender, RoutedEventArgs e) => await Describe(wholeScreen: false);
     async void OnDescribeScreen(object sender, RoutedEventArgs e) => await Describe(wholeScreen: true);

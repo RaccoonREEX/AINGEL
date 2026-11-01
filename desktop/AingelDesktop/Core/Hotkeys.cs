@@ -8,7 +8,7 @@ namespace Aingel.Desktop.Core;
 
 /// <summary>AINGEL's global shortcuts, all Ctrl+Alt+letter. Ctrl+Alt+N (NVDA's own start shortcut) and the arrows
 /// (NVDA table navigation) are left alone.</summary>
-public enum Command { DescribeWindow, DescribeScreen, ReadFocus, AskAboutWindow, MoreDetail, StopSpeech, ShowHide }
+public enum Command { DescribeWindow, DescribeScreen, ReadFocus, AskAboutWindow, MoreDetail, StopSpeech, ShowHide, OpenDocument }
 
 public sealed class Hotkeys : IDisposable
 {
@@ -24,6 +24,7 @@ public sealed class Hotkeys : IDisposable
         [Command.MoreDetail] = Key.M,
         [Command.StopSpeech] = Key.S,
         [Command.ShowHide] = Key.A,
+        [Command.OpenDocument] = Key.O,
     };
 
     [DllImport("user32.dll", SetLastError = true)] static extern bool RegisterHotKey(IntPtr hwnd, int id, uint modifiers, uint vk);

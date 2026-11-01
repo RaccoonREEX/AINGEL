@@ -67,7 +67,8 @@ class Provider:
                 "output": [{"type": "message", "content": [{"type": "output_text", "text": self.text}]}]}
 
     def prompt(self, index=-1):
-        return self.sent[index]["input"][0]["content"][0]["text"]
+        """AINGEL's instructions, sent in the request's own field (never in the user's turn)."""
+        return self.sent[index]["instructions"]
 
     def images(self, index=-1):
         return [part["image_url"] for part in self.sent[index]["input"][0]["content"] if part["type"] == "input_image"]
@@ -152,9 +153,9 @@ class VisionPayloadTests(PrivateProfileMixin, TestCase):
         self.assertEqual(len(self.provider.sent), 3)
         steps = sorted(self.provider.sent[:2], key=lambda payload: len(payload["input"][0]["content"]))
         overview, regions = (payload["input"][0]["content"] for payload in steps)
-        self.assertIn("STEP 1 of 3", overview[0]["text"])
+        self.assertIn("STEP 1 of 3", steps[0]["instructions"])
         self.assertEqual(sum(part["type"] == "input_image" for part in overview), 1)
-        self.assertIn("STEP 2 of 3", regions[0]["text"])
+        self.assertIn("STEP 2 of 3", steps[1]["instructions"])
         self.assertEqual(sum(part["type"] == "input_image" for part in regions), 6)  # whole image + five crops
         final = self.provider.sent[2]
         self.assertIn("STEP 3 of 3", self.provider.prompt(2))

@@ -1,6 +1,7 @@
 import { localVoice } from "../components/aingel/browserSpeech";
 import { useEffect, useRef, useState } from "react";
 import { APIError, api } from "../api";
+import DocumentReader from "../components/DocumentReader";
 import Field from "../components/Field";
 import PrivateMediaConsent, { imageTestFields } from "../components/PrivateMediaConsent";
 import {
@@ -316,6 +317,7 @@ export default function See({ profile, t, locale, busy, run }: WithProfile) {
           )}
         </section>
       )}
+      <DocumentReader profile={profile} t={t} locale={locale} busy={busy} run={run} />
     </>
   );
 }
