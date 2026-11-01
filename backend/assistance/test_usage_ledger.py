@@ -8,6 +8,7 @@ import os
 from decimal import Decimal
 from unittest.mock import AsyncMock, patch
 
+import httpx
 from channels.db import database_sync_to_async
 from channels.testing import WebsocketCommunicator
 from django.contrib.auth import get_user_model
@@ -24,6 +25,7 @@ from . import usage
 from .meta_quota import bind_account
 from .models import MetaUsage
 from .test_captions import FakeMeta as FakeVoice
+from .test_vision import Provider as VisionProvider
 
 # The server's own synthetic fixtures with Meta, as on a synthetic test server (no personal content).
 SYNTHETIC = {"AINGEL_AI_MODE": "meta", "MODEL_API_KEY": "synthetic-key", "AINGEL_SYNTHETIC_TESTS_ONLY": "1",
@@ -254,3 +256,50 @@ class CaptionBillingTests(TransactionTestCase):
             await ws.disconnect()
         connect.assert_not_called()
         self.assertEqual(await database_sync_to_async(MetaUsage.objects.count)(), 1)  # nothing billed
+
+
+class FailingStep(VisionProvider):
+    """Meta answers every deep-vision call except the one whose instructions contain [step]."""
+
+    def __init__(self, step):
+        super().__init__("Notas de prueba.")
+        self.step = step
+
+    def post(self, url, headers=None, json=None):
+        if self.step in (json.get("instructions") or ""):
+            raise httpx.ConnectError("synthetic failure")
+        return super().post(url, headers=headers, json=json)
+
+
+@patch.dict(os.environ, SYNTHETIC)
+class DeepVisionPartialBillingTests(TestCase):
+    """A deep description is three Meta calls; each one Meta answered is recorded even if a later one fails."""
+
+    def setUp(self):
+        cache.clear()
+        self.user, self.profile, self.client = account("ledger-deep")
+
+    def tearDown(self):
+        bind_account(None)
+
+    def describe(self, provider):
+        with patch("assistance.vision.httpx.Client", provider):
+            return self.client.post("/api/v1/vision/", {"locale": "es-EC", "fixture": "drawing_dog", "detail_level": "deep"}, format="multipart")
+
+    def test_a_failed_region_pass_keeps_the_overview_that_was_answered(self):
+        response = self.describe(FailingStep("STEP 2 of 3"))
+        self.assertEqual((response.status_code, response.data["error"]), (503, "meta_unavailable"))
+        rows = list(MetaUsage.objects.values_list("feature", "user_id", "status", "input_tokens"))
+        self.assertEqual(rows, [("vision_deep", self.user.pk, "completed", 2000)])
+
+    def test_a_failed_synthesis_keeps_both_notes(self):
+        provider = FailingStep("STEP 3 of 3")
+        response = self.describe(provider)
+        self.assertEqual((response.status_code, response.data["error"]), (503, "meta_unavailable"))
+        self.assertEqual(len(provider.sent), 2)
+        self.assertEqual(MetaUsage.objects.filter(feature="vision_deep", user=self.user).count(), 2)
+
+    def test_a_complete_deep_description_records_three_calls(self):
+        response = self.describe(VisionProvider("Descripción."))
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(MetaUsage.objects.filter(feature="vision_deep", user=self.user).count(), 3)

@@ -313,8 +313,10 @@ def call(content, effort, budget, reserve=True, instructions=None):
     }
 
 
-def _deep(image, plan_, locale, preferences, request):
-    """Global identification and enlarged regions in parallel, then a synthesis for speech: [calls]."""
+def _deep(image, plan_, locale, preferences, request, bill):
+    """Global identification and enlarged regions in parallel, then a synthesis for speech: [calls]. [bill] records
+    each call as soon as its result is back (in this thread), so a later stage failing does not lose the usage of
+    calls Meta already answered."""
     full = image_part(image)
     region = crop(image, plan_.region) if plan_.region in REGION_NAMES else None
     focus = [image_part(region)] if region else []
@@ -338,8 +340,18 @@ def _deep(image, plan_, locale, preferences, request):
     for _ in jobs:
         reserve_quota()
     with ThreadPoolExecutor(max_workers=2) as pool:
-        notes = list(pool.map(
-            lambda job: call(job[1], DEEP_STEP["effort"], DEEP_STEP["budget"], reserve=False, instructions=job[0]), jobs))
+        futures = [
+            pool.submit(call, content, DEEP_STEP["effort"], DEEP_STEP["budget"], reserve=False, instructions=text)
+            for text, content in jobs
+        ]
+    notes, failure = [], None
+    for future in futures:
+        try:
+            notes.append(bill(future.result()))
+        except Exception as error:  # the other note was still answered and billed: record it, then fail
+            failure = failure or error
+    if failure is not None:
+        raise failure
     working = "\n\n".join(
         f"Notes {index}: {call['text']}" for index, call in enumerate(notes, 1) if call["text"]
     )
@@ -349,10 +361,10 @@ def _deep(image, plan_, locale, preferences, request):
         "anything they missed. Organize it for listening: the main thing first, then each region or feature, then "
         "the relationships between elements, then real uncertainties. Use all the relevant detail.\n\n" + working
     )
-    final = call(
+    final = bill(call(
         [MATERIAL, full] + focus, LEVELS["deep"]["effort"], LEVELS["deep"]["budget"],
         instructions=_instruction(plan_, locale, preferences, request, synthesis),
-    )
+    ))
     return notes + [final]
 
 
@@ -378,19 +390,22 @@ def describe(image, plan_, locale, allowed, preferences=None, question="", turns
     started = time.monotonic()
     cropped = plan_.region in REGION_NAMES
     request = _request(plan_, locale, question, turns, cropped, source_kind)
+    spent = []
+
+    def bill(result):
+        """Ledger row for one answered call: billed units only, never the image, the question or the answer."""
+        spent.append(usage.record("vision_" + plan_.level, MODEL, result["effort"], result["usage"], result["latency_ms"],
+                                  allowed, result["status"], user))
+        return result
+
     if plan_.level == "deep":
-        calls = _deep(image, plan_, locale, preferences, request)
+        calls = _deep(image, plan_, locale, preferences, request, bill)
     else:
         content = [MATERIAL, image_part(image)]
         if cropped:
             content.append(image_part(crop(image, plan_.region)))
         level = LEVELS[plan_.level]
-        calls = [call(content, level["effort"], level["budget"], instructions=_instruction(plan_, locale, preferences, request))]
-    spent = [
-        usage.record("vision_" + plan_.level, MODEL, call["effort"], call["usage"], call["latency_ms"], allowed,
-                     call["status"], user)
-        for call in calls
-    ]
+        calls = [bill(call(content, level["effort"], level["budget"], instructions=_instruction(plan_, locale, preferences, request)))]
     final = calls[-1]
     if final["status"] != "completed":
         raise VisionUnavailable("meta_incomplete")
