@@ -34,7 +34,7 @@ class DeviceBackendTest {
             .put("terms_version", session.getString("terms_version")), TERRITORY_OUTSIDE, session.getString("territory_version"))
         val registration = api.request("auth/register/", "POST", credentials) as JSONObject
         assertEquals(username, registration.getJSONObject("user").getString("username"))
-        val profile = api.request("profiles/", "POST", JSONObject().put("display_name", "Synthetic Android test").put("locale", "es-EC")) as JSONObject
+        val profile = api.request("profiles/", "POST", JSONObject().put("display_name", "Synthetic Android test").put("locale", "es-EC").put("for_self", true)) as JSONObject
         val path = "profiles/${profile.getString("id")}/"
         api.request(path + "routines/", "POST", JSONObject().put("title", "Synthetic sleep routine").put("category", "sleep").put("at", "22:00")
             .put("weekdays", JSONArray((0..6).toList())).put("instructions", "Synthetic test only").put("active", true))
