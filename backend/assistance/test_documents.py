@@ -165,7 +165,7 @@ class OwnDocumentTests(TestCase):
         cache.clear()
         self.owner = adult(get_user_model().objects.create_user(username="document-owner"))
         self.profile = Profile.objects.create(owner=self.owner, display_name="Owner")
-        authorize(self.profile, {"camera": True, "microphone": True, "meta_data": True})
+        authorize(self.profile, {"camera": True, "microphone": True, "meta_data": True}, meta_documents=True)
         self.client = APIClient()
         self.client.force_authenticate(self.owner)
         self.provider = Provider("La página habla de la casa de Rosa.")
@@ -181,9 +181,14 @@ class OwnDocumentTests(TestCase):
         return self.client.post("/api/v1/documents/", {"locale": "es-EC", "file": pdf_upload(), "profile": str(self.profile.pk),
                                                        "private_test": True, **extra}, format="multipart")
 
-    def test_own_pdf_needs_the_image_authorization(self):
+    def test_own_pdf_needs_the_documents_authorization(self):
         response = self.client.post("/api/v1/documents/", {"locale": "es-EC", "file": pdf_upload(), "profile": str(self.profile.pk)}, format="multipart")
         self.assertEqual(response.data["error"], "privacy_review_required")
+        # The camera's permissions are not the documents' (care.consent.meta_documents).
+        authorize(self.profile, {"camera": True, "microphone": True, "meta_data": True}, meta_documents=False)
+        refused = self.client.post("/api/v1/documents/", {"locale": "es-EC", "file": pdf_upload(), "profile": str(self.profile.pk), "private_test": True}, format="multipart")
+        self.assertEqual((refused.status_code, refused.data["error"]), (403, "document_consent_revoked"))
+        authorize(self.profile, {"camera": True, "microphone": True, "meta_data": True}, meta_documents=True)
         opened = self.open()
         self.assertEqual(opened.status_code, 201, opened.data)
         self.assertEqual(opened.data["pages"], 4)
@@ -205,8 +210,8 @@ class OwnDocumentTests(TestCase):
         self.assertFalse(self.client.get(f"/api/v1/documents/{opened.data['document']}/pages/1/").data["has_text"])
 
     def test_revocation_closes_the_document_before_meta(self):
-        for purpose, error in (("camera_local", "camera_consent_revoked"), ("meta_photos", "consent_changed")):
-            authorize(self.profile, {"camera": True, "microphone": True, "meta_data": True})
+        for purpose, error in (("meta_documents", "document_consent_revoked"), ("camera_local", "consent_changed")):
+            authorize(self.profile, {"camera": True, "microphone": True, "meta_data": True}, meta_documents=True)
             token = self.open().data["document"]
             decide(self.profile, self.owner, purpose, "revoke")
             response = self.client.post(f"/api/v1/documents/{token}/ask/", {"action": "explain", "page": 2}, format="json")

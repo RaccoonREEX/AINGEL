@@ -8,7 +8,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.throttling import ScopedRateThrottle
 
-from care.consent import granted, meta_account_denial, meta_allowed, private_media_allowed, refused, still_current, subject_account
+from care.consent import capture_refusal, granted, meta_account_denial, meta_allowed, private_media_allowed, refused, still_current, subject_account
 from care.faces import FaceConsentChanged, FaceRecognitionDisabled, family_matches, recognition_enabled
 from care.permissions import access, audit
 
@@ -38,13 +38,19 @@ class SceneRequest(serializers.Serializer):
 REAL_FIELDS = ("image", "profile", "family", "private_test", "object_name")
 
 
-def image_basis(request, values, kind="image", content=REAL_FIELDS):
-    """(path, fixture or error, profile): decided before any image is read or any provider request is built."""
+# Refusals of a capture purpose: 403, before anything is read.
+REFUSALS = ("camera_consent_revoked", "screen_consent_revoked", "document_consent_revoked")
+
+
+def image_basis(request, values, kind="image", content=REAL_FIELDS, media="image"):
+    """(path, fixture or error, profile): decided before any image is read or any provider request is built.
+    [media]: «image» (camera or gallery photo) or «screen» (a capture of the person's computer screen), each under
+    its own purposes (care.consent.NEEDS)."""
     profile = access(request.user, values["profile"]) if "profile" in values else None
-    if refused(profile, "camera_local"):
-        return None, "camera_consent_revoked", None
+    if refusal := capture_refusal(profile, media):
+        return None, refusal, None
     real = profile is not None and (
-        private_media_allowed(profile, request.user, "image", values["private_test"]) or meta_allowed(profile, "image")
+        private_media_allowed(profile, request.user, media, values["private_test"]) or meta_allowed(profile, media)
     )
     path, value = synthetic.route(request.data, kind, real, content)
     if path in ("real", "mock") and "image" not in values:
@@ -223,9 +229,10 @@ class VisionView(APIView):
         values = serializer.validated_data
         if "session" in values:
             return self.follow_up(request, values)
-        path, value, profile = image_basis(request, values, content=VISION_FIELDS)
+        media = "screen" if values["source_kind"] == "screen" else "image"
+        path, value, profile = image_basis(request, values, content=VISION_FIELDS, media=media)
         if path is None:
-            return Response({"error": value}, status=403 if value == "camera_consent_revoked" else 400, headers=NO_STORE)
+            return Response({"error": value}, status=403 if value in REFUSALS else 400, headers=NO_STORE)
         if path == "fixture":
             image, preferences = synthetic.image(value), synthetic.FICTIONAL_PREFERENCES
         else:
@@ -240,7 +247,7 @@ class VisionView(APIView):
             response.data["session"] = vision.open_session(
                 request.user, image, basis_for(path), values["locale"], response.data["task"], asked(values),
                 response.data["text"], profile=profile, epoch=epoch,
-                fixture=value if path == "fixture" else None, private_test=values["private_test"],
+                fixture=value if path == "fixture" else None, private_test=values["private_test"], media=media,
             )
             response.data["session_seconds"] = vision.SESSION_SECONDS
             if path == "fixture":
@@ -267,10 +274,10 @@ class VisionView(APIView):
             image, preferences = vision.session_image(state), None
             if state["profile"]:
                 profile, epoch = access(request.user, state["profile"]), state["epoch"]
-                allowed = private_media_allowed(profile, request.user, "image", state["private_test"]) or meta_allowed(profile, "image")
-                error = (
-                    "camera_consent_revoked" if refused(profile, "camera_local")
-                    else "consent_changed" if not still_current(profile, epoch)
+                media = state.get("media", "image")
+                allowed = private_media_allowed(profile, request.user, media, state["private_test"]) or meta_allowed(profile, media)
+                error = capture_refusal(profile, media) or (
+                    "consent_changed" if not still_current(profile, epoch)
                     else None if allowed or state["basis"] is None else "privacy_review_required"
                 )
                 if error:

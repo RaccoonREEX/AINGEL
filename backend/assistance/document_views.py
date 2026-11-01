@@ -10,7 +10,7 @@ from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
-from care.consent import meta_account_denial, meta_allowed, private_media_allowed, refused, still_current
+from care.consent import capture_refusal, meta_account_denial, meta_allowed, private_media_allowed, still_current
 from care.permissions import access
 
 from . import documents, synthetic
@@ -69,10 +69,11 @@ class DocumentsView(APIView):
         serializer.is_valid(raise_exception=True)
         values = serializer.validated_data
         profile = access(request.user, values["profile"]) if "profile" in values else None
-        if refused(profile, "camera_local"):
-            return refuse("camera_consent_revoked", 403)
+        # Documents have their own purpose (care.consent.meta_documents), not the camera's.
+        if refusal := capture_refusal(profile, "document"):
+            return refuse(refusal, 403)
         real = profile is not None and (
-            private_media_allowed(profile, request.user, "image", values["private_test"]) or meta_allowed(profile, "image")
+            private_media_allowed(profile, request.user, "document", values["private_test"]) or meta_allowed(profile, "document")
         )
         path, value = synthetic.route(request.data, "document", real, DOCUMENT_FIELDS)
         if path is None:
@@ -120,11 +121,11 @@ class Session(APIView):
         if state["profile"] is None:
             return state["basis"], None, None, None  # local test mode: only the test answer, never Meta
         profile = access(request.user, state["profile"])
-        if refused(profile, "camera_local") or not still_current(profile, state["epoch"]):
+        refusal = capture_refusal(profile, "document")
+        if refusal or not still_current(profile, state["epoch"]):
             documents.close_session(token)
-            error = "camera_consent_revoked" if refused(profile, "camera_local") else "consent_changed"
-            return None, None, None, refuse(error, 403 if error == "camera_consent_revoked" else 409)
-        if not (private_media_allowed(profile, request.user, "image", state["private_test"]) or meta_allowed(profile, "image")):
+            return None, None, None, refuse(refusal or "consent_changed", 403 if refusal else 409)
+        if not (private_media_allowed(profile, request.user, "document", state["private_test"]) or meta_allowed(profile, "document")):
             return None, None, None, refuse("privacy_review_required", 403)
         preferences = profile_preferences(profile.communication, meta_allowed(profile, "personalization"))
         return state["basis"], profile, preferences, None

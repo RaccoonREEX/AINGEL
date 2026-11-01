@@ -422,13 +422,13 @@ def _key(token):
 
 
 def open_session(user, image, basis, locale, task, asked, answer, profile=None, epoch=None, fixture=None,
-                 private_test=False):
+                 private_test=False, media="image"):
     """A token for follow-up questions about this image, valid SESSION_SECONDS, starting with the first exchange.
     A fixture session keeps only the fixture's id; a real one keeps the normalized image, encrypted."""
     token = sealed.new_token()
     state = {
         "user": user.pk, "profile": str(profile.pk) if profile else None, "epoch": epoch, "basis": basis,
-        "fixture": fixture, "private_test": private_test, "locale": locale, "task": task,
+        "fixture": fixture, "private_test": private_test, "locale": locale, "task": task, "media": media,
         "turns": [_turn(asked, answer)],
         "expires": time.time() + SESSION_SECONDS,
         "image": None if fixture else base64.b64encode(image).decode("ascii"),

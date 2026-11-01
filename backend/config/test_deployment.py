@@ -73,15 +73,21 @@ class ProductionSettingsTests(SimpleTestCase):
             with self.subTest(change=change):
                 self.assertNotEqual(self.import_settings({**env, **change}).returncode, 0)
 
-    def test_private_media_mode_requires_exclusive_operator_opt_in(self):
-        env = self.environment()
-        env.update({"AINGEL_AI_MODE": "meta", "AINGEL_PRIVATE_OWN_MEDIA_TEST": "1", "AINGEL_REAL_DATA": "1", "AINGEL_SYNTHETIC_TESTS_ONLY": "0", "MODEL_API_KEY": "test-key"})
-        self.assertEqual(self.import_settings(env).returncode, 0)
-        for change in ({"AINGEL_PRIVATE_OWN_MEDIA_TEST": "0"}, {"AINGEL_REAL_DATA": "0"},
-                       {"AINGEL_SYNTHETIC_TESTS_ONLY": "1"}, {"AINGEL_AI_MODE": "mock"},
-                       {"MODEL_API_KEY": ""}):
+    def test_production_modes(self):
+        """Production with consent (the target) and the owner's private test are both valid; inconsistent switches
+        are refused at start-up."""
+        public = self.environment()
+        public.update({"AINGEL_AI_MODE": "meta", "AINGEL_PRIVATE_OWN_MEDIA_TEST": "0", "AINGEL_REAL_DATA": "1",
+                       "AINGEL_SYNTHETIC_TESTS_ONLY": "0", "MODEL_API_KEY": "test-key"})
+        self.assertEqual(self.import_settings(public).returncode, 0)
+        self.assertEqual(self.import_settings({**public, "AINGEL_PRIVATE_OWN_MEDIA_TEST": "1"}).returncode, 0)
+        self.assertEqual(self.import_settings({**public, "AINGEL_META_ACCESS": "allowlist", "AINGEL_META_ALLOWED_USER_IDS": "3"}).returncode, 0)
+        for change in ({"AINGEL_REAL_DATA": "0", "AINGEL_PRIVATE_OWN_MEDIA_TEST": "1"},
+                       {"AINGEL_SYNTHETIC_TESTS_ONLY": "1"}, {"AINGEL_AI_MODE": "mock"}, {"MODEL_API_KEY": ""},
+                       {"AINGEL_META_ACCESS": "everyone"}, {"AINGEL_META_ACCESS": "allowlist"},
+                       {"AINGEL_META_ACCESS": "allowlist", "AINGEL_META_ALLOWED_USER_IDS": "*"}):
             with self.subTest(change=change):
-                self.assertNotEqual(self.import_settings({**env, **change}).returncode, 0)
+                self.assertNotEqual(self.import_settings({**public, **change}).returncode, 0)
 
     def test_required_values_fail_closed(self):
         for name in ("DJANGO_SECRET_KEY", "AINGEL_ENCRYPTION_KEY", "AINGEL_ALLOWED_HOSTS",

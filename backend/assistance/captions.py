@@ -18,13 +18,15 @@ from .meta_quota import MetaQuotaError, reserve_meta_call
 
 class CaptionConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
-    def profile_allows(self, profile_id, private_test=False):
+    def profile_allows(self, profile_id, private_test=False, kind="audio"):
+        """[kind]: «audio» for the person's own microphone, «meeting_audio» for the computer's audio (AINGEL Desktop),
+        which may hold other people's voices and has its own purpose (care.consent.meta_meeting_audio)."""
         if not isinstance(profile_id, str):
             return False
         try:
             user = self.scope["user"]
             profile = access(user, profile_id)
-            allowed = private_media_allowed(profile, user, "audio", private_test) or meta_allowed(profile, "audio")
+            allowed = private_media_allowed(profile, user, kind, private_test) or meta_allowed(profile, kind)
             if allowed:
                 # Re-checked while streaming: a revocation ends the session (receive).
                 self.consent_profile, self.consent_epoch = profile, profile.consent_epoch
@@ -138,7 +140,12 @@ class CaptionConsumer(AsyncWebsocketConsumer):
         if "synthetic" in value or "fixture" in value:
             await self.fail("synthetic_captions_unavailable")
             return
-        if not await self.profile_allows(value.get("profile"), value.get("private_test")):
+        source = value.get("source", "microphone")
+        if source not in ("microphone", "system"):
+            await self.fail("caption_control_invalid")
+            return
+        kind = "meeting_audio" if source == "system" else "audio"
+        if not await self.profile_allows(value.get("profile"), value.get("private_test"), kind):
             await self.fail("privacy_review_required")
             return
         key = os.environ.get("MODEL_API_KEY", "")
@@ -146,7 +153,9 @@ class CaptionConsumer(AsyncWebsocketConsumer):
             await self.fail("meta_not_configured")
             return
         try:
-            await sync_to_async(reserve_meta_call, thread_sensitive=False)()
+            # Counted for this account (assistance.meta_quota), not only for the platform.
+            account = self.scope["user"].pk
+            await sync_to_async(lambda: reserve_meta_call(account=account), thread_sensitive=False)()
         except MetaQuotaError as error:
             await self.fail(str(error))
             return

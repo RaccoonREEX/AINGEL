@@ -15,7 +15,7 @@ from config.asgi import application
 from . import synthetic
 from .companion import CompanionUnavailable, call_spark
 from .locate import locate_object
-from .meta_quota import MetaQuotaError, reserve_meta_call
+from .meta_quota import MetaQuotaError, bind_account, meta_slot, reserve_meta_call
 from .scene import SceneUnavailable, describe_scene
 
 
@@ -27,18 +27,46 @@ class QuotaAdmissionTests(SimpleTestCase):
             make_key=lambda key: f"prefix:{key}",
             _cache=SimpleNamespace(get_client=lambda key, write: client),
         )
-        with patch("assistance.meta_quota.caches", {"meta_quota": fake_cache}):
+        with patch("assistance.meta_quota.caches", {"meta_quota": fake_cache}), override_settings(AINGEL_META_USER_LIMIT_PER_MINUTE=2, AINGEL_META_USER_LIMIT_PER_DAY=5):
             client.eval.return_value = 1
-            reserve_meta_call()
+            reserve_meta_call(account=7)
             args = client.eval.call_args.args
-            self.assertEqual(args[1:6], (2, "prefix:aingel:meta-quota:minute", "prefix:aingel:meta-quota:day", 3, 8))
-            self.assertEqual(len(args[6]), 32)
-            client.eval.return_value = 0
+            # The platform's counters and this account's, checked and counted together.
+            self.assertEqual(args[1:6], (4, "prefix:aingel:meta-quota:minute", "prefix:aingel:meta-quota:day",
+                                         "prefix:aingel:meta-quota:account:7:minute", "prefix:aingel:meta-quota:account:7:day"))
+            self.assertEqual(args[6:10], (3, 8, 2, 5))
+            self.assertEqual(len(args[10]), 32)
+            client.eval.return_value = -1
             with self.assertRaisesMessage(MetaQuotaError, "meta_quota_exceeded"):
+                reserve_meta_call(account=7)
+            client.eval.return_value = -2
+            with self.assertRaisesMessage(MetaQuotaError, "meta_account_quota_exceeded"):
+                reserve_meta_call(account=7)
+            # The request's account (bound by care.consent.meta_account_denial) is used when none is given.
+            client.eval.return_value = 1
+            bind_account(SimpleNamespace(pk=11))
+            try:
+                reserve_meta_call()
+                self.assertIn("prefix:aingel:meta-quota:account:11:minute", client.eval.call_args.args)
+            finally:
+                bind_account(None)
+            # Production never sends a call nobody answers for.
+            with self.assertRaisesMessage(MetaQuotaError, "meta_account_required"):
                 reserve_meta_call()
             client.eval.side_effect = OSError("connection details must not be exposed")
             with self.assertRaisesMessage(MetaQuotaError, "meta_quota_unavailable"):
-                reserve_meta_call()
+                reserve_meta_call(account=7)
+
+    def test_one_heavy_request_per_account_at_a_time(self):
+        cache.clear()
+        with meta_slot(account=5):
+            with self.assertRaisesMessage(MetaQuotaError, "meta_busy"):
+                with meta_slot(account=5):
+                    pass
+            with meta_slot(account=6):  # another account is not affected
+                pass
+        with meta_slot(account=5):  # released after use
+            pass
 
     def test_all_http_provider_calls_fail_before_contact(self):
         buf = io.BytesIO()

@@ -15,11 +15,16 @@ if AINGEL_ENV not in {"local", "production"}:
     raise ImproperlyConfigured("AINGEL_ENV must be local or production")
 PRODUCTION = AINGEL_ENV == "production"
 
-# Shared provider-call admission limits. Zero deliberately disables all calls.
+# Meta call admission (assistance.meta_quota): the platform's limits are a safety net for the shared credits and the
+# VPS; each account's limits keep one account, a bot or a loop from using up what everyone shares. A deep
+# description is three calls. Zero deliberately disables all calls.
 try:
-    AINGEL_META_LIMIT_PER_MINUTE = int(os.environ.get("AINGEL_META_LIMIT_PER_MINUTE", "10"))
-    AINGEL_META_LIMIT_PER_DAY = int(os.environ.get("AINGEL_META_LIMIT_PER_DAY", "100"))
-    if not 0 <= AINGEL_META_LIMIT_PER_MINUTE <= 100000 or not 0 <= AINGEL_META_LIMIT_PER_DAY <= 100000:
+    AINGEL_META_LIMIT_PER_MINUTE = int(os.environ.get("AINGEL_META_LIMIT_PER_MINUTE", "60"))
+    AINGEL_META_LIMIT_PER_DAY = int(os.environ.get("AINGEL_META_LIMIT_PER_DAY", "5000"))
+    AINGEL_META_USER_LIMIT_PER_MINUTE = int(os.environ.get("AINGEL_META_USER_LIMIT_PER_MINUTE", "12"))
+    AINGEL_META_USER_LIMIT_PER_DAY = int(os.environ.get("AINGEL_META_USER_LIMIT_PER_DAY", "300"))
+    if not all(0 <= value <= 100000 for value in (AINGEL_META_LIMIT_PER_MINUTE, AINGEL_META_LIMIT_PER_DAY,
+                                                    AINGEL_META_USER_LIMIT_PER_MINUTE, AINGEL_META_USER_LIMIT_PER_DAY)):
         raise ValueError
 except ValueError:
     raise ImproperlyConfigured("Meta call limits must be integers between 0 and 100000") from None
@@ -72,11 +77,18 @@ if PRODUCTION:
     private_media = os.environ.get("AINGEL_PRIVATE_OWN_MEDIA_TEST", "0")
     if ai_mode not in {"mock", "meta"} or real_data not in {"0", "1"} or synthetic_only not in {"0", "1"} or private_media not in {"0", "1"}:
         raise ImproperlyConfigured("Invalid production AI mode configuration")
+    # Modes: synthetic tests (REAL_DATA=0, SYNTHETIC_TESTS_ONLY=1); production with consent (REAL_DATA=1,
+    # SYNTHETIC_TESTS_ONLY=0, PRIVATE_OWN_MEDIA_TEST=0); the owner's private test (the same with PRIVATE=1).
     if real_data == "1":
-        if ai_mode != "meta" or private_media != "1" or synthetic_only != "0":
-            raise ImproperlyConfigured("Real-data mode requires the private own-media test configuration")
+        if ai_mode != "meta" or synthetic_only != "0":
+            raise ImproperlyConfigured("Real-data mode requires AINGEL_AI_MODE=meta and AINGEL_SYNTHETIC_TESTS_ONLY=0")
     elif private_media == "1":
         raise ImproperlyConfigured("Private own-media test requires real-data mode")
+    meta_access = os.environ.get("AINGEL_META_ACCESS", "public")
+    if meta_access not in {"public", "allowlist"}:
+        raise ImproperlyConfigured("AINGEL_META_ACCESS must be public or allowlist")
+    if meta_access == "allowlist" and not [item for item in os.environ.get("AINGEL_META_ALLOWED_USER_IDS", "").split(",") if item.strip().isdigit()]:
+        raise ImproperlyConfigured("AINGEL_META_ACCESS=allowlist needs AINGEL_META_ALLOWED_USER_IDS")
     if ai_mode == "meta":
         if real_data == "0" and (os.environ.get("AINGEL_META_SYNTHETIC_TEST_ACK") != "1" or synthetic_only != "1"):
             raise ImproperlyConfigured("Meta synthetic tests require explicit opt-in")
@@ -104,6 +116,7 @@ INSTALLED_APPS = [
 ]
 MIDDLEWARE = [
     "care.auth.PrivateAPIResponses",
+    "assistance.meta_quota.AccountScope",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",

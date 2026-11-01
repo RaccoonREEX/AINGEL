@@ -156,7 +156,9 @@ class AgeAndConsentTests(TestCase):
                          {("camera_local", "granted", self.person.pk, "own_account_signup"), ("meta_photos", "granted", self.person.pk, "own_account_signup")})
         state = self.as_user(self.person).get(f"/api/v1/profiles/{created.data['id']}/consent/?locale=en-US").data
         self.assertTrue(state["is_subject"])
-        self.assertIn("free credits", state["credits_notice"])
+        # Meta Model API terms (docs/META_MODEL_API_TERMS.md): Standard models only, not used for training.
+        self.assertIn("«Standard»", state["credits_notice"])
+        self.assertIn("does not use it to train", state["credits_notice"])
 
     def test_purpose_texts_are_served_for_sign_up(self):
         data = self.as_user(self.person).get("/api/v1/consent/purposes/?locale=es-EC").data
