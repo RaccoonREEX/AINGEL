@@ -120,6 +120,7 @@ private val Muted = Color(0xFF5A6780)
                     when {
                         s.username == null -> AccessFlow(model, s)
                         !s.adultDeclared -> AdultDeclaration(model, s)  // accounts from before the age policy
+                        s.territory != TERRITORY_OUTSIDE -> TerritoryDeclaration(model, s)  // Meta's Restricted Territories
                         screen == "security" -> Legacy(R.string.security, s, { navigate(if (s.profile == null) "home" else "more") }) { SecurityScreen(model, s) }
                         s.profile == null -> SetupFlow(model, s)
                         else -> key(screen, s.profile!!.optString("id")) {
@@ -201,6 +202,8 @@ internal fun errorMessage(error: String): Int = when (error) {
     "private_test_consent_required" -> R.string.private_test_missing_consent
     "privacy_review_required" -> R.string.private_test_server_denied
     "adult_declaration_required" -> R.string.err_adult_declaration_required
+    "territory_declaration_required" -> R.string.err_territory_declaration_required
+    "territory_restricted", "meta_territory_restricted" -> R.string.err_territory_restricted
     "consent_subject_only" -> R.string.err_consent_subject_only
     "legal_review_required" -> R.string.err_legal_review_required
     "consent_code_invalid" -> R.string.err_consent_code_invalid

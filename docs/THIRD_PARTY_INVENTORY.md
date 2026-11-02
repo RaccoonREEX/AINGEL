@@ -269,6 +269,8 @@ legal completa. Los avisos y textos de licencia que exigen las licencias deben a
 | pycparser | 3.12 | BSD-3-Clause | servidor (no se distribuye a clientes) |
 | psycopg | 3.2.10 | LGPL-3.0-only (GNU LGPL v3) | servidor (no se distribuye a clientes; ver nota de imágenes) |
 | psycopg-binary | 3.2.10 | LGPL-3.0-only; la rueda incluye libpq (PostgreSQL License) y bibliotecas nativas (p. ej. OpenSSL) | servidor (no se distribuye a clientes; ver nota de imágenes) |
+| pypdf | 6.21.4 | BSD-3-Clause | servidor (no se distribuye a clientes); añadido el 2026-10-31 para leer PDF |
+| pypdfium2 | 4.30.0 | (Apache-2.0 OR BSD-3-Clause) AND LicenseRef-PdfiumThirdParty; incluye PDFium (BSD-3-Clause) y sus dependencias | servidor (no se distribuye a clientes; ver nota de imágenes); añadido el 2026-10-31 para mostrar páginas escaneadas |
 | pyOpenSSL | 26.4.0 | Apache Software License | servidor (no se distribuye a clientes) |
 | PyOTP | 2.10.0 | MIT | servidor (no se distribuye a clientes) |
 | qrcode | 8.2 | BSD-3-Clause AND MIT (fichero LICENSE: Lincoln Loop BSD + parte pyqrnative MIT; el clasificador «Other/Proprietary» no corresponde al texto) | servidor (no se distribuye a clientes) |

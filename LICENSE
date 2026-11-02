@@ -1,0 +1,71 @@
+AINGEL — Proprietary License (source visible for evaluation)
+
+DRAFT FOR THE OWNER'S REVIEW. This text has not been reviewed by a lawyer and is not legal advice. The owner should
+confirm it, and complete the bracketed fields, before the repository is made public.
+
+Copyright (c) 2026 [OWNER'S FULL LEGAL NAME OR COMPANY — PENDING OWNER APPROVAL]. All rights reserved.
+
+1. What this license covers
+
+   "AINGEL" means the original source code, documentation, user-interface designs, texts, sign animations designed
+   for AINGEL, images and other materials in this repository that were created by or for the owner, except the
+   third-party components described in section 6. The owner keeps all rights in AINGEL that applicable law allows.
+
+2. What you may do
+
+   You may view and read AINGEL's source code and documentation, and build and run it on your own equipment, only
+   to evaluate it (for example, as a judge, organizer or reviewer of the Meta Global AI Developer Hackathon 2026, or
+   as a person reviewing the project). Nothing in this license prevents what GitHub's Terms of Service allow other
+   users to do with a public repository through GitHub's own features, such as viewing it or creating a fork on
+   GitHub.
+
+3. What you may not do without the owner's prior written permission
+
+   - copy, reproduce or redistribute AINGEL, in whole or in part, outside the uses allowed in section 2;
+   - modify AINGEL or create derivative works for any use other than private evaluation;
+   - sell, license, sublicense, rent, lend or otherwise make AINGEL available to others;
+   - use AINGEL, or any part of it, in a commercial product or to provide a service to third parties, including as
+     a hosted or online service;
+   - remove or alter copyright, license, attribution or brand notices.
+
+   No right is granted by implication, estoppel or otherwise beyond what this license states.
+
+4. Hackathon organizers
+
+   Submitting AINGEL to the Meta Global AI Developer Hackathon 2026 grants the event's organizers the license
+   described in the event's Official Rules. This license does not restrict, replace or contradict that grant, which
+   governs the organizers' use of the submission. Neither this license nor the submission assigns ownership of
+   AINGEL to Meta, Cerebral Valley or anyone else.
+
+5. Name, logo and designs
+
+   "AINGEL", the AINGEL logo and isotype, the AINGEL orb character and the visual identity of the applications are
+   brand assets of the owner. This license grants no right to use them, except to refer to the project accurately.
+   Using them does not imply any trademark registration unless the owner states otherwise.
+
+6. Third-party components
+
+   AINGEL uses and in some files adapts third-party software, fonts, models and data. They remain under their own
+   licenses, which continue to apply and are not changed by this license; nothing here limits the rights those
+   licenses give you. Where an AINGEL file includes or adapts third-party code (for example, the orb renderer
+   adapted from Thinking Orbs, MIT License), the third-party portions remain under their license and their notices
+   are kept. See THIRD_PARTY_NOTICES.md, docs/THIRD_PARTY_INVENTORY.md, docs/THIRD_PARTY_NOTICES.md and
+   docs/licenses/. Meta's models are used as remote services under the Meta Model API Terms of Service; no Meta model
+   or its weights are included in this repository.
+
+7. No warranty and limitation of liability
+
+   AINGEL is provided "as is", without warranty of any kind, express or implied, including fitness for a particular
+   purpose and non-infringement. To the maximum extent permitted by law, the owner is not liable for any damages
+   arising from its use. AINGEL is an accessibility assistant: it is not a medical device, does not diagnose, and
+   does not guarantee that a place or a route is safe.
+
+8. Termination
+
+   The rights in section 2 end automatically if you breach this license.
+
+9. Contact for permissions and licensing
+
+   [CONTACT ADDRESS — PENDING OWNER APPROVAL]
+
+   [GOVERNING LAW AND JURISDICTION — PENDING OWNER DECISION]

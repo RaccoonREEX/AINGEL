@@ -10,6 +10,7 @@ import httpx
 
 from .persona import VISION_RULES, instructions as persona_instructions, profile_preferences, vision_guard
 from PIL import Image, ImageOps, UnidentifiedImageError
+from . import usage
 from .meta_quota import MetaQuotaError, reserve_meta_call
 from .synthetic import require_basis
 
@@ -21,7 +22,7 @@ class SceneUnavailable(Exception):
     pass
 
 
-def normalize_image(upload) -> bytes:
+def normalize_image(upload, side=1600) -> bytes:
     if upload.size > MAX_BYTES:
         raise ValueError("image_too_large")
     raw = upload.read(MAX_BYTES + 1)
@@ -37,7 +38,7 @@ def normalize_image(upload) -> bytes:
                     raise ValueError("image_too_large")
                 image.load()
                 clean = ImageOps.exif_transpose(image).convert("RGB")
-                clean.thumbnail((1600, 1600))
+                clean.thumbnail((side, side))
                 output = io.BytesIO()
                 clean.save(output, format="JPEG", quality=85)
                 return output.getvalue()
@@ -70,9 +71,14 @@ def describe_scene(image: bytes, locale: str, allowed, known_person: bool = Fals
     if not require_basis(allowed):
         raise SceneUnavailable("privacy_review_required")
     language = "Ecuadorian Spanish" if locale == "es-EC" else "English"
-    task = "Scene description from one photo, at most three short sentences. " + VISION_RULES + (
+    # Brief, as PEOPLE AND EXPRESSIONS asks for BRIEF: a person's apparent expression and one or two key features.
+    # A camera image, not necessarily a photograph of the world: it may show a drawing or a screen (CONTENT TYPE).
+    task = "Scene description from one camera image, at most three short sentences. " + VISION_RULES + (
+        " If a person is the main subject, the first sentence gives their apparent expression."
+    ) + (
         " The person in front is someone the user knows; the app already says who it is. Without naming or "
-        "identifying them, start with that person: what they are wearing and what they seem to be doing."
+        "identifying them, start with that person: their apparent expression, what they are wearing and what they "
+        "seem to be doing."
         if known_person else ""
     )
     instruction = persona_instructions(locale, preferences or profile_preferences({}), task)
@@ -97,8 +103,9 @@ def describe_scene(image: bytes, locale: str, allowed, known_person: bool = Fals
     }
     started = time.monotonic()
     try:
+        usage.admit()
         reserve_meta_call()
-    except MetaQuotaError as error:
+    except (MetaQuotaError, usage.BudgetExhausted) as error:
         raise SceneUnavailable(str(error)) from None
     try:
         # Fixed destination: no user-provided URLs and no forwarding redirects with credentials.
@@ -110,6 +117,8 @@ def describe_scene(image: bytes, locale: str, allowed, known_person: bool = Fals
             )
         response.raise_for_status()
         data = response.json()
+        usage.record("scene", "muse-spark-1.3", "minimal", data.get("usage"), round((time.monotonic() - started) * 1000),
+                     allowed, data.get("status"))
         if data.get("status") != "completed":
             raise SceneUnavailable("meta_incomplete")
         text = "\n".join(

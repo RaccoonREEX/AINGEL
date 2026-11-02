@@ -15,6 +15,7 @@ from care.consent import meta_account_denial, meta_allowed, still_current
 from care.permissions import access, audit
 from care.serializers import COMMUNICATION_DEFAULTS
 from . import synthetic
+from . import usage
 from .meta_quota import MetaQuotaError, reserve_meta_call
 
 MAX_INPUT_CHARS = 1000
@@ -128,8 +129,9 @@ def call_spark(instructions, input_text, max_output_tokens=600, web_search=False
         payload["tools"] = tools
     started = time.monotonic()
     try:
+        usage.admit()
         reserve_meta_call()
-    except MetaQuotaError as error:
+    except (MetaQuotaError, usage.BudgetExhausted) as error:
         raise CompanionUnavailable(str(error)) from None
     try:
         with httpx.Client(timeout=45, follow_redirects=False) as client:
@@ -146,6 +148,9 @@ def call_spark(instructions, input_text, max_output_tokens=600, web_search=False
                     if len(body) > MAX_OUTPUT_BYTES:
                         raise CompanionUnavailable("companion_output_too_large")
         data = json.loads(body)
+        searched = sum(1 for item in data.get("output", []) if item.get("type") == "web_search_call")
+        usage.record("companion", "muse-spark-1.3", "minimal", data.get("usage"), round((time.monotonic() - started) * 1000),
+                     basis, data.get("status"), web_searches=searched)
         if data.get("status") != "completed":
             raise CompanionUnavailable("companion_incomplete")
         texts = [
@@ -163,7 +168,6 @@ def call_spark(instructions, input_text, max_output_tokens=600, web_search=False
                 url = note.get("url") if isinstance(note, dict) and note.get("type") == "url_citation" else None
                 if isinstance(url, str) and url.startswith("https://") and len(url) <= 500 and url not in [c["url"] for c in citations]:
                     citations.append({"url": url, "title": str(note.get("title") or url)[:200]})
-        searched = sum(1 for item in data.get("output", []) if item.get("type") == "web_search_call")
         action = None
         for item in data.get("output", []):
             if item.get("type") == "function_call" and item.get("name") in (functions or {}):

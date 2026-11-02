@@ -29,6 +29,9 @@ class AingelVoice(context: Context, private val onReady: (Boolean) -> Unit = {})
     private val done = mutableMapOf<String, () -> Unit>()
     private val routes = mutableMapOf<String, AudioDeviceInfo>()
     private var player: MediaPlayer? = null
+    // The rest of a long text on a chosen output: synthesised one part at a time as each part finishes playing.
+    private val upcoming = ArrayDeque<String>()
+    private var upcomingDone: (() -> Unit)? = null
 
     init {
         tts = TextToSpeech(app) { status ->
@@ -54,17 +57,34 @@ class AingelVoice(context: Context, private val onReady: (Boolean) -> Unit = {})
     }
     fun available(locale: Locale) = ready && (tts?.isLanguageAvailable(locale) ?: -1) >= 0
 
-    /** Speaks [text] on the chosen output; [onDone] runs on the main thread. */
+    /** Speaks [text] on the chosen output, in parts when it is long ([speechChunks]); [onDone] runs on the main
+     * thread after the last part. */
     fun speak(text: String, locale: Locale, rate: Float, onDone: (() -> Unit)? = null) {
         stop()
         val engine = tts ?: return
         engine.language = locale; engine.setSpeechRate(rate)
+        val parts = speechChunks(text)
         val target = if (Build.VERSION.SDK_INT >= 28) AudioRoute.speechTarget(app) else null
-        val id = (if (target != null) "file-" else "aingel-") + System.nanoTime()
-        if (onDone != null) synchronized(done) { done[id] = onDone }
-        if (target == null) { engine.speak(text, TextToSpeech.QUEUE_FLUSH, null, id); return }
+        if (target == null) {
+            parts.forEachIndexed { index, part ->
+                val id = "aingel-${System.nanoTime()}-$index"
+                if (index == parts.lastIndex && onDone != null) synchronized(done) { done[id] = onDone }
+                engine.speak(part, if (index == 0) TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD, null, id)
+            }
+            return
+        }
+        synchronized(upcoming) { upcoming.addAll(parts.drop(1)); upcomingDone = onDone }
+        synthesize(engine, parts.first(), target)
+    }
+    private fun synthesize(engine: TextToSpeech, part: String, target: AudioDeviceInfo) {
+        val id = "file-" + System.nanoTime()
+        synchronized(upcoming) { if (upcoming.isEmpty()) upcomingDone?.let { callback -> synchronized(done) { done[id] = callback } } }
         synchronized(routes) { routes[id] = target }
-        engine.synthesizeToFile(text, null, File(app.cacheDir, "$id.wav"), id)
+        engine.synthesizeToFile(part, null, File(app.cacheDir, "$id.wav"), id)
+    }
+    private fun next(target: AudioDeviceInfo) {
+        val part = synchronized(upcoming) { upcoming.removeFirstOrNull() } ?: return
+        synthesize(tts ?: return, part, target)
     }
 
     private fun play(id: String) {
@@ -77,7 +97,7 @@ class AingelVoice(context: Context, private val onReady: (Boolean) -> Unit = {})
                 setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ASSISTANT).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
                 setDataSource(file.path); prepare()
                 if (Build.VERSION.SDK_INT >= 28) setPreferredDevice(device)
-                setOnCompletionListener { file.delete(); release(); if (player === it) player = null; finished(id) }
+                setOnCompletionListener { file.delete(); release(); if (player === it) player = null; finished(id); next(device) }
                 start()
             }
             tickPulse()
@@ -96,6 +116,7 @@ class AingelVoice(context: Context, private val onReady: (Boolean) -> Unit = {})
     }
 
     fun stop() {
+        synchronized(upcoming) { upcoming.clear(); upcomingDone = null }
         synchronized(done) { done.clear() }
         tts?.stop()
         player?.let { try { it.stop() } catch (_: Exception) {}; it.release() }; player = null

@@ -6,6 +6,16 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ConsentGuardTest {
+    @Test fun onlyAReallyOpenCaptureIsReportedAsStopped() {
+        // A mode just chosen and still checking (nothing open): no "stopped", its own check says "not authorized".
+        assertNull(stoppedCapture(cameraOpen = false, cameraAllowed = false, micOpen = false, micAllowed = false))
+        // Open and still allowed: nothing to report.
+        assertNull(stoppedCapture(cameraOpen = true, cameraAllowed = true, micOpen = true, micAllowed = true))
+        // Open and no longer allowed: that one is closed and reported.
+        assertEquals(Capture.CAMERA, stoppedCapture(cameraOpen = true, cameraAllowed = false, micOpen = false, micAllowed = false))
+        assertEquals(Capture.MICROPHONE, stoppedCapture(cameraOpen = false, cameraAllowed = false, micOpen = true, micAllowed = false))
+    }
+
     private fun consent(epoch: Long, camera: String, microphone: String) = JSONObject().put("subject_status", "self").put("epoch", epoch).put("is_subject", true)
         .put("purposes", JSONArray()
             .put(JSONObject().put("id", "camera_local").put("to", "local").put("status", camera))
@@ -63,7 +73,8 @@ class ConsentGuardTest {
 
     @Test fun refusalCodesStopCapturesButOtherFailuresRetry() {
         for (code in listOf("consent_changed", "privacy_review_required", "camera_consent_revoked", "private_test_consent_required",
-                "legal_review_required", "authentication_required", "session_changed")) assertTrue(code, stopsCapture(code))
+                "legal_review_required", "authentication_required", "session_changed",
+                "territory_declaration_required", "meta_territory_restricted")) assertTrue(code, stopsCapture(code))
         for (code in listOf("consent_subject_only", "video_busy", "server_unavailable", "throttled", "clip_invalid", "image_required", "")) assertFalse(code, stopsCapture(code))
     }
 

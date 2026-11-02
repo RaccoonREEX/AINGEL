@@ -10,6 +10,10 @@ aingel.mapatechstudio.com {
             # proxy is in front, establish its trusted-proxy policy first.
             header_up X-Real-IP {http.request.remote.host}
             header_up X-Forwarded-Proto https
+            # Meta Restricted Territories (backend care.territory): a client must never supply the connection's
+            # country. Removed here; only if a trusted GeoIP source is added, replace this line with one that sets
+            # it (e.g. header_up X-AINGEL-Country {geoip-country-code}) and set AINGEL_GEO_COUNTRY_HEADER.
+            header_up -X-AINGEL-Country
         }
     }
 

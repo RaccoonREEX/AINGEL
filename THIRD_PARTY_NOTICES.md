@@ -1,13 +1,15 @@
 # Third-party notices
 
 AINGEL is the work of its own authors. This file preserves the notices of third-party components it
-uses or adapts. Declared licences of every npm, Android and Python dependency are listed in
+uses or adapts.
+AINGEL's own code and assets are proprietary, all rights reserved (see LICENSE); the components below
+remain under their own licences, which this does not change. Declared licences of every npm, Android and Python dependency are listed in
 [`docs/THIRD_PARTY_INVENTORY.md`](docs/THIRD_PARTY_INVENTORY.md); models, datasets and services in
 [`docs/THIRD_PARTY_NOTICES.md`](docs/THIRD_PARTY_NOTICES.md). Full licence texts are in
 [`docs/licenses/`](docs/licenses/). Readiness review: [`docs/PUBLICATION_READINESS.md`](docs/PUBLICATION_READINESS.md).
 This is not a completed legal audit.
 
-What is distributed to end users (reviewed 2026-10-30):
+What is distributed to end users (reviewed 2026-11-02):
 
 - Web bundle (browser): React, ReactDOM, scheduler, three.js, AINGEL code (incl. the AingelOrb renderer).
   Montserrat is fetched from Google Fonts, not bundled.
@@ -16,6 +18,8 @@ What is distributed to end users (reviewed 2026-10-30):
   libyuv (BSD-3-Clause) inside CameraX `camera-core`; Public Suffix List data (MPL-2.0) inside OkHttp;
   Montserrat font files (OFL-1.1); AINGEL code and assets. The APK copy of this notice is
   `android/app/src/main/assets/licenses/THIRD_PARTY_NOTICES.md`.
+- AINGEL Desktop for Windows and its installer: AINGEL code only, built without NuGet packages; it runs on
+  the Microsoft .NET 8 Desktop Runtime, which the person installs separately under Microsoft's licence.
 - Server only (not distributed unless a container image is published): Python packages, Meta SAM parser,
   YuNet/SFace weights (downloaded at setup, never committed), MedlinePlus index, sign clip catalogue.
 

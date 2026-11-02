@@ -15,6 +15,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework.test import APIClient
 
 from .consent import TERMS_VERSION
+from . import territory
 from .models import AccountPolicy
 from .models import Invitation, Membership, Memory, Message, Profile, Routine
 
@@ -414,7 +415,8 @@ class AuthTests(TestCase):
             self.assertEqual((refused.status_code, refused.json()), (400, {"error": "adult_declaration_required"}))
         valid = self.client.post(
             "/api/v1/auth/register/",
-            {"username": "new-user", "password": "Synthetic!Long-19483", "adult": True, "terms_version": TERMS_VERSION},
+            {"username": "new-user", "password": "Synthetic!Long-19483", "adult": True, "terms_version": TERMS_VERSION,
+             "territory": "outside_restricted", "territory_version": territory.POLICY_VERSION},
             format="json",
             HTTP_X_CSRFTOKEN=token,
         )
@@ -422,6 +424,7 @@ class AuthTests(TestCase):
         self.assertTrue(valid.json()["user"]["adult_declared"])
         policy = AccountPolicy.objects.get(user__username="new-user")
         self.assertEqual((policy.terms_version, policy.declaration), (TERMS_VERSION, "self_declaration"))
+        self.assertEqual((policy.territory, policy.territory_version), ("outside_restricted", territory.POLICY_VERSION))
 
     def test_sensitive_api_responses_not_cached(self):
         self.assertEqual(

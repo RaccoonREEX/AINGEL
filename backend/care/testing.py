@@ -1,13 +1,16 @@
 """Test helpers for the age and consent policy (care.consent). Not used by the application."""
 
+from . import territory
 from .consent import TERMS_VERSION, declare_adult, decide
 
 META_PURPOSES = ("meta_conversation", "meta_photos", "meta_video", "meta_voice", "profile_personalization")
 
 
 def adult(user):
-    """The account declared it is 18 or older (as registration requires)."""
+    """An eligible account, as registration leaves it: it declared it is 18 or older and not located in a Meta
+    Restricted Territory (care.territory)."""
     declare_adult(user, TERMS_VERSION)
+    territory.declare(user, territory.OUTSIDE)
     return user
 
 

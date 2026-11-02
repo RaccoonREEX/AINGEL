@@ -343,9 +343,9 @@ export const es = {
   lastReported: "La última observación registrada indica",
   evidenceMode: "Consulta local de datos guardados",
   seeIntro:
-    "Describe una imagen con Meta Muse Spark 1.3 y recibe una respuesta breve.",
+    "Describe una imagen con Meta Muse Spark 1.3 con el nivel de detalle que elijas, y sigue preguntando sobre ella.",
   syntheticOnly:
-    "La imagen de formas incluida es una prueba sintética. Para probar una imagen propia en el entorno privado, confirma su uso antes de cada envío y habilita la cámara y Meta en Personalizar. El servidor decide si permite la prueba.",
+    "Las imágenes sintéticas incluidas las dibuja el servidor y no muestran a personas reales. Para probar una imagen propia en el entorno privado, confirma su uso antes de cada envío y habilita la cámara y Meta en Personalizar. El servidor decide si permite la prueba.",
   chooseImage: "Seleccionar imagen",
   useFixture: "Usar imagen sintética incluida",
   syntheticConsent:
@@ -382,6 +382,10 @@ export const es = {
     "La fecha de observación debe estar dentro de los últimos 7 días y no puede estar en el futuro.",
   errorAdult:
     "AINGEL es solo para personas adultas. Esta cuenta debe declarar que tiene 18 años o más.",
+  errorTerritoryDeclare:
+    "Antes de usar la IA de Meta, indica si estás en alguno de los territorios donde Meta no permite su servicio.",
+  errorTerritory:
+    "AINGEL no puede usar la IA de Meta desde los territorios donde Meta no permite su servicio.",
   errorMinor:
     "AINGEL no admite perfiles de menores de 18 años, ni siquiera con la autorización de una persona adulta.",
   errorSubjectOnly:
@@ -742,9 +746,9 @@ const en: Record<keyof typeof es, string> = {
   lastReported: "The latest recorded observation says",
   evidenceMode: "Local saved-data lookup",
   seeIntro:
-    "Describe an image with Meta Muse Spark 1.3 and receive a short response.",
+    "Describe an image with Meta Muse Spark 1.3 at the level of detail you choose, and keep asking about it.",
   syntheticOnly:
-    "The included shapes image is a synthetic test. To test your own image in the private environment, confirm each submission and enable camera and Meta in Personalize. The server decides whether the test is allowed.",
+    "The included synthetic images are drawn by the server and show no real people. To test your own image in the private environment, confirm each submission and enable camera and Meta in Personalize. The server decides whether the test is allowed.",
   chooseImage: "Choose image",
   useFixture: "Use included synthetic image",
   syntheticConsent:
@@ -781,6 +785,10 @@ const en: Record<keyof typeof es, string> = {
     "Observation time must be within the last 7 days and cannot be in the future.",
   errorAdult:
     "AINGEL is for adults only. This account must declare that it is 18 or older.",
+  errorTerritoryDeclare:
+    "Before using Meta's AI, say whether you are in one of the territories where Meta does not allow its service.",
+  errorTerritory:
+    "AINGEL cannot use Meta's AI from the territories where Meta does not allow its service.",
   errorMinor:
     "AINGEL does not support profiles for people under 18, not even with an adult's authorization.",
   errorSubjectOnly:

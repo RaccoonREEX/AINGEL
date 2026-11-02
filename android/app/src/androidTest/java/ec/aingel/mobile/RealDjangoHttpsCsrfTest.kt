@@ -72,7 +72,7 @@ class RealDjangoHttpsCsrfTest {
         // A real write: the transport sends X-CSRFToken and the same-origin Origin header; Django accepts it.
         val username = "https-check-" + UUID.randomUUID().toString().take(8)
         val registered = transport.request("auth/register/", "POST", JSONObject().put("username", username)
-            .put("password", "Https-Check-" + UUID.randomUUID()).put("adult", true).put("terms_version", terms)) as JSONObject
+            .put("password", "Https-Check-" + UUID.randomUUID()).put("adult", true).put("terms_version", terms).put("territory", TERRITORY_OUTSIDE).put("territory_version", session.getString("territory_version"))) as JSONObject
         assertEquals(username, registered.getJSONObject("user").getString("username"))
         assertTrue("the session cookie is Secure too", synchronized(cookies.all) { cookies.all.single { it.name == "sessionid" }.secure })
 

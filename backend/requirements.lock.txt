@@ -41,3 +41,5 @@ zope.interface==8.7
 psycopg==3.2.10
 psycopg-binary==3.2.10
 redis==6.4.0
+pypdf==6.21.4
+pypdfium2==4.30.0

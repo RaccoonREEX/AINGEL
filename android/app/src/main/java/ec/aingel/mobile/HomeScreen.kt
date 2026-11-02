@@ -26,6 +26,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.runtime.*
@@ -69,6 +70,8 @@ private data class Answer(
     val web: List<Pair<String, String>> = emptyList(),
     /** App feature the model asked this phone to run (name, arguments) instead of answering in words. */
     val action: Pair<String, JSONObject>? = null,
+    /** A deep-vision answer whose picture the server keeps for follow-up questions (backend assistance.vision). */
+    val followUp: Boolean = false,
 )
 /** App features offered to the model as tools (backend assistance.conversation.APP_ACTIONS). */
 private val APP_ACTIONS = listOf("describe_surroundings", "find_object", "start_continuous_watch", "stop_continuous_watch", "listen_and_sign", "open_sign_translator")
@@ -129,6 +132,8 @@ private const val MAX_MODEL_PAIRS = 5
     val resumed = lifecycleState.isAtLeast(Lifecycle.State.RESUMED)
     var vision by remember { mutableStateOf(false) }
     var capture by remember { mutableStateOf<ImageCapture?>(null) }
+    var recognizing by remember { mutableStateOf(false) }
+    var recognizedNote by remember { mutableStateOf<String?>(null) }
     var seeking by remember { mutableStateOf("") }
     var nextId by remember { mutableLongStateOf(1L) }
     // Continuous voice conversation: after each answer AINGEL listens again, until 25 s pass with nobody speaking.
@@ -152,6 +157,7 @@ private const val MAX_MODEL_PAIRS = 5
     var signGuard by remember { mutableStateOf<Job?>(null) }  // reopens listening if the hands never report the end
     var visionJob by remember { mutableStateOf<Job?>(null) }  // a look in flight, cancelled if the camera grant goes
     var visionPending by remember { mutableStateOf<Long?>(null) }  // its question, answered with why it stopped
+    var visionSession by remember { mutableStateOf<Pair<String, Long>?>(null) }  // follow-ups about the last picture: (token, ends at)
     var speechAsk by remember { mutableStateOf<(() -> Unit)?>(null) }  // listening that waits for this account's decision
     val watch by WatchState.status.collectAsState()
     val str = { id: Int -> context.getString(id) }
@@ -262,6 +268,7 @@ private const val MAX_MODEL_PAIRS = 5
 
     var listenAgain: () -> Unit = {}  // set below, once startListening exists
     var runAction: (String, JSONObject, String) -> Unit = { _, _, _ -> }  // set below, once the modes exist
+    var followVision: (String) -> Unit = {}  // set below, once looking exists
     fun reply(id: Long, answer: Answer?) {
         val index = thread.indexOfFirst { it.id == id }
         if (index >= 0) thread[index] = thread[index].copy(answer = answer)
@@ -284,6 +291,8 @@ private const val MAX_MODEL_PAIRS = 5
             CameraCommand.WATCH_STOP -> { runAction("stop_continuous_watch", JSONObject(), text); return }
             null -> {}
         }
+        val session = visionSession
+        if (session != null && System.currentTimeMillis() < session.second && thread.lastOrNull()?.answer?.followUp == true) { followVision(text); return }
         val id = nextId++
         val history = thread.toList()
         thread.add(Exchange(id, text, null)); notice = null; phase = AingelOrbState.THINKING
@@ -314,6 +323,28 @@ private const val MAX_MODEL_PAIRS = 5
         }
     }
 
+    /** Experimental: AINGEL tries to recognize the signs made in front of the camera and adds them to the message. */
+    fun recognizeSigns() {
+        val use = capture ?: return
+        recognizing = true; recognizedNote = null; phase = AingelOrbState.THINKING
+        visionJob = scope.launch {
+            val note = try {
+                val result = model.recognizeSigns(use.signFrames(context))
+                val ids = recognizedSigns(result)
+                when {
+                    result.optString("mode") == "mock" -> str(R.string.ui_signs_recognize_mock)
+                    ids.isEmpty() -> str(R.string.ui_signs_recognize_none)
+                    else -> { message.addAll(ids); str(R.string.ui_signs_recognize_done) }
+                }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (e: Exception) {
+                // A refusal of the camera grant closes the camera, as when describing.
+                if (e is ApiFailure && stopsCapture(e.code)) { vision = false; capture = null; str(R.string.capture_camera_stopped) } else str(R.string.ui_signs_recognize_failed)
+            }
+            recognizing = false; phase = AingelOrbState.IDLE; recognizedNote = note
+        }
+    }
+
     /** One-off capture of the full frame; sent only with the image consent and never stored. */
     /** Message for a failed look; a refusal of the person's camera grant also closes the camera (a new grant reopens it). */
     fun visionFailure(e: Exception): Int = when {
@@ -323,6 +354,31 @@ private const val MAX_MODEL_PAIRS = 5
         e is ApiFailure && e.code == "privacy_review_required" -> R.string.ui_vision_need_consent
         else -> R.string.ui_vision_failed
     }
+    /** A deep-vision answer: the caution about moving only for scenes, not for drawings, pages or screens. */
+    fun visionAnswer(result: JSONObject): Answer {
+        val mock = result.optString("mode") == "mock"
+        val text = result.optString("text")
+        val caution = if (result.optString("task", "general") == "general") " " + str(R.string.ui_vision_caution) else ""
+        return Answer(text + caution, text, origin = Origin.VISION, followUp = visionSession != null,
+            source = if (mock) str(R.string.ui_src_vision_mock) else context.getString(R.string.ui_src_vision_session, result.optString("model", "Meta")))
+    }
+    /** A question about the picture of the last visual answer, which the server still holds (nothing new is captured). */
+    fun askVision(question: String) {
+        val token = visionSession?.first ?: return
+        val id = nextId++
+        thread.add(Exchange(id, question, null)); notice = null; composerOpen = true; phase = AingelOrbState.THINKING
+        visionJob = scope.launch {
+            val answer = try { visionAnswer(model.describeVision(null, question, token)) }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (e: Exception) {
+                if (e is ApiFailure && endsVisionSession(e.code)) visionSession = null
+                val message = if (e is ApiFailure && e.code == "visual_session_expired") str(R.string.ui_vision_session_expired) else str(visionFailure(e))
+                Answer(message, message, source = str(R.string.ui_src_local), origin = Origin.NOTICE)
+            }
+            reply(id, answer)
+        }
+    }
+    followVision = ::askVision
     fun look(objectName: String?, question: String? = null) {
         val use = capture ?: return
         val id = nextId++
@@ -333,6 +389,12 @@ private const val MAX_MODEL_PAIRS = 5
         visionJob = scope.launch {
             val caution = str(R.string.ui_vision_caution)
             val answer = try {
+                // Describing goes to deep vision (the question sets the detail); finding an object stays on SAM.
+                if (objectName == null) {
+                    val result = model.describeVision(use.jpegFrame(context), question, null)
+                    visionSession = visionSessionOf(result, System.currentTimeMillis())
+                    visionAnswer(result)
+                } else run {
                 val result = model.analyzeFrame(use.jpegFrame(context), objectName)
                 val mock = result.optString("mode") == "mock"
                 val text = if (objectName == null) withKnownPeople(result, result.optString("text")) else if (mock) str(R.string.ui_vision_mock) else {
@@ -343,6 +405,7 @@ private const val MAX_MODEL_PAIRS = 5
                 }
                 Answer("$text $caution", text, origin = Origin.VISION,
                     source = if (mock) str(R.string.ui_src_vision_mock) else context.getString(R.string.ui_src_vision_meta, result.optString("model", "Meta")))
+                }
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (e: Exception) { str(visionFailure(e)).let { Answer(it, it, source = str(R.string.ui_src_local), origin = Origin.NOTICE) } }
             if (visionPending == id) visionPending = null
@@ -372,7 +435,11 @@ private const val MAX_MODEL_PAIRS = 5
             if (heard.isBlank()) silent() else { transcript = heard; silenceUntil = 0L; ask(heard) }
         }, onFailure = { error ->
             voice.stop()
-            if (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) silent()
+            // The phone's own recogniser lacked the language: the system's one needs this account's acceptance first.
+            if (error == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS && voice.needsAcceptance()) {
+                continuous = false; silenceUntil = 0L; phase = AingelOrbState.IDLE; speechAsk = { startListening() }
+            }
+            else if (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) silent()
             else if (retry && error in setOf(SpeechRecognizer.ERROR_RECOGNIZER_BUSY, SpeechRecognizer.ERROR_CLIENT, SpeechRecognizer.ERROR_SERVER_DISCONNECTED)) {
                 scope.launch { delay(600); startListening(false) }
             }
@@ -410,6 +477,15 @@ private const val MAX_MODEL_PAIRS = 5
     }
     var onHandsDone: () -> Unit = {}  // set below, once «Escuchar y traducir» exists
     fun sign(seq: List<String>) {
+        // Only validated LSEC signs move the hands (or AINGEL's designs, if the person chose illustrations): otherwise
+        // the heard text stays on screen, the gap is said, and listening goes on.
+        val plan = model.signPlan(seq)
+        if (seq.isNotEmpty() && plan is SignPlan.Blocked) {
+            phase = AingelOrbState.IDLE; signSeq = emptyList(); signing = false; signKey++
+            notice = if (plan.partial) context.getString(R.string.ui_signs_partial, plan.validated, plan.total) else str(R.string.ui_signs_unavailable_lsec)
+            if (mode == HomeMode.HEAR) onHandsDone()
+            return
+        }
         phase = AingelOrbState.IDLE; signSeq = seq; signing = seq.isNotEmpty(); signKey++
         signGuard?.cancel()
         if (mode == HomeMode.HEAR && signing) {
@@ -441,7 +517,8 @@ private const val MAX_MODEL_PAIRS = 5
         }, onFailure = { error ->
             voice.stop()
             if (mode == HomeMode.HEAR) {
-                if (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) again(400)
+                if (error == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS && voice.needsAcceptance()) { phase = AingelOrbState.IDLE; speechAsk = { hearListen() } }
+                else if (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) again(400)
                 else if (transientRecognizerError(error) && tries < 3) { modeJob?.cancel(); modeJob = scope.launch { delay(600); hearListen(tries + 1) } }
                 else { phase = AingelOrbState.IDLE; notice = str(R.string.ui_voice_failed) }
             }
@@ -523,9 +600,15 @@ private const val MAX_MODEL_PAIRS = 5
     RefreshConsentWhile(model, vision || phase == AingelOrbState.LISTENING || mode == HomeMode.HEAR || wakeIdle)
     // Decisions that no longer allow the camera or microphone close them here (the ViewModel stops watching and
     // captions); opening them again needs a new grant. Withdrawing the speech-service acceptance ends listening too.
+    // Only what was really open: a mode still checking before it opens leaves the refusal to that check
+    // («no ha autorizado»), instead of claiming the camera turned off and the person withdrew something.
     LaunchedEffect(s.consent, s.speechService) {
-        val camera = !mayStart(s.consent, Capture.CAMERA) && (vision || mode?.camera == true)
-        val microphone = (!mayStart(s.consent, Capture.MICROPHONE) || voice.needsAcceptance()) && (phase == AingelOrbState.LISTENING || mode == HomeMode.HEAR)
+        val cameraOpen = vision || visionPending != null
+        val micOpen = phase == AingelOrbState.LISTENING || (mode == HomeMode.HEAR && phase != AingelOrbState.IDLE)
+        val stopped = stoppedCapture(cameraOpen, mayStart(s.consent, Capture.CAMERA),
+            micOpen, mayStart(s.consent, Capture.MICROPHONE) && !voice.needsAcceptance())
+        val camera = cameraOpen && !mayStart(s.consent, Capture.CAMERA)
+        val microphone = micOpen && (!mayStart(s.consent, Capture.MICROPHONE) || voice.needsAcceptance())
         if (camera) {
             if (visionJob?.isActive == true) { visionJob?.cancel(); phase = AingelOrbState.IDLE }
             visionPending?.let { id -> visionPending = null; str(R.string.capture_camera_stopped).let { reply(id, Answer(it, it, source = str(R.string.ui_src_local), origin = Origin.NOTICE)) } }
@@ -533,7 +616,7 @@ private const val MAX_MODEL_PAIRS = 5
         }
         if (microphone) { voice.stop(); continuous = false; silenceUntil = 0L; if (phase == AingelOrbState.LISTENING) phase = AingelOrbState.IDLE }
         if ((camera && mode?.camera == true) || (microphone && mode == HomeMode.HEAR)) endMode()
-        if (camera || microphone) notice = str(if (camera) R.string.capture_camera_stopped else R.string.capture_microphone_stopped)
+        if (stopped != null) notice = str(if (stopped == Capture.CAMERA) R.string.capture_camera_stopped else R.string.capture_microphone_stopped)
     }
     // Watching that ended on its own (a refused authorization) says why here, once.
     LaunchedEffect(watch.stopped) { if (watch.stopped.isNotBlank() && !watch.running) { notice = watch.stopped; WatchState.change { it.copy(stopped = "") } } }
@@ -572,7 +655,11 @@ private const val MAX_MODEL_PAIRS = 5
             else cameraPermission.launch(Manifest.permission.CAMERA)
         }
     }
-    fun clearConversation() { settleJob?.cancel(); voice.stop(); model.stopSpeech(); continuous = false; silenceUntil = 0L; thread.clear(); notice = null; phase = AingelOrbState.IDLE }
+    fun clearConversation() {
+        settleJob?.cancel(); voice.stop(); model.stopSpeech(); continuous = false; silenceUntil = 0L; thread.clear(); notice = null; phase = AingelOrbState.IDLE
+        // Done with the picture: the server deletes it now instead of at the end of its session.
+        visionSession?.first?.let { token -> scope.launch { model.closeVision(token) } }; visionSession = null
+    }
     /** A short local answer in the conversation (spoken unless the feature speaks for itself). */
     fun localReply(question: String, text: String, speak: Boolean = true) {
         val id = nextId++
@@ -651,6 +738,8 @@ private const val MAX_MODEL_PAIRS = 5
                 T(longDate(profile.optString("locale", "es-EC"), zoneId), 13, color = Ui.Muted)
             }
             if (!menu) { HandButton { vision = false; onSigns() }; EyesButton(vision) { toggleVision() } }
+            // With the modes menu in the corner the eyes stay one tap away too: AINGEL looks through the camera.
+            else EyesButton(vision) { toggleVision() }
         }
     }
     val stage: @Composable () -> Unit = {
@@ -687,13 +776,13 @@ private const val MAX_MODEL_PAIRS = 5
                 T(stringResource(if (signing) R.string.ui_m_signing_mic_paused else if (phase == AingelOrbState.LISTENING) R.string.ui_st_listening else R.string.ui_st_idle), 18, FontWeight.Medium, Ui.Navy,
                     align = TextAlign.Center, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
                 if (heard.isNotBlank()) { Spacer(Modifier.height(6.dp)); T("«$heard»", 15, color = Ui.Muted, align = TextAlign.Center) }
-                Spacer(Modifier.height(10.dp)); DesignBadge()
+                Spacer(Modifier.height(10.dp)); DesignBadge(s.illustrativeSigns, s.validatedSigns.size)
                 notice?.let { Spacer(Modifier.height(12.dp)); Notice(it) }
                 Spacer(Modifier.weight(1f).heightIn(min = 20.dp)); StopButton { endMode() }
             }
             HomeMode.WRITE -> {
                 if (signing) T(stringResource(R.string.ui_m_signing), 18, FontWeight.Medium, Ui.Navy, align = TextAlign.Center, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
-                DesignBadge()
+                DesignBadge(s.illustrativeSigns, s.validatedSigns.size)
                 Spacer(Modifier.weight(1f).heightIn(min = 20.dp))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FieldInput(stringResource(R.string.ui_m_write_here), typedSigns, { typedSigns = it.take(200) }, Modifier.weight(1f), height = 52.dp)
@@ -707,6 +796,10 @@ private const val MAX_MODEL_PAIRS = 5
             HomeMode.SEE -> {
                 T(stringResource(R.string.ui_m_make_signs), 20, FontWeight.SemiBold, Ui.Navy, align = TextAlign.Center)
                 Spacer(Modifier.height(4.dp)); T(stringResource(R.string.ui_m_no_recognizer), 12, color = Ui.Muted, align = TextAlign.Center, lineHeight = 1.45f)
+                Spacer(Modifier.height(10.dp))
+                PrimaryButton(stringResource(if (recognizing) R.string.ui_signs_recognizing else R.string.ui_signs_recognize), height = 48.dp,
+                    enabled = capture != null && !recognizing) { recognizeSigns() }
+                recognizedNote?.let { Spacer(Modifier.height(6.dp)); T(it, 12, color = Ui.Muted, align = TextAlign.Center, lineHeight = 1.4f, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) }
                 Spacer(Modifier.height(12.dp))
                 SignBoard(spanish) { id -> message.add(id) }
                 val text = message.joinToString(" ") { signName(it, spanish).trim('¿', '?') }.replaceFirstChar { it.uppercase() }
@@ -798,7 +891,8 @@ private const val MAX_MODEL_PAIRS = 5
                     T(status, 14, FontWeight.Medium, Ui.Navy)
                 }
                 visionPanel()
-                thread.forEach { ex -> ExchangeView(ex, model, onSpeak = { phase = AingelOrbState.SPEAKING }, onStop = { phase = AingelOrbState.IDLE }, onAsk = { ask(it) }, phaseProvider = { phase }) }
+                thread.forEach { ex -> ExchangeView(ex, model, onSpeak = { phase = AingelOrbState.SPEAKING }, onStop = { phase = AingelOrbState.IDLE }, onAsk = { ask(it) }, phaseProvider = { phase },
+                    latest = ex === thread.last() && !busy) }
                 notice?.let { Spacer(Modifier.height(14.dp)); Notice(it) }
                 if (phase == AingelOrbState.LISTENING) Row(Modifier.fillMaxWidth().padding(top = 16.dp).semantics { liveRegion = LiveRegionMode.Polite },
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -845,9 +939,19 @@ private const val MAX_MODEL_PAIRS = 5
     }
 }
 
-@Composable private fun DesignBadge() {
+@Composable internal fun DesignBadge(illustrative: Boolean, validated: Int) {
     Box(Modifier.clip(RoundedCornerShape(50)).background(Color(0xFFFDF3DF)).padding(horizontal = 10.dp, vertical = 4.dp)) {
-        T(stringResource(R.string.ui_signs_design), 11, FontWeight.SemiBold, Color(0xFF7A5410), align = TextAlign.Center)
+        T(if (illustrative) stringResource(R.string.ui_signs_illustrative) else stringResource(R.string.ui_signs_validated_only, validated),
+            11, FontWeight.SemiBold, Color(0xFF7A5410), align = TextAlign.Center)
+    }
+}
+
+/** The person's choice to also see AINGEL's unvalidated sign designs, as illustrations. */
+@Composable internal fun IllustrativeSwitch(model: AingelViewModel, on: Boolean) {
+    Row(Modifier.fillMaxWidth().padding(top = 8.dp).toggleable(value = on, role = Role.Switch, onValueChange = { model.setIllustrativeSigns(it) }),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        T(stringResource(R.string.ui_signs_show_illustrative), 13, color = Ui.Text, lineHeight = 1.4f, modifier = Modifier.weight(1f))
+        Switch(checked = on, onCheckedChange = null)
     }
 }
 
@@ -864,7 +968,8 @@ private const val MAX_MODEL_PAIRS = 5
     }
 }
 
-@Composable private fun ExchangeView(ex: Exchange, model: AingelViewModel, onSpeak: () -> Unit, onStop: () -> Unit, onAsk: (String) -> Unit, phaseProvider: () -> AingelOrbState) {
+@Composable private fun ExchangeView(ex: Exchange, model: AingelViewModel, onSpeak: () -> Unit, onStop: () -> Unit, onAsk: (String) -> Unit, phaseProvider: () -> AingelOrbState,
+                                     latest: Boolean = false) {
     val uri = LocalUriHandler.current
     Column(Modifier.fillMaxWidth().padding(top = 18.dp)) {
         if (ex.question.isNotBlank()) Box(Modifier.align(Alignment.End).clip(RoundedCornerShape(16.dp, 16.dp, 4.dp, 16.dp)).background(Ui.Selected).padding(horizontal = 14.dp, vertical = 10.dp)) {
@@ -889,8 +994,14 @@ private const val MAX_MODEL_PAIRS = 5
                     Column { T(c.title, 14, FontWeight.SemiBold, maxLines = 2); if (c.meta.isNotBlank()) T(c.meta, 12, color = Ui.Muted, maxLines = 1) }
                 }
             }
-            if (a.offerLocal) Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(R.string.ui_suggest_today, R.string.ui_suggest_messages).forEach { id ->
+            // Follow-ups about the same picture: the server reads the level from these words (assistance.vision.classify).
+            val suggestions = when {
+                a.offerLocal -> listOf(R.string.ui_suggest_today, R.string.ui_suggest_messages)
+                a.followUp && latest -> listOf(R.string.ui_vision_more, R.string.ui_vision_deep)
+                else -> emptyList()
+            }
+            if (suggestions.isNotEmpty()) Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                suggestions.forEach { id ->
                     val label = stringResource(id)
                     Box(Modifier.clip(RoundedCornerShape(50)).border(1.dp, Ui.Control, RoundedCornerShape(50)).clickable(role = Role.Button) { onAsk(label) }.padding(horizontal = 14.dp, vertical = 9.dp)) { T(label, 12, FontWeight.Medium, Ui.Navy) }
                 }

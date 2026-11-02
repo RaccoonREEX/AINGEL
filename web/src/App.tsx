@@ -1,7 +1,8 @@
+import DesktopDownload from "./components/DesktopDownload";
 import { speakLocally } from "./components/aingel/browserSpeech";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { WithProfile } from "./ui";
-import Auth, { AdultDeclaration, Brand, type Who } from "./screens/Auth";
+import Auth, { AdultDeclaration, Brand, TerritoryDeclaration, territoryFields, type TerritoryPolicy, type Who } from "./screens/Auth";
 import { RedeemCode } from "./components/ConsentPanel";
 import Onboarding, { AcceptInvite } from "./screens/Onboarding";
 import Home from "./screens/Home";
@@ -37,9 +38,10 @@ type Tab =
   | "activity"
   | "tools"
   | "signs"
+  | "desktop"
   | "more";
 const primaryTabs: Tab[] = ["ask", "dashboard", "signs", "see", "hear", "memory", "messages", "circle"];
-const accountTabs: Tab[] = ["settings", "security", "familyFaces", "tools", "activity"];
+const accountTabs: Tab[] = ["settings", "security", "familyFaces", "tools", "desktop", "activity"];
 const mobileTabs: Tab[] = ["ask", "dashboard", "memory", "circle", "more"];
 type Task = () => Promise<void>;
 
@@ -60,6 +62,11 @@ export default function App() {
   // The terms the 18+ declaration refers to; sent back as-is (the server rejects a stale version).
   const [termsVersion, setTermsVersion] = useState("");
   const [speechVersion, setSpeechVersion] = useState("");
+  // Meta's Restricted Territories (backend care.territory): the policy version and the list, from the session.
+  const [territories, setTerritories] = useState<TerritoryPolicy>({ version: "", list: {} });
+  const keepTerritories = (session: Session) => {
+    if (session.territory_version) setTerritories({ version: session.territory_version, list: session.restricted_territories ?? {} });
+  };
   const [focusConsent, setFocusConsent] = useState(false);
   const [version, setVersion] = useState(0);
   const [homeKey, setHomeKey] = useState(0);
@@ -92,6 +99,7 @@ export default function App() {
         setUser(result.user);
         setTermsVersion(result.terms_version ?? "");
         setSpeechVersion(result.speech_service_version ?? "");
+        keepTerritories(result);
         setMfaRequired(!!result.mfa_required);
         if (result.user) await loadProfiles();
       })
@@ -108,6 +116,8 @@ export default function App() {
     setUser(session.user);
     if (session.terms_version) setTermsVersion(session.terms_version);
     if (session.speech_service_version) setSpeechVersion(session.speech_service_version);
+    keepTerritories(session);
+    if (session.user?.territory !== "outside_restricted") return;  // the territory gate comes first
     await loadProfiles();
   };
   /** After a code: the profile is now this account's own (role subject); open its permissions. */
@@ -164,7 +174,7 @@ export default function App() {
     window.scrollTo({ top: 0 });
   };
   const label = (x: Tab) =>
-    x === "ask" ? L("Asistente", "Assistant") : x === "more" ? L("Más", "More") : x === "tools" ? L("Conversación IA", "AI chat") : x === "signs" ? L("Traductor de señas", "Sign translator") : t(x);
+    x === "ask" ? L("Asistente", "Assistant") : x === "more" ? L("Más", "More") : x === "tools" ? L("Conversación IA", "AI chat") : x === "signs" ? L("Traductor de señas", "Sign translator") : x === "desktop" ? L("AINGEL para tu computadora", "AINGEL for your computer") : t(x);
   const visible = (x: Tab) =>
     (x !== "activity" || profile?.role === "owner") &&
     !(x === "see" && profile?.preferences.visual_assistance === false) &&
@@ -180,7 +190,7 @@ export default function App() {
       <div className={rootClass}>
         <a href="#main" className="skip">{L("Saltar al contenido", "Skip to content")}</a>
         <Auth
-          t={t} locale={locale} setLocale={setLocale} busy={busy} error={error} mfaRequired={mfaRequired}
+          t={t} locale={locale} setLocale={setLocale} busy={busy} error={error} mfaRequired={mfaRequired} territories={territories}
           onLogin={(data) => void run(async () => signedIn(await api<Session>("auth/login/", "POST", data)))}
           onRegister={(data, extra) => void run(async () => { setSignup(extra); await signedIn(await api<Session>("auth/register/", "POST", { ...data, terms_version: termsVersion })); })}
           onMfa={(code) => void run(async () => signedIn(await api<Session>("auth/mfa/verify/", "POST", { code })))}
@@ -198,6 +208,22 @@ export default function App() {
             const session = await api<Session>("auth/adult/", "POST", { adult: true, terms_version: termsVersion });
             setTermsVersion(session.terms_version ?? termsVersion);
             setUser(session.user);
+          })} />
+      </div>
+    );
+
+  // Meta's Restricted Territories: accounts from before the policy answer once; «inside» keeps AINGEL closed.
+  if (user.territory !== "outside_restricted")
+    return (
+      <div className={rootClass}>
+        <a href="#main" className="skip">{L("Saltar al contenido", "Skip to content")}</a>
+        <TerritoryDeclaration t={t} locale={locale} setLocale={setLocale} busy={busy} error={error} username={user.username}
+          current={user.territory ?? null} territories={territories} onLogout={logout}
+          onDeclare={(answer) => void run(async () => {
+            const session = await api<Session>("auth/territory/", "POST", territoryFields(answer, territories.version));
+            keepTerritories(session);
+            setUser(session.user);
+            if (session.user?.territory === "outside_restricted") await loadProfiles();
           })} />
       </div>
     );
@@ -262,7 +288,7 @@ export default function App() {
         ) : tab === "dashboard" ? (
           <div className="page page--wide"><Routines key={profile.id} {...context} profile={profile} version={version} onAsk={(q) => go("ask", q)} /></div>
         ) : tab === "more" ? (
-          <MorePage tabs={([...primaryTabs.filter((x) => !mobileTabs.includes(x)), "familyFaces", "tools"] as Tab[]).filter(visible)} account={["settings", "security", "activity"].filter((x) => visible(x as Tab)) as Tab[]} label={label} es={es} onGo={go} onSupport={() => setSupportOpen(true)} t={t} locale={locale} setLocale={setLocale} onLogout={logout} />
+          <MorePage tabs={([...primaryTabs.filter((x) => !mobileTabs.includes(x)), "familyFaces", "tools", "desktop"] as Tab[]).filter(visible)} account={["settings", "security", "activity"].filter((x) => visible(x as Tab)) as Tab[]} label={label} es={es} onGo={go} onSupport={() => setSupportOpen(true)} t={t} locale={locale} setLocale={setLocale} onLogout={logout} />
         ) : (
           <Page title={label(tab)} subtitle={`${profile.display_name} · ${t(profile.role)}`} badge={profile.ready ? undefined : t("draft")}>
             {!profile.ready && tab === "circle" && <p className="callout">{t("incomplete")}</p>}
@@ -393,6 +419,8 @@ function ProfileContent(props: WithProfile & { tab: Tab; version: number; focusC
       return <Memories {...props} />;
     case "tools":
       return <Ask {...props} />;
+    case "desktop":
+      return <DesktopDownload locale={props.locale} />;
     case "see":
       return <See {...props} />;
     case "hear":

@@ -31,6 +31,7 @@ from care.consent import meta_account_denial, meta_allowed, refused, still_curre
 from care.permissions import access, audit
 
 from . import synthetic
+from . import usage
 from .meta_quota import MetaQuotaError, reserve_meta_call
 from .persona import VISION_RULES, instructions as persona_instructions, profile_preferences, vision_guard
 
@@ -200,8 +201,9 @@ def describe_changes(clip, locale, previous, preferences, transport="inline", ba
     file_id = None
     try:
         # The same global, fail-closed Meta admission as every other call (assistance.meta_quota).
+        usage.admit()
         reserve_meta_call()
-    except MetaQuotaError as error:
+    except (MetaQuotaError, usage.BudgetExhausted) as error:
         raise VideoUnavailable(str(error)) from None
     try:
         with httpx.Client(timeout=60, follow_redirects=False) as client:
@@ -229,6 +231,8 @@ def describe_changes(clip, locale, previous, preferences, transport="inline", ba
             timings["meta_inference_ms"] = round((time.monotonic() - inference_started) * 1000)
             response.raise_for_status()
             data = response.json()
+            usage.record("video", "muse-spark-1.3", "minimal", data.get("usage"), timings["meta_inference_ms"], basis,
+                         data.get("status"))
     except (httpx.HTTPError, ValueError, KeyError, TypeError):
         raise VideoUnavailable("meta_unavailable") from None
     finally:

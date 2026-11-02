@@ -13,7 +13,8 @@ import { useCommunication } from "../Communication";
 import { useMediaQuery } from "../useMediaQuery";
 import { greetingKey, initials, longDate, summarizeToday } from "../today";
 import type { WithProfile } from "../ui";
-import type { CareMessage, Located, Memory, Routine, Scene } from "../types";
+import type { CareMessage, Located, Memory, Routine } from "../types";
+import type { VisionResult } from "../components/aingel/vision";
 
 type Card = { time?: string; title: string; meta: string };
 type Source = { title: string; url: string; source: string; downloaded_at: string };
@@ -390,6 +391,7 @@ export default function Home({ profile, t, locale, run, busy, date, speech: acco
     form.append("profile", profile.id);
     for (const [key, value] of Object.entries(testFields)) form.append(key, String(value));
     if (objectName) form.append("object_name", objectName);
+    else form.append("source_kind", "camera");
     const caution = L("No uses esta respuesta como guía segura para moverte.", "Don't rely on this answer to move around safely.");
     try {
       let answer: Answer;
@@ -402,8 +404,12 @@ export default function Home({ profile, t, locale, run, busy, date, speech: acco
         answer = { text: <>{text} <span className="muted">{caution}</span></>, spoken: text, origin: "vision",
           source: result.mode === "mock" ? L("Modo de prueba · imagen no enviada", "Test mode · image not sent") : L(`Meta ${result.model ?? "SAM"} · imagen no guardada`, `Meta ${result.model ?? "SAM"} · image not stored`) };
       } else {
-        const result = await request<Scene>("scene/", "POST", form);
-        answer = { text: <>{result.text} <span className="muted">{caution}</span></>, spoken: result.text, origin: "vision",
+        // Deep vision (assistance.vision). This screen asks no follow-ups, so the server's copy is deleted at once.
+        const result = await request<VisionResult>("vision/", "POST", form);
+        if (result.session) void api(`vision/sessions/${result.session}/`, "DELETE").catch(() => undefined);
+        // The caution about moving is for scenes, not for drawings, pages or screens.
+        const note = result.task === "general" ? <span className="muted">{caution}</span> : null;
+        answer = { text: <>{result.text} {note}</>, spoken: result.text, origin: "vision",
           source: result.mode === "mock" ? L("Modo de prueba · imagen no enviada", "Test mode · image not sent") : L("Meta Muse Spark · imagen no guardada", "Meta Muse Spark · image not stored") };
       }
       if (gen === turn.current) respond(id, answer);

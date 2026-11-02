@@ -11,6 +11,7 @@ from django.middleware.csrf import get_token
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_http_methods
 
+from . import territory
 from .consent import SPEECH_SERVICE_VERSION, TERMS_VERSION, adult_declared, decide_speech_service, declare_adult, speech_service_accepted
 
 
@@ -18,7 +19,7 @@ def session_data(request):
     return {
         "user": (
             {"id": request.user.id, "username": request.user.username, "adult_declared": adult_declared(request.user),
-             "speech_service": speech_service_accepted(request.user)}
+             "territory": territory.declared(request.user), "speech_service": speech_service_accepted(request.user)}
             if request.user.is_authenticated
             else None
         ),
@@ -26,6 +27,9 @@ def session_data(request):
         # Current terms the 18+ declaration refers to (care.consent): clients show and send it back.
         "terms_version": TERMS_VERSION,
         "speech_service_version": SPEECH_SERVICE_VERSION,
+        # Meta's Restricted Territories (care.territory): clients show the list and send the version back.
+        "territory_version": territory.POLICY_VERSION,
+        "restricted_territories": territory.RESTRICTED,
         "mfa_required": bool(
             request.session.get("mfa_pending_user")
             and request.session.get("mfa_pending_until", 0) > time.time()
@@ -63,6 +67,13 @@ def authenticate_user(request, register=False):
         # Only adults (18+) may hold an account: required by the Meta Model API terms, checked here, not only in the apps.
         return JsonResponse({"error": "adult_declaration_required"}, status=400)
     if register:
+        # Nor anyone located in a Meta Restricted Territory (care.territory): no account is created for them.
+        answer = territory.statement(data)
+        if answer is None:
+            return JsonResponse({"error": "territory_declaration_required"}, status=400)
+        if answer == territory.INSIDE or territory.restricted_country(territory.country_from_meta(request.META)):
+            return JsonResponse({"error": "territory_restricted"}, status=403)
+    if register:
         user = get_user_model()(username=username)
         try:
             user.full_clean(exclude=["password"])
@@ -70,6 +81,7 @@ def authenticate_user(request, register=False):
             user.set_password(password)
             user.save()
             declare_adult(user, TERMS_VERSION)
+            territory.declare(user, territory.OUTSIDE)
         except (ValidationError, IntegrityError):
             return JsonResponse({"error": "registration_invalid"}, status=400)
         login(request, user, backend="django.contrib.auth.backends.ModelBackend")
@@ -111,6 +123,24 @@ def declare(request):
     if not adult_statement(data):
         return JsonResponse({"error": "adult_declaration_required"}, status=400)
     declare_adult(request.user, TERMS_VERSION)
+    return JsonResponse(session_data(request))
+
+
+@csrf_protect
+@require_http_methods(["POST"])
+def declare_territory(request):
+    """The account says, for the current policy version, whether it is located in a Meta Restricted Territory: accounts
+    from before this policy, or someone who moved. «Inside» is kept and closes AINGEL's Meta features."""
+    if not request.user.is_authenticated:
+        return JsonResponse({"error": "authentication_required"}, status=401)
+    try:
+        data = json.loads(request.body)
+    except ValueError:
+        data = None
+    answer = territory.statement(data)
+    if answer is None:
+        return JsonResponse({"error": "territory_declaration_required"}, status=400)
+    territory.declare(request.user, answer)
     return JsonResponse(session_data(request))
 
 

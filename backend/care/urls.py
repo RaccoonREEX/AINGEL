@@ -1,9 +1,10 @@
 from django.urls import path
 
-from . import auth, consent_views, views, mfa, faces, knowledge, signs
+from . import auth, consent_views, views, mfa, faces, knowledge, sign_registry, signs
 from assistance.companion import chat
 from assistance.conversation import conversation
 from assistance.gloss import gloss
+from assistance.sign_recognition import recognize_signs
 from assistance.video import ClipSessionEndView, ClipView
 
 urlpatterns = [
@@ -12,6 +13,7 @@ urlpatterns = [
     path("auth/register/", auth.authenticate_user, {"register": True}),
     path("auth/logout/", auth.sign_out),
     path("auth/adult/", auth.declare),
+    path("auth/territory/", auth.declare_territory),
     path("auth/speech-service/", auth.speech_service),
     path("auth/mfa/verify/", mfa.verify_challenge),
     path("auth/mfa/status/", mfa.mfa_status),
@@ -33,9 +35,12 @@ urlpatterns = [
     path("vision/clip/", ClipView.as_view()),
     path("vision/clip/end/", ClipSessionEndView.as_view()),
     path("consent/purposes/", consent_views.purposes),
+    path("signs/registry/", sign_registry.registry),
+    path("signs/feedback/", sign_registry.feedback),
     path("profiles/<uuid:profile_id>/signs/catalog/", signs.catalog),
     path("profiles/<uuid:profile_id>/signs/lookup/", signs.lookup),
     path("profiles/<uuid:profile_id>/signs/gloss/", gloss),
+    path("profiles/<uuid:profile_id>/signs/recognize/", recognize_signs),
     path("profiles/<uuid:profile_id>/signs/clips/<str:clip_id>/", signs.clip_content),
     path("profiles/<uuid:profile_id>/circle/", views.circle),
     path("profiles/<uuid:profile_id>/circle/<uuid:member_id>/", views.membership),

@@ -9,6 +9,7 @@ Limits are never raised by these tests: they are set low on purpose.
 """
 
 import os
+from types import SimpleNamespace
 import threading
 import time
 import uuid
@@ -26,7 +27,7 @@ from care.testing import adult
 from . import synthetic
 from .companion import CompanionUnavailable, call_spark
 from .conversation import ConversationRate
-from .meta_quota import MetaQuotaError, reserve_meta_call
+from .meta_quota import MetaQuotaError, bind_account, reserve_meta_call
 from .scene import SceneUnavailable, describe_scene
 
 DOWN = "redis://127.0.0.1:1/0"
@@ -81,8 +82,10 @@ class RedisUnavailableTests(TestCase):
         self.settings_override.enable()
         self.env = patch.dict(os.environ, META)
         self.env.start()
+        bind_account(SimpleNamespace(pk=1))  # as an endpoint's meta_account_denial does
 
     def tearDown(self):
+        bind_account(None)
         self.env.stop()
         self.settings_override.disable()
 
@@ -132,11 +135,11 @@ class RealRedisTests(TestCase):
         cache = caches["meta_quota"]
         return cache.make_key("aingel:meta-quota:minute"), cache.make_key("aingel:meta-quota:day")
 
-    def reserve_all(self, attempts):
+    def reserve_all(self, attempts, account=1):
         outcomes = []
         for _ in range(attempts):
             try:
-                reserve_meta_call()
+                reserve_meta_call(account=account)
                 outcomes.append("ok")
             except MetaQuotaError as error:
                 outcomes.append(str(error))
@@ -156,7 +159,7 @@ class RealRedisTests(TestCase):
             def one():
                 start.wait()
                 try:
-                    reserve_meta_call()
+                    reserve_meta_call(account=threading.get_ident() % 5)
                     results.append(True)
                 except MetaQuotaError:
                     results.append(False)
@@ -186,11 +189,19 @@ class RealRedisTests(TestCase):
     def test_per_account_limits_are_per_account(self):
         assert_per_account_limit(self)
 
+    def test_meta_quota_per_account_on_real_redis(self):
+        """Several accounts on real Redis: each has its own counters, and the platform's limit is shared."""
+        with override_settings(AINGEL_META_LIMIT_PER_MINUTE=100, AINGEL_META_LIMIT_PER_DAY=6,
+                               AINGEL_META_USER_LIMIT_PER_MINUTE=2, AINGEL_META_USER_LIMIT_PER_DAY=50):
+            self.assertEqual(self.reserve_all(3, account=101), ["ok", "ok", "meta_account_quota_exceeded"])
+            self.assertEqual(self.reserve_all(2, account=102), ["ok", "ok"])  # not affected by account 101
+            self.assertEqual(self.reserve_all(3, account=103), ["ok", "ok", "meta_quota_exceeded"])  # platform day full
+
     def test_losing_redis_mid_run_keeps_failing_closed(self):
         self.assertEqual(self.reserve_all(1), ["ok"])
         with override_settings(CACHES=redis_caches(DOWN, self.prefix)):
             with self.assertRaises(MetaQuotaError) as raised:
-                reserve_meta_call()
+                reserve_meta_call(account=1)
         self.assertEqual(str(raised.exception), "meta_quota_unavailable")
         time.sleep(0)  # the real server still holds only the first reservation
         client = caches["meta_quota"]._cache.get_client(write=True)

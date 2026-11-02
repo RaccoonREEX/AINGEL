@@ -116,6 +116,9 @@ private const val CHEVRON_PATH = "M6 9l6 6 6-6"
     var camera by remember { mutableStateOf(false) }
     val message = remember { mutableStateListOf<String>() }
     var text by remember { mutableStateOf("") }
+    var signCapture by remember { mutableStateOf<androidx.camera.core.ImageCapture?>(null) }
+    var recognizing by remember { mutableStateOf(false) }
+    var recognizedNote by remember { mutableStateOf<String?>(null) }
     var shown by remember { mutableStateOf(false) }
     var moodJob by remember { mutableStateOf<Job?>(null) }
     val str = { id: Int -> context.getString(id) }
@@ -130,7 +133,16 @@ private const val CHEVRON_PATH = "M6 9l6 6 6-6"
     }
 
     fun settle(state: AingelOrbState, ms: Long) { moodJob?.cancel(); orb = state; moodJob = scope.launch { delay(ms); orb = AingelOrbState.IDLE } }
-    fun sign(ids: List<String>) { moodJob?.cancel(); orb = AingelOrbState.IDLE; seq = ids; current = -1; playKey++ }
+    var blocked by remember { mutableStateOf<SignPlan.Blocked?>(null) }
+    LaunchedEffect(Unit) { model.loadSignRegistry() }
+    /** Animates [ids] only if all are validated in LSEC, or the person chose illustrations (returns false otherwise). */
+    fun sign(ids: List<String>): Boolean {
+        moodJob?.cancel(); orb = AingelOrbState.IDLE
+        val plan = model.signPlan(ids)
+        if (plan is SignPlan.Blocked) { seq = emptyList(); blocked = plan; return false }
+        blocked = null; seq = ids; current = -1; playKey++
+        return true
+    }
     fun onSign(i: Int) {
         current = i
         // Expression of the sign being made; happy once the phrase is signed ("Entendido").
@@ -143,11 +155,11 @@ private const val CHEVRON_PATH = "M6 9l6 6 6-6"
             // By meaning first (Meta); the word-by-word rule when Meta is not available.
             val meant = model.signsFor(value)
             if (heard != value) return@launch  // a newer sentence came in meanwhile
-            if (!meant.isNullOrEmpty()) { byMeaning = true; result = "signing"; sign(meant); return@launch }
+            if (!meant.isNullOrEmpty()) { byMeaning = true; result = if (sign(meant)) "signing" else "not-validated"; return@launch }
             val b = buildSentence(value)
             built = b?.words ?: emptyList()
             if (b == null) { result = "unsupported"; settle(AingelOrbState.CONFUSED, 3500); return@launch }
-            result = "signing"; sign(b.seq)
+            result = if (sign(b.seq)) "signing" else "not-validated"
         }
     }
     fun micBlocked() = !mayStart(model.state.value.consent, Capture.MICROPHONE) || voice.needsAcceptance()
@@ -163,8 +175,12 @@ private const val CHEVRON_PATH = "M6 9l6 6 6-6"
                 if (said.isBlank()) { result = "no-speech"; settle(AingelOrbState.CONFUSED, 3000) } else interpret(said)
             }, onFailure = { error ->
                 voice.stop()
+                // The phone's own recogniser lacked the language: the system's one needs this account's acceptance first.
+                if (error == android.speech.SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS && voice.needsAcceptance()) {
+                    listening = false; orb = AingelOrbState.IDLE; speechAsk = { listen() }
+                }
                 // Right after leaving home the microphone may still be closing: try again before giving up.
-                if (transientRecognizerError(error) && tries < 3 && listening) scope.launch { delay(600); if (listening) begin(tries + 1) }
+                else if (transientRecognizerError(error) && tries < 3 && listening) scope.launch { delay(600); if (listening) begin(tries + 1) }
                 else {
                     listening = false
                     result = if (error == android.speech.SpeechRecognizer.ERROR_NO_MATCH || error == android.speech.SpeechRecognizer.ERROR_SPEECH_TIMEOUT) "no-speech" else "unavailable"
@@ -186,6 +202,26 @@ private const val CHEVRON_PATH = "M6 9l6 6 6-6"
     }
     fun say(value: String) { if (value.isNotBlank() && model.speak(value) { orb = AingelOrbState.IDLE }) orb = AingelOrbState.SPEAKING }
     fun add(id: String) { message.add(id); sign(listOf(id)); text = message.joinToString(" ") { label(it) } }
+    /** Experimental: AINGEL tries to recognize the signs made in front of the camera and adds them to the message. */
+    fun recognize() {
+        val use = signCapture ?: return
+        recognizing = true; recognizedNote = null; orb = AingelOrbState.THINKING
+        scope.launch {
+            recognizedNote = try {
+                val result = model.recognizeSigns(use.signFrames(context))
+                val ids = recognizedSigns(result)
+                when {
+                    result.optString("mode") == "mock" -> str(R.string.ui_signs_recognize_mock)
+                    ids.isEmpty() -> str(R.string.ui_signs_recognize_none)
+                    else -> { message.addAll(ids); text = message.joinToString(" ") { label(it) }; str(R.string.ui_signs_recognize_done) }
+                }
+            } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+            catch (e: ApiFailure) {
+                if (stopsCapture(e.code)) { camera = false; str(R.string.capture_camera_stopped) } else str(R.string.ui_signs_recognize_failed)
+            } catch (_: Exception) { str(R.string.ui_signs_recognize_failed) }
+            recognizing = false; orb = AingelOrbState.IDLE
+        }
+    }
 
     val status = when {
         listening -> str(R.string.ui_st_listening)
@@ -196,6 +232,8 @@ private const val CHEVRON_PATH = "M6 9l6 6 6-6"
         result == "camera-consent" -> str(R.string.capture_camera_not_authorized)
         result == "mic-stopped" -> str(R.string.capture_microphone_stopped)
         result == "camera-stopped" -> str(R.string.capture_camera_stopped)
+        mode.signsOut && result == "not-validated" -> blocked?.takeIf { it.partial }?.let { context.getString(R.string.ui_signs_partial, it.validated, it.total) }
+            ?: str(R.string.ui_signs_unavailable_lsec)
         mode.signsOut -> str(when (result) {
             "signing" -> if (current >= 0) R.string.ui_signs_signing else R.string.ui_signs_done
             "thinking" -> R.string.ui_signs_thinking; "unsupported" -> R.string.ui_signs_none_found; "no-speech" -> R.string.ui_signs_no_speech; "unavailable" -> R.string.ui_signs_voice_unavailable
@@ -219,7 +257,7 @@ private const val CHEVRON_PATH = "M6 9l6 6 6-6"
                 Box(Modifier.offset(x = (stageW - orbSize) / 2, y = cy - orbSize / 2)) {
                     OrbWithCamera(if (listening) AingelOrbState.LISTENING else orb, orbSize, reduced, vision = camera && !mode.signsOut, front = true,
                         level = if (listening) voice::level else if (orb == AingelOrbState.SPEAKING) model::speechLevel else { { 0f } },
-                        onCameraError = { camera = false; result = "camera-denied" })
+                        onCapture = { signCapture = it }, onCameraError = { camera = false; result = "camera-denied" })
                 }
                 if (hands3d) AingelHands3D(stageW, stageH, stageW / 2, cy, r, seq, playKey, speed, reduced, ::onSign) { hands3d = false }
                 else AingelSigner(stageW, stageH, stageW / 2, cy, r, seq, playKey, speed, reduced, ::onSign)
@@ -243,9 +281,10 @@ private const val CHEVRON_PATH = "M6 9l6 6 6-6"
                         T((if (speed == 1f) "1" else speed.toString().removePrefix("0")) + "×", 13, FontWeight.SemiBold, Ui.Navy)
                     }
                 }
-                Box(Modifier.clip(RoundedCornerShape(50)).background(Color(0xFFFDF3DF)).padding(horizontal = 10.dp, vertical = 4.dp)) {
-                    T(stringResource(R.string.ui_signs_design), 11, FontWeight.SemiBold, Color(0xFF7A5410), align = TextAlign.Center)
-                }
+                val signState by model.state.collectAsState()
+                DesignBadge(signState.illustrativeSigns, signState.validatedSigns.size)
+                IllustrativeSwitch(model, signState.illustrativeSigns)
+                if (!mode.signsOut && blocked != null) T(stringResource(R.string.ui_signs_board_unvalidated), 13, color = Ui.Muted, align = TextAlign.Center)
             }
         }
         // "Traducir" button with AINGEL's eyes: unfolds the four modes downwards.
@@ -310,7 +349,12 @@ private const val CHEVRON_PATH = "M6 9l6 6 6-6"
                         else cameraPermission.launch(Manifest.permission.CAMERA)
                     }
                 }
-                if (camera) T(stringResource(R.string.ui_signs_camera_private), 11, color = Ui.Muted, align = TextAlign.Center)
+                if (camera) {
+                    PrimaryButton(stringResource(if (recognizing) R.string.ui_signs_recognizing else R.string.ui_signs_recognize), height = 46.dp,
+                        enabled = signCapture != null && !recognizing) { recognize() }
+                    T(stringResource(R.string.ui_signs_camera_private), 11, color = Ui.Muted, align = TextAlign.Center)
+                }
+                recognizedNote?.let { T(it, 12, color = Ui.Muted, align = TextAlign.Center, lineHeight = 1.4f, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) }
                 T(stringResource(R.string.ui_signs_no_recognizer), 12, color = Ui.Muted, align = TextAlign.Center, lineHeight = 1.45f)
                 SIGN_BOARD.chunked(4).forEach { row ->
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

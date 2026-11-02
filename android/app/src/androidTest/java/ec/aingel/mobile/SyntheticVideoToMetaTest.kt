@@ -49,9 +49,10 @@ class SyntheticVideoToMetaTest {
 
         val api = ApiClient(context)
         api.configure(backend)
-        val terms = (api.request("auth/session/") as JSONObject).getString("terms_version")
+        val session = api.request("auth/session/") as JSONObject
+        val terms = session.getString("terms_version")
         api.request("auth/register/", "POST", JSONObject().put("username", "synthetic-video-${suffix.take(8)}")
-            .put("password", "Synthetic-" + UUID.randomUUID()).put("adult", true).put("terms_version", terms))
+            .put("password", "Synthetic-" + UUID.randomUUID()).put("adult", true).put("terms_version", terms).put("territory", TERRITORY_OUTSIDE).put("territory_version", session.getString("territory_version")))
         // The phone's own clip is never forwarded without the person's authorization, whatever the client says.
         val refused = try { api.uploadClip("vision/clip/", clip!!, mapOf("locale" to "es-EC", "session" to suffix, "seq" to "1")); null }
             catch (e: ApiFailure) { e.code }

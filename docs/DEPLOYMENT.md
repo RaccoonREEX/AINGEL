@@ -1,10 +1,54 @@
-# Deployment â€” pending
+# Despliegue (2-11-2026)
 
-No public deployment, domain, TLS configuration, Docker image exists yet; an Android debug APK is built locally, installed on Samsung SM-F721B/Android 16 and has passed a native backend integration test (camera/audio/family accuracy still pending). Local React/Vite and Django/Daphne run on loopback with persistent session/encryption secrets and SQLite. Start-Aingel.ps1 bootstraps migrations/demo/retention and launches hidden services; do not expose these development servers.
+Sustituye la versión que decía que no existía despliegue público.
 
-Production gate: verified VPS destination and domain, Dockerized ASGI service, PostgreSQL, private evidence directory/object store, HTTPS reverse proxy with WSS and upload/time limits, stable secret manager, debug disabled, explicit hosts/origins, secure cookies, process limits, global quotas and provider budget policy. Use Redis when channel/rate coordination needs it. Do not interpret billing email alerts as hard spending caps.
+## Estado
 
-Before first deploy: back up existing services, isolate AINGEL from the CRM, run migrations/checks, verify health and auth-denied behavior, confirm private media access, smoke-test synthetic Meta inference, test rollback and restore. Record exact commands against actual infrastructure when inspected. Target first staging deployment Nov 1, 2026; first submission Nov 3.
+AINGEL 3.0 está desplegado en <https://aingel.mapatechstudio.com>.
 
+**Comprobado de forma pasiva el 2-11-2026** (solo peticiones de lectura, sin cuentas ni datos):
+- la web y `/api/health/` responden 200 por HTTPS con un certificado válido;
+- la sesión anónima ya expone `territory_version` y `restricted_territories`, es decir, el código de acceso público
+  con territorios.
 
-Current production blockers: configure PostgreSQL, shared cache for auth/WS quotas, HTTPS and Secure cookies, explicit production Origin/hosts, secret manager with AINGEL_ENV=production and AINGEL_ENCRYPTION_KEY, evidence/media permissions, daily purge job and secure backup/restore. Backup the database, private media and both local keys as one recoverable set; do not copy .local into an image or public repository. The local encryption fallback is deliberately unavailable outside local mode. Biometric consent/privacy and model/data provenance need separate commercialization review. No production deployment validation has occurred.
+**No comprobado:**
+- qué commit exacto corre en el servidor;
+- si incluye `screen_media` y la prioridad de expresiones, añadidas el 2-11-2026 en esta rama.
+
+Este repositorio no despliega nada por sí mismo. El despliegue lo hace el operador en el VPS.
+
+## Cómo se despliega
+
+1. **Arquitectura y requisitos:** [`deploy/README.md`](../deploy/README.md) describe Docker Compose detrás del Caddy
+   existente, la red interna y PostgreSQL y Redis solo por TLS.
+2. **Despliegue coordinado:** [`docs/VPS_RECONCILIATION.md`](VPS_RECONCILIATION.md) cubre la inspección de solo
+   lectura, las variables de producción, el respaldo con `pg_dump`, las migraciones (solo añaden), el reinicio solo
+   del backend y la reversión.
+3. **Cuotas:** las pruebas con Redis real se ejecutan aislado ([`docs/REDIS_REAL_VALIDATION.md`](REDIS_REAL_VALIDATION.md)),
+   y la CI de GitHub también las ejecuta con un Redis desechable.
+
+## Correcciones de imágenes incluidas en esta rama
+
+| Imagen | Problema | Corrección |
+|---|---|---|
+| Backend | `manage.py` tenía permisos 600 y el usuario 10001 no podía leerlo | `chmod -R a+rX /app /web` antes de `USER 10001:10001` |
+| Backend | Faltaban las huellas de las señas | Se copia `signFingerprints.json` a `/web/...` |
+| Web | La imagen `nginx-unprivileged` (UID 101) no podía leer `default.conf`: HTTP 502 | `COPY --chmod=644`; un `RUN chmod` posterior falla porque se ejecuta como ese mismo usuario |
+
+La web además ejecuta `nginx -t` durante la construcción, como el usuario de ejecución.
+
+`deploy/tests/` y el trabajo `images` de la CI comprueban estas correcciones: construyen las dos imágenes, arrancan
+la web y comprueban que el backend corre como 10001.
+
+## Antes de desplegar esta rama
+
+- **Respaldo:** respaldar la base de datos y conservar la etiqueta de la imagen anterior.
+- **Construcción:** construir desde el commit fusionado.
+- **Migraciones:** aplicar `assistance.0002` y `care.0010` si faltan.
+- **Datos reales:** no copiar `.local/` ni archivos `.env` a una imagen. Mantener `AINGEL_FACE_RECOGNITION_ENABLED=0`
+  y `AINGEL_VIDEO_REAL=0`.
+- **Prueba de humo:**
+  - HTTPS y WebSocket;
+  - dos cuentas nuevas;
+  - la declaración de territorio de una cuenta existente;
+  - el consumo registrado.

@@ -1,11 +1,15 @@
 /** adult_declared: the account's own 18+ self-declaration (backend care.consent); Meta stays closed without it. */
 /** speech_service: this account accepted that the browser's recognition may send its voice to the vendor. */
-export type User = { id: number; username: string; adult_declared?: boolean; speech_service?: boolean };
+/** territory: its own answer about Meta's Restricted Territories (backend care.territory); null until it answers. */
+export type Territory = "outside_restricted" | "inside_restricted";
+export type User = { id: number; username: string; adult_declared?: boolean; territory?: Territory | null; speech_service?: boolean };
 export type Session = {
   user: User | null;
   csrf: string;
   terms_version?: string;
   speech_service_version?: string;
+  territory_version?: string;
+  restricted_territories?: Record<string, string>;
   mfa_required?: boolean;
 };
 export type Profile = {

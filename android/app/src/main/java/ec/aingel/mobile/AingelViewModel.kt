@@ -31,9 +31,15 @@ data class MobileState(
     // Age and consent policy (backend care.consent): the account's 18+ declaration, the current terms, and the
     // person's decisions for the selected profile.
     val adultDeclared: Boolean = true, val termsVersion: String = "", val consent: JSONObject? = null,
+    // Meta's Restricted Territories (Territory.kt): the account's answer ("" until it answers), the policy version
+    // and Meta's list, from the session.
+    val territory: String = TERRITORY_OUTSIDE, val territoryVersion: String = "", val restrictedTerritories: JSONObject? = null,
     val consentCode: JSONObject? = null, val purposes: JSONObject? = null, val openConsent: Boolean = false,
     // This account's own acceptance that the phone's speech service may receive its voice (only from the session payload).
     val speechService: Boolean = false, val speechServiceVersion: String = "",
+    // Signs validated by LSEC signers for this app's animations (care.sign_registry), and whether the person also
+    // wants AINGEL's own unvalidated designs shown as illustrations.
+    val validatedSigns: Set<String> = emptySet(), val illustrativeSigns: Boolean = false,
 )
 
 class AingelViewModel(app: Application) : AndroidViewModel(app) {
@@ -49,6 +55,10 @@ class AingelViewModel(app: Application) : AndroidViewModel(app) {
     private var lastSignPhrase: SignPhrase? = null
     private var activeSpeechTurn: String? = null
     private val retiredSpeechTurns = mutableSetOf<String>()
+    private val signPrefs = app.getSharedPreferences("aingel-signs", android.content.Context.MODE_PRIVATE)
+    private val signFingerprints: Map<String, String> by lazy {
+        try { app.assets.open("hands3d/signFingerprints.json").bufferedReader().use { fingerprintsFrom(it.readText()) } } catch (_: Exception) { emptyMap() }
+    }
     private val captionClient = CaptionClient(api, viewModelScope,
         onTurns = { turns ->
             val epoch = captionEpoch.get()
@@ -88,6 +98,19 @@ class AingelViewModel(app: Application) : AndroidViewModel(app) {
         private set
     /** The orb follows AINGEL's voice (word ranges, or a pulse while a routed phrase plays). */
     fun speechLevel(): Float = voice.level()
+    init { mutable.update { it.copy(illustrativeSigns = signPrefs.getBoolean("illustrative", false)) } }
+    /** The registry from the server; without it (offline, an old server) no sign counts as validated. */
+    fun loadSignRegistry() {
+        viewModelScope.launch {
+            val registry = try { api.request("signs/registry/") as? JSONObject } catch (e: CancellationException) { throw e } catch (_: Exception) { null }
+            mutable.update { it.copy(validatedSigns = validatedSigns(registry, signFingerprints)) }
+        }
+    }
+    fun setIllustrativeSigns(on: Boolean) {
+        signPrefs.edit().putBoolean("illustrative", on).apply()
+        mutable.update { it.copy(illustrativeSigns = on) }
+    }
+    internal fun signPlan(seq: List<String>) = planSigns(seq, state.value.validatedSigns, state.value.illustrativeSigns)
     init {
         operation {
             val session = api.request("auth/session/") as JSONObject
@@ -118,10 +141,13 @@ class AingelViewModel(app: Application) : AndroidViewModel(app) {
     private suspend fun applySession(session: JSONObject) {
         val username = session.optJSONObject("user")?.optString("username")
         val adult = session.optJSONObject("user")?.optBoolean("adult_declared", false) ?: true
+        val territory = territoryOf(session)
         mutable.update { it.copy(username = username, mfaRequired = session.optBoolean("mfa_required"), adultDeclared = adult,
             termsVersion = session.optString("terms_version").ifBlank { it.termsVersion }, speechService = speechServiceOf(session),
-            speechServiceVersion = session.optString("speech_service_version").ifBlank { it.speechServiceVersion }) }
-        if (username != null && adult) refreshProfiles()
+            speechServiceVersion = session.optString("speech_service_version").ifBlank { it.speechServiceVersion },
+            territory = territory, territoryVersion = session.optString("territory_version").ifBlank { it.territoryVersion },
+            restrictedTerritories = session.optJSONObject("restricted_territories") ?: it.restrictedTerritories) }
+        if (username != null && adult && territory == TERRITORY_OUTSIDE) refreshProfiles()
     }
     private suspend fun refreshProfiles() {
         val profiles = (api.request("profiles/") as JSONArray).rows()
@@ -142,13 +168,23 @@ class AingelViewModel(app: Application) : AndroidViewModel(app) {
     fun register(username: String, password: String, who: String, name: String) { signup = who to name.trim(); login(username, password, true) }
     fun login(username: String, password: String, register: Boolean = false) = operation {
         val body = JSONObject().put("username", username).put("password", password)
-        // Registration carries the explicit 18+ declaration for the current terms; the server checks it.
-        if (register) body.put("adult", true).put("terms_version", termsVersion())
+        // Registration carries the explicit 18+ declaration for the current terms and the answer about Meta's
+        // Restricted Territories (only «outside» can create an account); the server checks both.
+        if (register) territoryFields(body.put("adult", true).put("terms_version", termsVersion()), TERRITORY_OUTSIDE, territoryVersion())
         val response = api.request("auth/${if (register) "register" else "login"}/", "POST", body) as JSONObject
         applySession(response)
     }
     private suspend fun termsVersion(): String = mutable.value.termsVersion.ifBlank {
         (api.request("auth/session/") as JSONObject).optString("terms_version").also { v -> mutable.update { it.copy(termsVersion = v) } }
+    }
+    private suspend fun territoryVersion(): String = mutable.value.territoryVersion.ifBlank {
+        (api.request("auth/session/") as JSONObject).let { session ->
+            session.optString("territory_version").also { v -> mutable.update { it.copy(territoryVersion = v, restrictedTerritories = session.optJSONObject("restricted_territories")) } }
+        }
+    }
+    fun loadTerritories() = operation { territoryVersion() }
+    fun declareTerritory(answer: String) = operation {
+        applySession(api.request("auth/territory/", "POST", territoryFields(JSONObject(), answer, territoryVersion())) as JSONObject)
     }
     fun declareAdult() = operation {
         applySession(api.request("auth/adult/", "POST", JSONObject().put("adult", true).put("terms_version", termsVersion())) as JSONObject)
@@ -283,6 +319,34 @@ class AingelViewModel(app: Application) : AndroidViewModel(app) {
     }
     private fun appLocale() = if (getApplication<Application>().resources.configuration.locales[0].language == "es") "es-EC" else "en-US"
     /** One captured frame to scene description or object search; the image is not stored. */
+    /**
+     * Experimental: consecutive frames of a person signing, compared by Meta with AINGEL's own sign set (no model
+     * validated by Deaf LSEC signers exists; it can be wrong). Same authorization as describing a photo.
+     */
+    suspend fun recognizeSigns(frames: List<ByteArray>): JSONObject {
+        val id = mutable.value.profile?.optString("id")?.takeIf { it.isNotBlank() } ?: throw ApiFailure("profile_required")
+        val fields = imageRequestFields(mutable.value.profile, mutable.value.privateTestProfileId)
+        val token = cameraResults.open()
+        val result = api.uploadFrames("profiles/$id/signs/recognize/", frames, fields)
+        if (!cameraResults.accepts(token)) throw ApiFailure("consent_changed")
+        return result
+    }
+    /**
+     * Deep vision: [image] with the person's question, or a follow-up about [session]'s picture when [image] is null.
+     * Same authorization as describing a photo; the server rechecks it on every follow-up.
+     */
+    suspend fun describeVision(image: ByteArray?, question: String?, session: String?, level: String? = null): JSONObject {
+        val fields = if (session != null && image == null) visionFollowUpFields(appLocale(), session, question, level)
+            else visionFields(imageRequestFields(mutable.value.profile, mutable.value.privateTestProfileId), question, level)
+        val token = cameraResults.open()
+        val result = api.vision(image, fields)
+        if (!cameraResults.accepts(token)) throw ApiFailure("consent_changed")
+        return result
+    }
+    /** Ends a follow-up session early: the server deletes its copy of the picture now. */
+    suspend fun closeVision(session: String) {
+        try { api.request("vision/sessions/$session/", "DELETE") } catch (e: CancellationException) { throw e } catch (_: Exception) {}
+    }
     suspend fun analyzeFrame(image: ByteArray, objectName: String?): JSONObject {
         // The profile lets the server apply its sign-up authorization (camera + Meta).
         val fields = imageRequestFields(mutable.value.profile, mutable.value.privateTestProfileId)

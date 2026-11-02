@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The AINGEL Desktop installer (AINGEL 3.0, phase 6): per-user, guided, no administrator rights, no NuGet packages.
+       Build it with desktop\Build-Installer.ps1, which embeds the published app and its SHA-256. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>Aingel.Setup</RootNamespace>
+    <AssemblyName>AingelSetup</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Version>0.1.0</Version>
+    <Product>AINGEL Desktop</Product>
+    <Company>Mapatech Studio</Company>
+    <Description>Instalador de AINGEL Desktop</Description>
+    <PayloadZip Condition="'$(PayloadZip)' == ''">$(MSBuildProjectDirectory)\..\obj-installer\payload.zip</PayloadZip>
+    <PayloadHash Condition="'$(PayloadHash)' == ''">$(MSBuildProjectDirectory)\..\obj-installer\payload.sha256</PayloadHash>
+  </PropertyGroup>
+
+  <ItemGroup Condition="Exists('$(PayloadZip)')">
+    <EmbeddedResource Include="$(PayloadZip)" LogicalName="payload.zip" />
+    <EmbeddedResource Include="$(PayloadHash)" LogicalName="payload.sha256" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="AingelDesktop.Tests" />
+  </ItemGroup>
+
+</Project>

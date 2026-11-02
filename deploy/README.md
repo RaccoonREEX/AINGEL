@@ -11,9 +11,9 @@ revisión de seguridad, privacidad, disponibilidad y recuperación.
 
 ## Integración previa, adaptada al servidor real
 
-El VPS identificado es `2.25.176.195`; el proxy central existente es el
-contenedor `mapatech-proxy` y su Caddyfile está en `/opt/apps/proxy/Caddyfile`.
-Hay otras aplicaciones activas. Estos datos no determinan las redes Docker, las
+El servidor de destino ya tiene un proxy Caddy central en un contenedor, con su
+propio Caddyfile, y otras aplicaciones activas. Su dirección, el nombre del contenedor y las rutas se mantienen en
+la documentación privada de operación, no en este repositorio. Estos datos no determinan las redes Docker, las
 IP internas, el método de recarga ni la política de logs del servidor: se deben
 inspeccionar y validar antes de integrar cualquier cambio. No reemplazar el
 contenedor, su Caddyfile completo ni las configuraciones de otros sitios.

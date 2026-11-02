@@ -8,14 +8,15 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.throttling import ScopedRateThrottle
 
-from care.consent import granted, meta_account_denial, meta_allowed, private_media_allowed, refused, still_current, subject_account
+from care.consent import capture_refusal, granted, meta_account_denial, meta_allowed, private_media_allowed, refused, still_current, subject_account
 from care.faces import FaceConsentChanged, FaceRecognitionDisabled, family_matches, recognition_enabled
 from care.permissions import access, audit
 
-from . import synthetic
+from . import synthetic, vision
 from .persona import profile_preferences
 from .scene import SceneUnavailable, describe_scene, normalize_image
 from .locate import locate_object
+from .meta_quota import MetaQuotaError, meta_slot
 
 
 def health(request):
@@ -38,15 +39,21 @@ class SceneRequest(serializers.Serializer):
 REAL_FIELDS = ("image", "profile", "family", "private_test", "object_name")
 
 
-def image_basis(request, values, kind="image"):
-    """(path, fixture or error, profile): decided before any image is read or any provider request is built."""
+# Refusals of a capture purpose: 403, before anything is read.
+REFUSALS = ("camera_consent_revoked", "screen_consent_revoked", "document_consent_revoked")
+
+
+def image_basis(request, values, kind="image", content=REAL_FIELDS, media="image"):
+    """(path, fixture or error, profile): decided before any image is read or any provider request is built.
+    [media]: «image» (camera or gallery photo) or «screen» (a capture of the person's computer screen), each under
+    its own purposes (care.consent.NEEDS)."""
     profile = access(request.user, values["profile"]) if "profile" in values else None
-    if refused(profile, "camera_local"):
-        return None, "camera_consent_revoked", None
+    if refusal := capture_refusal(profile, media):
+        return None, refusal, None
     real = profile is not None and (
-        private_media_allowed(profile, request.user, "image", values["private_test"]) or meta_allowed(profile, "image")
+        private_media_allowed(profile, request.user, media, values["private_test"]) or meta_allowed(profile, media)
     )
-    path, value = synthetic.route(request.data, kind, real, REAL_FIELDS)
+    path, value = synthetic.route(request.data, kind, real, content)
     if path in ("real", "mock") and "image" not in values:
         return None, "image_required", None
     return path, value, profile if path == "real" else None
@@ -181,3 +188,136 @@ class LocateView(SceneView):
         if path == "fixture":
             result["synthetic_fixture"] = value
         return Response(result)
+
+
+class VisionRequest(SceneRequest):
+    """Deep vision (assistance.vision). Each optional field overrides what the question suggests."""
+    question = serializers.CharField(max_length=600, required=False)
+    detail_level = serializers.ChoiceField(choices=list(vision.LEVELS), required=False)
+    visual_task = serializers.ChoiceField(choices=["auto", *vision.TASKS], required=False)
+    focus_region = serializers.ChoiceField(choices=list(vision.REGIONS), required=False)
+    source_kind = serializers.ChoiceField(choices=list(vision.SOURCES), default="camera")
+    # A follow-up about the image of an earlier answer, instead of a new image or fixture.
+    session = serializers.CharField(max_length=64, required=False)
+
+    def validate_question(self, value):
+        if any(c in value for c in "<>\x00"):
+            raise serializers.ValidationError("question_invalid")
+        return value.strip()
+
+
+def asked(values):
+    """What the person asked, as remembered in a follow-up session: their words, or the part they pointed at."""
+    region = values.get("focus_region")
+    return values.get("question") or (f"the {vision.REGION_NAMES.get(region, region)} part" if region else "a description")
+
+
+# A typed question is free content: like a photo, it never goes with a server fixture.
+VISION_FIELDS = REAL_FIELDS + ("question",)
+NO_STORE = {"Cache-Control": "no-store"}
+
+
+class VisionView(APIView):
+    parser_classes = [MultiPartParser, FormParser]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "vision"
+
+    def post(self, request):
+        if denial := meta_account_denial(request.user):
+            return Response({"error": denial}, status=403, headers=NO_STORE)
+        serializer = VisionRequest(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        values = serializer.validated_data
+        if "session" in values:
+            return self.follow_up(request, values)
+        media = "screen" if values["source_kind"] == "screen" else "image"
+        path, value, profile = image_basis(request, values, content=VISION_FIELDS, media=media)
+        if path is None:
+            return Response({"error": value}, status=403 if value in REFUSALS else 400, headers=NO_STORE)
+        if path == "fixture":
+            image, preferences = synthetic.image(value), synthetic.FICTIONAL_PREFERENCES
+        else:
+            try:
+                image = normalize_image(values["image"], side=2048)
+            except ValueError as error:
+                return Response({"error": str(error)}, status=400, headers=NO_STORE)
+            preferences = profile_preferences(profile.communication, meta_allowed(profile, "personalization")) if profile else None
+        epoch = profile.consent_epoch if profile is not None else None
+        response = self.answer(request, values, image, basis_for(path), preferences, profile, epoch)
+        if response.status_code == 200:
+            response.data["session"] = vision.open_session(
+                request.user, image, basis_for(path), values["locale"], response.data["task"], asked(values),
+                response.data["text"], profile=profile, epoch=epoch,
+                fixture=value if path == "fixture" else None, private_test=values["private_test"], media=media,
+            )
+            response.data["session_seconds"] = vision.SESSION_SECONDS
+            if path == "fixture":
+                response.data["synthetic_fixture"] = value
+        return response
+
+    def follow_up(self, request, values):
+        """Same image, new question: the person's consent is checked again, as for a new photo."""
+        token = values["session"]
+        state = vision.load_session(token, request.user)
+        if state is None:
+            return Response({"error": "visual_session_expired"}, status=404, headers=NO_STORE)
+        if any(field in request.data for field in ("image", "fixture", "profile", "family")):
+            return Response({"error": "visual_session_conflict"}, status=400, headers=NO_STORE)
+        profile, epoch, preferences = None, None, synthetic.FICTIONAL_PREFERENCES
+        if state["fixture"]:
+            if not synthetic.enabled():
+                vision.close_session(token)
+                return Response({"error": "synthetic_tests_disabled"}, status=403, headers=NO_STORE)
+            if "question" in values:
+                return Response({"error": "synthetic_fixture_only"}, status=400, headers=NO_STORE)
+            image = synthetic.image(state["fixture"])
+        else:
+            image, preferences = vision.session_image(state), None
+            if state["profile"]:
+                profile, epoch = access(request.user, state["profile"]), state["epoch"]
+                media = state.get("media", "image")
+                allowed = private_media_allowed(profile, request.user, media, state["private_test"]) or meta_allowed(profile, media)
+                error = capture_refusal(profile, media) or (
+                    "consent_changed" if not still_current(profile, epoch)
+                    else None if allowed or state["basis"] is None else "privacy_review_required"
+                )
+                if error:
+                    vision.close_session(token)
+                    return Response({"error": error}, status=409 if error == "consent_changed" else 403, headers=NO_STORE)
+                preferences = profile_preferences(profile.communication, meta_allowed(profile, "personalization"))
+        # The picture's origin comes from the session, not from the follow-up (clients send no source_kind there).
+        source = "screen" if state.get("media") == "screen" else values["source_kind"]
+        response = self.answer(request, {**values, "locale": state["locale"], "source_kind": source}, image, state["basis"],
+                               preferences, profile, epoch, turns=state["turns"], previous=state["task"])
+        if response.status_code == 200:
+            vision.add_turn(token, state, asked(values), response.data["text"])
+            response.data["session"] = token
+        elif response.status_code == 409:
+            vision.close_session(token)
+        return response
+
+    def answer(self, request, values, image, basis, preferences, profile, epoch, turns=(), previous=None):
+        question = values.get("question", "")
+        plan = vision.plan(question, values.get("detail_level"), values.get("visual_task"), values.get("focus_region"),
+                           values["source_kind"], previous)
+        try:
+            # One description per account at a time (a deep one is three Meta calls): repeated taps wait, not pile up.
+            with meta_slot():
+                result = vision.describe(image, plan, values["locale"], basis, preferences, question, turns,
+                                         values["source_kind"], request.user)
+        except MetaQuotaError as error:
+            return Response({"error": str(error)}, status=429, headers=NO_STORE)
+        except vision.VisionUnavailable as error:
+            return Response({"error": str(error)}, status=503, headers=NO_STORE)
+        if profile is not None and not still_current(profile, epoch):
+            # Revoked while Meta was looking: the description is dropped, not shown as current.
+            return Response({"error": "consent_changed"}, status=409, headers=NO_STORE)
+        return Response(result, headers=NO_STORE)
+
+
+class VisionSessionView(APIView):
+    def delete(self, request, token):
+        """The person closes the follow-up early: the cached image is deleted now, not at expiry."""
+        if vision.load_session(token, request.user) is not None:
+            vision.close_session(token)
+        return Response(status=204, headers=NO_STORE)
