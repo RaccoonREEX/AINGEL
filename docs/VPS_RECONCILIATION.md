@@ -26,7 +26,7 @@ diff -ru --exclude=__pycache__ /tmp/aingel-pr12/backend /tmp/aingel-running/app 
 | Tipo | Qué hacer |
 |---|---|
 | Corrección válida, como la de reconocimiento facial (#3), la de captura de Android (#4) o la de señas (#5) | Comprobar que ya está en el PR. Si falta, enviarla como commit. |
-| Excepción temporal por usuario, como `AINGEL_META_ALLOWED_USER_IDS=3` o el código con «dpinargote» | **Quitar.** El PR #12 lo sustituye por el acceso público con consentimiento. |
+| Excepción temporal por usuario, como `AINGEL_META_ALLOWED_USER_IDS=3` o el código que habilitaba una cuenta concreta | **Quitar.** El PR #12 lo sustituye por el acceso público con consentimiento. |
 | Prueba privada (`AINGEL_PRIVATE_OWN_MEDIA_TEST=1`) | Pasar a `0` en producción pública. Se puede mantener en un entorno de pruebas aparte. |
 | Valores antiguos de cuota (10 por minuto y 100 por día, globales) | Subirlos (ver `docs/PUBLIC_ACCESS.md`) y añadir los límites por cuenta |
 
