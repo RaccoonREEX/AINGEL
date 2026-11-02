@@ -1,71 +1,126 @@
-AINGEL — Proprietary License (source visible for evaluation)
+AINGEL — Proprietary Software License
+Source Available for Evaluation — All Rights Reserved
 
-DRAFT FOR THE OWNER'S REVIEW. This text has not been reviewed by a lawyer and is not legal advice. The owner should
-confirm it, and complete the bracketed fields, before the repository is made public.
+Copyright © 2026 David Iarrael Pinargote Valverde. All rights reserved.
 
-Copyright (c) 2026 [OWNER'S FULL LEGAL NAME OR COMPANY — PENDING OWNER APPROVAL]. All rights reserved.
+Version 1.0 — 2 November 2026
 
-1. What this license covers
+1. Ownership and intellectual property
 
-   "AINGEL" means the original source code, documentation, user-interface designs, texts, sign animations designed
-   for AINGEL, images and other materials in this repository that were created by or for the owner, except the
-   third-party components described in section 6. The owner keeps all rights in AINGEL that applicable law allows.
+AINGEL (Adaptive Intelligence for Navigation, Guidance & Everyday Living) is a proprietary software project
+developed under the direction of David Iarrael Pinargote Valverde, an individual residing in Quito, Ecuador.
 
-2. What you may do
+All rights in the original source code, documentation, original interface designs, software architecture, original
+visual assets, animations and other original materials of AINGEL are reserved by the copyright holder, to the extent
+such rights are owned by the copyright holder under applicable law.
 
-   You may view and read AINGEL's source code and documentation, and build and run it on your own equipment, only
-   to evaluate it (for example, as a judge, organizer or reviewer of the Meta Global AI Developer Hackathon 2026, or
-   as a person reviewing the project). Nothing in this license prevents what GitHub's Terms of Service allow other
-   users to do with a public repository through GitHub's own features, such as viewing it or creating a fork on
-   GitHub.
+This license does not transfer ownership or grant any commercial license to third parties.
 
-3. What you may not do without the owner's prior written permission
+2. Permission for evaluation
 
-   - copy, reproduce or redistribute AINGEL, in whole or in part, outside the uses allowed in section 2;
-   - modify AINGEL or create derivative works for any use other than private evaluation;
-   - sell, license, sublicense, rent, lend or otherwise make AINGEL available to others;
-   - use AINGEL, or any part of it, in a commercial product or to provide a service to third parties, including as
-     a hosted or online service;
-   - remove or alter copyright, license, attribution or brand notices.
+Permission is granted to view, inspect, study, build and run AINGEL solely for private, non-commercial evaluation,
+including evaluation in connection with the Meta Global AI Developer Hackathon 2026.
 
-   No right is granted by implication, estoppel or otherwise beyond what this license states.
+This permission does not include authorization to distribute the software, offer services based on it, or
+commercially exploit the source code.
 
-4. Hackathon organizers
+Nothing in this license restricts actions expressly permitted by GitHub's Terms of Service, including viewing and
+forking public repositories through GitHub's authorized features, or rights that cannot legally be restricted.
 
-   Submitting AINGEL to the Meta Global AI Developer Hackathon 2026 grants the event's organizers the license
-   described in the event's Official Rules. This license does not restrict, replace or contradict that grant, which
-   governs the organizers' use of the submission. Neither this license nor the submission assigns ownership of
-   AINGEL to Meta, Cerebral Valley or anyone else.
+3. Commercial use and restrictions
 
-5. Name, logo and designs
+Without prior written authorization from David Iarrael Pinargote Valverde, no person or organization may:
 
-   "AINGEL", the AINGEL logo and isotype, the AINGEL orb character and the visual identity of the applications are
-   brand assets of the owner. This license grants no right to use them, except to refer to the project accurately.
-   Using them does not imply any trademark registration unless the owner states otherwise.
+- Reproduce, redistribute or publish AINGEL outside the expressly permitted evaluation activities.
+- Modify or create derivative works of the proprietary portions for purposes other than private evaluation.
+- Sell, sublicense, rent, transfer or commercially distribute AINGEL.
+- Incorporate AINGEL's proprietary code into other commercial products or services.
+- Operate a commercial service based on AINGEL, including a hosted or SaaS offering.
+- Remove or misrepresent copyright, license or attribution notices.
 
-6. Third-party components
+All commercial use of AINGEL's proprietary materials requires prior written authorization from the copyright holder.
 
-   AINGEL uses and in some files adapts third-party software, fonts, models and data. They remain under their own
-   licenses, which continue to apply and are not changed by this license; nothing here limits the rights those
-   licenses give you. Where an AINGEL file includes or adapts third-party code (for example, the orb renderer
-   adapted from Thinking Orbs, MIT License), the third-party portions remain under their license and their notices
-   are kept. See THIRD_PARTY_NOTICES.md, docs/THIRD_PARTY_INVENTORY.md, docs/THIRD_PARTY_NOTICES.md and
-   docs/licenses/. Meta's models are used as remote services under the Meta Model API Terms of Service; no Meta model
-   or its weights are included in this repository.
+Commercial licenses, enterprise agreements, distribution arrangements, partnerships and assignments of
+intellectual property rights may be negotiated separately.
 
-7. No warranty and limitation of liability
+4. Hackathon participation
 
-   AINGEL is provided "as is", without warranty of any kind, express or implied, including fitness for a particular
-   purpose and non-infringement. To the maximum extent permitted by law, the owner is not liable for any damages
-   arising from its use. AINGEL is an accessibility assistant: it is not a medical device, does not diagnose, and
-   does not guarantee that a place or a route is safe.
+AINGEL is submitted to the Meta Global AI Developer Hackathon 2026 subject to the event's applicable Official Rules.
+
+Any rights granted to Meta, Cerebral Valley or other authorized organizers through the submission are governed by
+those Official Rules and are not restricted by this license.
+
+This license does not itself assign ownership of AINGEL to the event organizers.
+
+5. Brand and visual identity
+
+The name AINGEL, its logo, isotype, original visual identity, original graphical designs and original character
+assets are reserved to their respective rights holder to the extent applicable.
+
+No permission is granted to use these assets for commercial branding, endorsement or marketing without prior
+written authorization, except for accurate identification of the project and other legally permitted uses.
+
+This provision does not represent a claim that any trademark has been registered.
+
+6. Third-party software and components
+
+AINGEL incorporates or interacts with third-party software, frameworks, fonts, libraries, datasets and artificial
+intelligence services.
+
+These components remain subject to their respective licenses and terms.
+
+Relevant dependencies and resources include:
+
+- Meta Model API and supported Meta models.
+- Thinking Orbs, under the MIT License.
+- React and Three.js, under their applicable MIT licenses.
+- AndroidX and other Android libraries, under their respective licenses.
+- Montserrat, under the SIL Open Font License.
+- Additional dependencies and resources identified in the project's third-party notices.
+
+The proprietary restrictions of this license do not override permissions granted by third-party licenses or apply
+to independently licensed third-party materials.
+
+See THIRD_PARTY_NOTICES.md, docs/THIRD_PARTY_INVENTORY.md, docs/THIRD_PARTY_NOTICES.md and docs/licenses/.
+
+7. Warranty and liability
+
+AINGEL is provided "AS IS", without warranties of any kind, express or implied, to the maximum extent permitted
+by applicable law.
+
+The copyright holder makes no guarantee of uninterrupted operation, accuracy, fitness for a particular purpose
+or non-infringement.
+
+AINGEL is an accessibility assistance tool, not a medical device. It does not provide medical diagnoses and does
+not guarantee the safety of an environment, location or route.
+
+Liability is limited or excluded only to the extent permitted by applicable law.
 
 8. Termination
 
-   The rights in section 2 end automatically if you breach this license.
+The evaluation permissions granted under Section 2 terminate upon material violation of this license, subject
+to applicable law.
 
-9. Contact for permissions and licensing
+Termination does not affect rights independently granted under third-party licenses or the event's applicable
+Official Rules.
 
-   [CONTACT ADDRESS — PENDING OWNER APPROVAL]
+9. Governing law and jurisdiction
 
-   [GOVERNING LAW AND JURISDICTION — PENDING OWNER DECISION]
+This license is intended to be governed by the laws of the Republic of Ecuador.
+
+Subject to mandatory applicable legal provisions and any enforceable agreement between the parties, disputes
+arising from this license shall be submitted to the competent courts of Quito, Ecuador.
+
+10. Licensing and commercial inquiries
+
+For requests involving commercial licensing, enterprise use, partnerships, distribution or acquisition of AINGEL,
+contact:
+
+Copyright holder: David Iarrael Pinargote Valverde
+Email: dpinargote@mapatechstudio.com
+Location: Quito, Ecuador
+
+Any authorization for commercial exploitation must be granted in writing by the copyright holder or an expressly
+authorized representative.
+
+© 2026 David Iarrael Pinargote Valverde. All rights reserved.
