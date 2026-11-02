@@ -92,7 +92,9 @@ class ClassifyTests(TestCase):
         self.assertEqual(vision.classify("Análisis académico para psicología del dibujo")[1], "academic")
         self.assertEqual(vision.classify("Dime rápido qué ves")[0], "brief")
         self.assertEqual(vision.classify("What does the person look like?")[1], "face")
-        self.assertEqual(vision.classify("", "screen")[1], "screen")
+        # A screen capture is described by its media or documents; the interface only when asked about (test_screen_media).
+        self.assertEqual(vision.classify("", "screen")[1], "screen_media")
+        self.assertEqual(vision.classify("¿Qué botones hay en esta ventana?", "screen")[1], "screen")
         # «caracter» is not «cara»: whole words only.
         self.assertEqual(vision.classify("¿Qué carácter tiene el lugar?")[1], "general")
 

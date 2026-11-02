@@ -285,8 +285,10 @@ class VisionView(APIView):
                     vision.close_session(token)
                     return Response({"error": error}, status=409 if error == "consent_changed" else 403, headers=NO_STORE)
                 preferences = profile_preferences(profile.communication, meta_allowed(profile, "personalization"))
-        response = self.answer(request, {**values, "locale": state["locale"]}, image, state["basis"], preferences,
-                               profile, epoch, turns=state["turns"], previous=state["task"])
+        # The picture's origin comes from the session, not from the follow-up (clients send no source_kind there).
+        source = "screen" if state.get("media") == "screen" else values["source_kind"]
+        response = self.answer(request, {**values, "locale": state["locale"], "source_kind": source}, image, state["basis"],
+                               preferences, profile, epoch, turns=state["turns"], previous=state["task"])
         if response.status_code == 200:
             vision.add_turn(token, state, asked(values), response.data["text"])
             response.data["session"] = token

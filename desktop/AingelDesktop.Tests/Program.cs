@@ -68,6 +68,8 @@ static class Program
         var screen = VisionFields.Screen(Own, privateTest: true, "  ¿Qué dice el botón azul?  ", "deep");
         Check(screen.Count == 6 && screen["source_kind"] == "screen" && screen["private_test"] == "true" && screen["profile"] == "p1"
               && screen["question"] == "¿Qué dice el botón azul?" && screen["detail_level"] == "deep", "screen fields");
+        // The server chooses what to describe on a screen (its media or documents; the interface only when asked).
+        Check(!screen.ContainsKey("visual_task") && !VisionFields.FollowUp("es-EC", "t", null, "deep").ContainsKey("visual_task"), "screen focus left to the server");
         Check(!VisionFields.Screen(Own, false, null, null).ContainsKey("private_test"), "no declaration unless chosen");
         Check(!VisionFields.Screen(Own, false, null, "maximum").ContainsKey("detail_level"), "unknown level dropped");
         Check(VisionFields.Screen(Own, false, new string('a', 900), null)["question"].Length == 600, "question bounded");

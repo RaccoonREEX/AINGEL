@@ -38,7 +38,9 @@ LEVELS = {
     "deep": {"effort": "high", "budget": 12000},
 }
 DEEP_STEP = {"effort": "high", "budget": 8000}
-TASKS = ("general", "face", "drawing", "academic", "document", "chart", "screen")
+# «screen_media» (the default for a screen capture) describes the media or document shown on it; «screen» describes
+# the interface itself (windows, menus, buttons), only when the person asks about it.
+TASKS = ("general", "face", "drawing", "academic", "document", "chart", "screen_media", "screen")
 SOURCES = ("camera", "gallery", "screen", "document")
 TASK_POLICIES = {
     "general": ("people",),
@@ -47,6 +49,7 @@ TASK_POLICIES = {
     "academic": ("drawings", "academic", "people"),
     "document": ("documents",),
     "chart": ("documents",),
+    "screen_media": ("documents", "drawings", "people"),
     "screen": ("screen", "documents"),
 }
 TASK_FOCUS = {
@@ -68,11 +71,27 @@ TASK_FOCUS = {
         "The image shows a chart, diagram or table: say its type and title, the axes or columns, the values you can "
         "read and the main relationships."
     ),
+    "screen_media": (
+        "Find the main media or document the person has open, in this order of priority: a video or film frame, a "
+        "photograph or an animation; an image, drawing or illustration; a document, book, PDF, slide or scanned "
+        "page; a chart, diagram or table. Describe only that content: for a video, the visible scene; for a "
+        "document, what it is by its content, then its legible text in reading order."
+    ),
     "screen": (
-        "The image is a capture of a computer screen: name the application or window if visible, then its regions, "
-        "controls and text from top to bottom."
+        "The person asks about the interface of their computer screen (accessibility): name the application or "
+        "window if visible, then its regions, controls and text from top to bottom."
     ),
 }
+# The only answer when a screen capture shows no media or document (screen_media): nothing is invented to fill it.
+NO_MEDIA = {
+    "es-EC": "No encuentro una imagen, un video o un documento visible para describir. Abre uno y vuelve a intentarlo.",
+    "en-US": "I can't find a visible image, video or document to describe. Open one and try again.",
+}
+# Added to the working notes of a deep description of screen content, so the notes do not inventory the interface.
+MEDIA_NOTES = (
+    "Only the media or document counts: note nothing about the desktop, windows, tabs, address bar, menus, "
+    "toolbars, player controls or notifications. If there is no media or document, write only «no media»."
+)
 ACADEMIC_LABELS = {"es-EC": ("Observaciones visuales", "Interpretaciones teóricas"),
                    "en-US": ("Visual observations", "Theoretical interpretations")}
 # Fractions of the image (left, top, right, bottom); the background is a direction for the model, not a crop.
@@ -101,6 +120,12 @@ class Plan:
     level: str
     task: str
     region: str | None
+    source: str = "camera"
+
+    @property
+    def media_focus(self):
+        """A capture of the person's screen, described by its media or documents rather than its interface."""
+        return self.source == "screen" and self.task != "screen"
 
 
 # --- Understanding the request -----------------------------------------------------------------------------------
@@ -127,7 +152,10 @@ def classify(question, source_kind="camera"):
         level = "brief"
     else:
         level = "standard"
-    if _has(text, r"psicolog", r"proyectiv", r"academ", r"\bhtp\b", r"test del arbol", r"psycholog", r"projective"):
+    if source_kind == "screen" and asks_about_interface(text):
+        # On a capture of the person's own screen, the interface is described only when they ask about it.
+        task = "screen"
+    elif _has(text, r"psicolog", r"proyectiv", r"academ", r"\bhtp\b", r"test del arbol", r"psycholog", r"projective"):
         task = "academic"
     elif _has(text, r"dibuj", r"ilustraci", r"boceto", r"garabat", r"trazo", r"pintura", r"acuarela", r"\bdrawing",
               r"\bdrawn\b", r"sketch", r"illustration", r"painting", r"doodle", r"strokes"):
@@ -141,10 +169,12 @@ def classify(question, source_kind="camera"):
     elif _has(text, r"documento", r"pagina", r"\blibro", r"\bcarta\b", r"\btexto\b", r"\blee(r|s)?\b", r"receta",
               r"factura", r"\bdocument", r"\bpage\b", r"\bbook\b", r"\bletter\b", r"\btext\b", r"\bread\b"):
         task = "document"
+    elif source_kind == "screen":
+        task = "screen_media"
     elif _has(text, r"pantalla", r"ventana", r"escritorio", r"\bscreen", r"\bwindow", r"desktop"):
         task = "screen"
     else:
-        task = {"screen": "screen", "document": "document"}.get(source_kind, "general")
+        task = {"document": "document"}.get(source_kind, "general")
     spatial = re.sub(r"\ba fondo\b", "", text)
     if _has(spatial, r"\bfondo\b", r"\bdetras\b", r"background", r"\bbehind\b"):
         region = "background"
@@ -164,18 +194,32 @@ def classify(question, source_kind="camera"):
     return level, task, region
 
 
+def asks_about_interface(text):
+    """The person asks about the computer's interface itself (folded text). Only words that mean the interface: a
+    window, a desk or a restaurant menu inside a photo or a document is content, not the interface."""
+    return _has(text, r"interfa[zc]", r"\bbotone?s?\b", r"\bbarras? de (tareas|herramientas|direcciones|menus?|estado)",
+                r"\bmenu (de )?inicio\b", r"\bmenus? (del|de la) (programa|navegador|aplicacion|ventana)",
+                r"\bventanas?\b.{0,20}\babiert", r"\bque ventanas\b",r"\bventanas? (del|de la) (programa|navegador|sistema|aplicacion)",
+                r"pestanas? del navegador", r"\biconos?\b", r"escritorio de windows", r"\bque (programas?|aplicacion)",
+                r"\b(programas?|aplicaciones) abiert", r"\bcontroles\b", r"\binterface\b", r"\bbuttons?\b", r"toolbar",
+                r"taskbar", r"address bar", r"start menu", r"open windows", r"\bwhich (app|application|program)",
+                r"browser tabs?", r"\bicons?\b", r"\bcontrols\b")
+
+
 # What the image is does not change between follow-ups: «¿Y los ojos?» about a drawing is still about a drawing.
-CONTENT_TASKS = ("drawing", "academic", "document", "chart", "screen")
+CONTENT_TASKS = ("drawing", "academic", "document", "chart", "screen_media", "screen")
 
 
 def plan(question="", detail_level=None, visual_task=None, focus_region=None, source_kind="camera", previous=None):
     level, task, region = classify(question, source_kind)
-    if previous in TASKS and (previous in CONTENT_TASKS or task == "general"):
+    # A follow-up keeps what the image is, except a person asking about the interface of their screen content.
+    if previous in TASKS and (previous in CONTENT_TASKS or task == "general") and not (previous == "screen_media" and task == "screen"):
         task = previous
     return Plan(
         level=detail_level or level,
         task=visual_task if visual_task and visual_task != "auto" else task,
         region=focus_region or region,
+        source=source_kind,
     )
 
 
@@ -239,7 +283,14 @@ def _request(plan_, locale, question, turns, cropped, source_kind):
         f"Visual request. Detail level: {plan_.level.upper()}.",
         TASK_FOCUS[plan_.task].format(observed=observed, theory=theory),
     ]
-    if source_kind == "screen":
+    if plan_.media_focus:
+        no_media = NO_MEDIA.get(locale, NO_MEDIA["en-US"])
+        parts.append(
+            "The image is a still capture of the person's own computer screen: context for you, never something to "
+            "mention. If no photograph, video, image, drawing, document, chart or table is visible, answer only with "
+            f"this sentence and nothing else: «{no_media}»"
+        )
+    elif source_kind == "screen":
         parts.append("The image comes from the person's own computer screen.")
     if plan_.region == "background":
         parts.append("Focus on the background, behind the main subject.")
@@ -258,7 +309,8 @@ def _request(plan_, locale, question, turns, cropped, source_kind):
 
 
 def _instruction(plan_, locale, preferences, request, step=""):
-    names = VISION_POLICIES + TASK_POLICIES[plan_.task]
+    # Screen content keeps its rules at every step (notes, synthesis, follow-ups), whatever the content is.
+    names = VISION_POLICIES + (("screen_media",) if plan_.media_focus else ()) + TASK_POLICIES[plan_.task]
     task = policies(*names) + " " + request + (" " + step if step else "")
     return persona_instructions(locale, preferences or profile_preferences({}), task)
 
@@ -333,6 +385,8 @@ def _deep(image, plan_, locale, preferences, request, bill):
         "For each crop note the fine details visible there that the overall view misses: small objects, text, textures, "
         "edges, strokes, facial features, colours. Mark uncertain readings; never repeat a detail across crops."
     )
+    if plan_.media_focus:
+        overview, closer = overview + " " + MEDIA_NOTES, closer + " " + MEDIA_NOTES
     jobs = (
         (_instruction(plan_, locale, preferences, request, overview), [MATERIAL, full] + focus),
         (_instruction(plan_, locale, preferences, request, closer), [MATERIAL, full] + focus + crops),
@@ -359,7 +413,10 @@ def _deep(image, plan_, locale, preferences, request, bill):
         "STEP 3 of 3: write the final DEEP answer for the person. Below are working notes AINGEL made on this same "
         "image; they may contain mistakes: keep only what you can confirm in the image, drop the rest, and add "
         "anything they missed. Organize it for listening: the main thing first, then each region or feature, then "
-        "the relationships between elements, then real uncertainties. Use all the relevant detail.\n\n" + working
+        "the relationships between elements, then real uncertainties. Use all the relevant detail."
+        + (" If the notes found no media or document, give only the sentence the request names for that case."
+           if plan_.media_focus else "")
+        + "\n\n" + working
     )
     final = bill(call(
         [MATERIAL, full] + focus, LEVELS["deep"]["effort"], LEVELS["deep"]["budget"],
@@ -412,6 +469,10 @@ def describe(image, plan_, locale, allowed, preferences=None, question="", turns
     if not final["text"]:
         raise VisionUnavailable("meta_empty_response")
     text, paragraphs = speakable(final["text"])
+    no_media = NO_MEDIA.get(locale, NO_MEDIA["en-US"])
+    if plan_.media_focus and no_media.rstrip(".") in text:
+        # Nothing to describe: only that sentence, never a description invented around it.
+        text, paragraphs = no_media, [no_media]
     # Mobility rule in code: an assurance that a path is clear or safe is replaced, never shown nor spoken.
     guarded, adjusted = vision_guard(text, locale)
     if adjusted:

@@ -106,6 +106,19 @@ POLICIES = {
         "anything without a confirmed action. Read separators in titles (such as « - » or « | ») as a pause, "
         "never as words like «menos»."
     ),
+    "screen_media": (
+        "SCREEN CONTENT. A capture of the person's screen is only how the content reaches you: describe the media "
+        "and documents on it, not the computer. Leave out the desktop and its icons, the taskbar and Start menu, "
+        "window frames and titles, browser tabs and the address bar, menus, toolbars, player controls, buttons such "
+        "as close, minimize or maximize, and notifications unrelated to the content, unless the person asks about "
+        "them. Never open with or mention a capture, screenshot, screen, monitor, operating system, browser, "
+        "application or your own analysis: start directly with what is seen, for example «Se observa a un hombre "
+        "caminando por una calle concurrida». Identify a document by its content, never by the program showing it; "
+        "read legible text in reading order, describe its tables, images and charts, and never invent illegible "
+        "text. A capture is one still frame: never attribute continuous movement, sound, dialogue or events before "
+        "or after it. If a video area is black or blank, say its picture is not visible in the capture and never "
+        "guess what it shows."
+    ),
     "audio": (
         "AUDIO AND COMMUNICATION. Keep the meaning of transcripts; separate what was recognized from what is "
         "uncertain; never invent words lost to noise; never attribute words to a specific person without reliable "
