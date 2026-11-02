@@ -47,6 +47,18 @@ releída el 2-11-2026. Esto no es asesoría legal.
 
 Ver «Resultados de pruebas» al final de este documento.
 
+### Mejoras de visión incluidas en la entrega
+
+- **Enfoque en el contenido de pantalla (`screen_media`):** Desktop describe el vídeo, la foto o el documento
+  visibles, no Windows.
+- **Expresión primero en personas:** la expresión aparente y sus señales visibles, nunca como emoción confirmada.
+- **Tipo de imagen:** se decide a partir de la propia imagen (fotografía, dibujo, ilustración, pintura, foto de una
+  hoja con un dibujo, documento o indeterminado). Los dibujos se describen primero por la figura y después por los
+  trazos. Surgió de la retroalimentación de una persona con discapacidad visual.
+
+Las tres son cambios en las instrucciones del servidor, con pruebas de lo que recibe Meta. **No miden la precisión
+de Meta.**
+
 ---
 
 ## Versión del 29-10-2026, conservada como historial
@@ -86,3 +98,45 @@ Ver «Resultados de pruebas» al final de este documento.
 2. Documentar y seleccionar aportes creados durante el evento; revisar derechos y atribuciones de código, modelos, datasets, imágenes, audio y personas. Preparar un repositorio público sin secretos, datos privados ni archivos ajenos sin autorización.
 3. Grabar y probar un vídeo de tres minutos, y verificar acceso del jurado al código y a una demo funcional. Distinguir pruebas sintéticas, capacidades verificadas y limitaciones; no prometer precisión facial, traducción validada de señas ni otras funciones no demostradas.
 4. Completar el formulario con descripciones y feedback veraces, revisar la autorización promocional y obtener una confirmación de envío antes del plazo. Este informe no constituye presentación ni aceptación de condiciones.
+
+## Resultados de pruebas (2-11-2026)
+
+**Commit final:** el que contiene este documento en `release/hackathon-submission-2026`. Las cifras de GitHub Actions
+del commit final constan en el PR #13.
+
+### Local (Windows 11)
+
+| Suite | Resultado |
+|---|---|
+| Backend Django | 364 ejecutadas: 357 correctas, 7 omitidas (Redis real, que aquí no hay). Migraciones completas |
+| Configuración de contenedores (`deploy/tests`) | 5 correctas |
+| Web | `typecheck`, `build` y los 9 scripts `test:*`, correctos |
+| Desktop | 101 de 101 comprobaciones, incluida la captura real de audio |
+| Android | 85 pruebas JVM, `lintDebug` y `assembleDebug`: BUILD SUCCESSFUL |
+
+### GitHub Actions (`.github/workflows/ci.yml`, sin secretos ni llamadas a Meta)
+
+- **Commits `628e1f8` y `0f9cf0e`:** los 5 trabajos correctos.
+  - **Backend:** 364 ejecutadas en `0f9cf0e` y **0 omitidas**. Las 7 de Redis real pasaron contra un servicio Redis
+    desechable del propio CI. Las migraciones están completas.
+  - **Web:** correcto.
+  - **Android:** pruebas JVM, lint y compilación correctos.
+  - **Desktop en Windows:** 99 comprobaciones correctas. El CI no tiene dispositivo de audio, así que la captura real
+    se omite y se comprueba que la falta de audio se informa sin bloquear la aplicación.
+  - **Imágenes Docker:**
+    - construcción de ambas, con `nginx -t` como usuario sin privilegios;
+    - arranque de la web y respuesta 200;
+    - backend ejecutándose como UID 10001;
+    - 34 pruebas del backend dentro de la imagen.
+- **Antes, en `5786141` y `2c233a8`,** fallaron Android y Desktop por dos problemas reales que el CI detectó y que se
+  corrigieron en `628e1f8`:
+  - `android/gradlew` no era ejecutable en Git;
+  - Desktop se cerraba de golpe al iniciar subtítulos sin un dispositivo de audio.
+
+### No ejecutado
+
+- **Llamadas reales a Meta:** no se hicieron en esta preparación, para no consumir créditos ni usar datos.
+- **Pruebas en dispositivo:** Android con cámara y TalkBack.
+- **Desktop contra staging.**
+- **Lectores de pantalla:** NVDA y TalkBack.
+- **Precisión:** no se evaluó la precisión de Meta en expresiones ni en el tipo de imagen.

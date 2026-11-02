@@ -13,6 +13,9 @@ Sustituye la versión del 27-10-2026, que describía una versión local anterior
   Meta real quedó pendiente en staging.
 - **Descripción de personas:** se basa en una sola foto o fotograma. La expresión se describe como apariencia y
   nunca prueba lo que alguien siente. No hay una evaluación de su precisión.
+- **Tipo de imagen:** Meta decide si recibió una fotografía, un dibujo, una ilustración o una foto de una hoja con un
+  dibujo, siguiendo las instrucciones de AINGEL. No se ha medido con qué precisión lo distingue; las pruebas solo
+  verifican las instrucciones (`docs/VISION_CONTENT_TYPE.md`).
 
 ## Funciones experimentales o desactivadas
 

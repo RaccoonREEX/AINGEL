@@ -10,8 +10,9 @@ natural conversation — using Meta's models, under each person's own consent, o
 **Track:** Indie Developer · **Theme:** Build for Your World
 
 > **Resumen ejecutivo (español).** AINGEL es un asistente de accesibilidad para personas adultas con necesidades de
-> apoyo visual, auditivo o de comunicación. Describe lo que muestra la cámara o la pantalla —priorizando la expresión
-> aparente de las personas y el contenido de vídeos, fotos y documentos—, lee documentos, subtitula la voz y el audio
+> apoyo visual, auditivo o de comunicación. Describe lo que muestra la cámara o la pantalla —distinguiendo
+> fotografías de dibujos, describiendo en un dibujo la figura antes que sus trazos, priorizando la expresión aparente
+> de las personas y el contenido de vídeos, fotos y documentos—, lee documentos, subtitula la voz y el audio
 > del equipo, y conversa con naturalidad. Usa modelos Standard de Meta (Muse Spark 1.3, Muse Voice Transcribe y
 > SAM 3.1) solo con el consentimiento expreso de cada persona, por finalidad y revocable en cualquier momento. Funciona
 > en web, Android y Windows, y está desplegado en <https://aingel.mapatechstudio.com>. No es un dispositivo médico, el
@@ -30,7 +31,8 @@ of their data leaves the server.
 | Need | What AINGEL does | Meta model |
 |---|---|---|
 | "What is in front of me?" | Describes a photo at four levels (brief, standard, detailed, deep). Deep makes two passes in parallel, one over the whole picture and one over five enlarged regions, then a synthesis. Follow-up questions about the same picture for 15 minutes. | Muse Spark 1.3 |
-| "How does this person look?" | Leads with the person's **apparent** expression and the visible cues for it, then appearance and context — never claiming to know how anyone feels. | Muse Spark 1.3 |
+| "Is this a photo or a drawing?" | Decides from the image itself, in the same call, whether it is a photograph, a drawing, a digital illustration, a painting, a photo of a sheet with a drawing, a document or uncertain. In a drawing it describes the figure first (what it represents, its orientation, proportions and features) and the technique after (lines, strokes, shading), never mistaking a stroke for a feature; a photo gets no talk of strokes. | Muse Spark 1.3 |
+| "How does this person look?" | Leads with the person's **apparent** expression and the visible cues for it, then appearance and context — never claiming to know how anyone feels. Says the head's orientation and describes only what that view shows: an eye or ear hidden in a profile is never described. | Muse Spark 1.3 |
 | "Where are my keys?" | Finds a named object in a photo and returns its position. | SAM 3.1 |
 | "What is on my screen?" (Windows) | Hotkeys describe the active window or the whole screen, focusing on the video, photo, document or chart shown — not on Windows itself. The interface is described only when asked. | Muse Spark 1.3 |
 | "Read me this" | Opens PDFs and photos of pages: text is read locally; scanned pages are transcribed, and pages explained or questioned on request. | Muse Spark 1.3 |
@@ -66,7 +68,8 @@ authentication.
 - **Not a medical device:** AINGEL does not diagnose, and never states that a route or place is safe.
 
 Details: [docs/PUBLIC_ACCESS.md](docs/PUBLIC_ACCESS.md) · [docs/META_MODEL_API_TERMS.md](docs/META_MODEL_API_TERMS.md) ·
-[docs/PRIVACY_ARCHITECTURE.md](docs/PRIVACY_ARCHITECTURE.md) · [docs/VISION_PEOPLE_EXPRESSIONS.md](docs/VISION_PEOPLE_EXPRESSIONS.md).
+[docs/PRIVACY_ARCHITECTURE.md](docs/PRIVACY_ARCHITECTURE.md) · [docs/VISION_PEOPLE_EXPRESSIONS.md](docs/VISION_PEOPLE_EXPRESSIONS.md) ·
+[docs/VISION_CONTENT_TYPE.md](docs/VISION_CONTENT_TYPE.md).
 
 ## Architecture
 
@@ -195,6 +198,8 @@ commit real values.
   - the local family face matcher.
 - **Descriptions** come from a single photo or frame: they can be wrong, and they never establish safety, identity
   or how someone feels.
+- **Accuracy is unmeasured:** how well Meta tells photographs from drawings, or reads expressions, has not been
+  measured; the tests check the instructions AINGEL sends.
 - **Interface languages:** Spanish and English only.
 
 More: [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md).
@@ -214,7 +219,9 @@ More: [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md).
   - quotas and billing;
   - restricted territories;
   - screen-content focus;
-  - expression-first descriptions.
+  - expression-first descriptions;
+  - photo/drawing identification, with drawings described figure first and technique after (from a blind user's
+    feedback).
 - **Records:** [docs/AINGEL3_FINAL_REPORT.md](docs/AINGEL3_FINAL_REPORT.md) and the `docs/AINGEL3_PHASE*.md` files
   document each phase.
 - **How it was built:** the owner directed the development with AI coding assistants (Anthropic's Claude Code and

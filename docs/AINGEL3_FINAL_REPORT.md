@@ -2,7 +2,9 @@
 
 > **Actualización (2-11-2026).**
 > - **Una sola rama:** las seis fases, el acceso público con consentimiento (PR #12), las correcciones de staging, las
->   de las imágenes Docker (backend y Nginx), el enfoque `screen_media` de Desktop y la prioridad de expresiones están
+>   de las imágenes Docker (backend y Nginx), el enfoque `screen_media` de Desktop, la prioridad de expresiones y la
+>   identificación del tipo de imagen (fotografía, dibujo, ilustración…, con los dibujos descritos primero por la
+>   figura y después por los trazos; `docs/VISION_CONTENT_TYPE.md`) están
 >   en `release/hackathon-submission-2026`, con un único PR hacia `main`. El orden de fusión de la sección 1 ya no
 >   aplica: la rama contiene todos esos PR por ascendencia.
 > - **Producción:** AINGEL 3.0 está desplegado en <https://aingel.mapatechstudio.com>, según `docs/DEPLOYMENT.md`.
