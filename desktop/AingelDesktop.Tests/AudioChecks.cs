@@ -80,6 +80,17 @@ static class AudioChecks
         assembler.Feed(new CaptionEvent("speaker", "3", "", false, "1"));
         check(assembler.Speaker("3") == "1", "reported speaker kept for its turn");
 
+        // A real loopback capture needs an audio output (CI machines have none): without one, it must fail as
+        // system_audio_unavailable, which the captions window shows, never as a crash.
+        if (!LoopbackCapture.HasOutputDevice())
+        {
+            var code = "";
+            try { new LoopbackCapture().Start(_ => { }); }
+            catch (ApiFailure failure) { code = failure.Code; }
+            check(code == "system_audio_unavailable", "no audio output: reported, not a crash");
+            Console.WriteLine("skip real loopback capture (no audio output device)");
+            return;
+        }
         // A real loopback capture for about 1.2 s: frames of exactly 200 ms, at real-time pace (silence when nothing plays).
         var frames = new List<byte[]>();
         try

@@ -93,8 +93,32 @@ public sealed class LoopbackCapture : IDisposable
         return new AudioFormat(rate, channels, bits, isFloat);
     }
 
-    /// <summary>Starts capturing; [onFrame] receives each 200 ms frame (16-bit PCM bytes) on a background thread.</summary>
+    /// <summary>Whether Windows has a default audio output to capture (none on a machine without speakers or with all
+    /// outputs disabled).</summary>
+    public static bool HasOutputDevice()
+    {
+        try
+        {
+            var enumerator = (IMMDeviceEnumerator)new MMDeviceEnumeratorComObject();
+            return enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Console, out _) == 0;
+        }
+        catch (COMException) { return false; }
+    }
+
+    /// <summary>Starts capturing; [onFrame] receives each 200 ms frame (16-bit PCM bytes) on a background thread. A
+    /// missing or unusable output device is reported as ApiFailure("system_audio_unavailable"), never as a crash: the
+    /// COM interop raises COMException for some failures before Check sees their HRESULT.</summary>
     public void Start(Action<byte[]> onFrame)
+    {
+        try { Open(); }
+        catch (COMException) { throw new ApiFailure("system_audio_unavailable"); }
+        catch (InvalidCastException) { throw new ApiFailure("system_audio_unavailable"); }
+        stop = new CancellationTokenSource();
+        var token = stop.Token;
+        loop = Task.Run(() => Run(onFrame, token), token);
+    }
+
+    void Open()
     {
         var enumerator = (IMMDeviceEnumerator)new MMDeviceEnumeratorComObject();
         Check(enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Console, out var device));
@@ -116,9 +140,6 @@ public sealed class LoopbackCapture : IDisposable
         Check(client.GetService(ref captureId, out var service));
         capture = (IAudioCaptureClient)service;
         Check(client.Start());
-        stop = new CancellationTokenSource();
-        var token = stop.Token;
-        loop = Task.Run(() => Run(onFrame, token), token);
     }
 
     void Run(Action<byte[]> onFrame, CancellationToken token)
