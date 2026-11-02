@@ -72,7 +72,8 @@ def describe_scene(image: bytes, locale: str, allowed, known_person: bool = Fals
         raise SceneUnavailable("privacy_review_required")
     language = "Ecuadorian Spanish" if locale == "es-EC" else "English"
     # Brief, as PEOPLE AND EXPRESSIONS asks for BRIEF: a person's apparent expression and one or two key features.
-    task = "Scene description from one photo, at most three short sentences. " + VISION_RULES + (
+    # A camera image, not necessarily a photograph of the world: it may show a drawing or a screen (CONTENT TYPE).
+    task = "Scene description from one camera image, at most three short sentences. " + VISION_RULES + (
         " If a person is the main subject, the first sentence gives their apparent expression."
     ) + (
         " The person in front is someone the user knows; the app already says who it is. Without naming or "
