@@ -245,7 +245,7 @@ Full notices: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), [docs/THIRD_PART
 
 ## License
 
-**Copyright © 2026 [owner — pending approval]. All rights reserved.**
+**Copyright © 2026 David Iarrael Pinargote Valverde. All rights reserved.**
 
 - **Source visible for evaluation:** the source is visible so the project can be evaluated; it is **not open
   source**.
@@ -254,4 +254,4 @@ Full notices: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), [docs/THIRD_PART
 - **What stays the same:** the license granted to the hackathon organizers under the Official Rules, and the
   licenses of third-party components.
 
-See [LICENSE](LICENSE).
+See [LICENSE](LICENSE). For commercial permissions, enterprise licensing or acquisition inquiries, contact **dpinargote@mapatechstudio.com**. The owner's proprietary materials require prior written permission for commercial use; third-party licenses and the hackathon organizers' rights under the Official Rules remain unaffected.
