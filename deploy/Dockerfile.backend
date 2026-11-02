@@ -12,6 +12,8 @@ COPY backend/manage.py ./manage.py
 COPY backend/config ./config
 COPY backend/care ./care
 COPY backend/assistance ./assistance
+COPY web/src/components/aingel/signFingerprints.json /web/src/components/aingel/signFingerprints.json
+RUN chmod -R a+rX /app /web && chown app:app /app/care/data/sign_registry.json
 USER 10001:10001
 EXPOSE 8000
 # Verbosity 0 keeps warnings/errors but disables Daphne's stdout access log,
