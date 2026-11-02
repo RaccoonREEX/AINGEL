@@ -42,21 +42,26 @@ DEEP_STEP = {"effort": "high", "budget": 8000}
 # the interface itself (windows, menus, buttons), only when the person asks about it.
 TASKS = ("general", "face", "drawing", "academic", "document", "chart", "screen_media", "screen")
 SOURCES = ("camera", "gallery", "screen", "document")
+# «expressions» puts a person's apparent expression first wherever a person can be the main content.
 TASK_POLICIES = {
-    "general": ("people",),
-    "face": ("faces", "people"),
+    "general": ("expressions", "people"),
+    "face": ("expressions", "faces", "people"),
     "drawing": ("drawings", "people"),
     "academic": ("drawings", "academic", "people"),
     "document": ("documents",),
     "chart": ("documents",),
-    "screen_media": ("documents", "drawings", "people"),
+    "screen_media": ("documents", "drawings", "expressions", "people"),
     "screen": ("screen", "documents"),
 }
 TASK_FOCUS = {
-    "general": "Describe the image: say first what it shows, then the main elements, their layout and details.",
+    "general": (
+        "Describe the image: say first what it shows, then the main elements, their layout and details. When a "
+        "person is the main subject, follow PEOPLE AND EXPRESSIONS: their apparent expression comes first."
+    ),
     "face": (
-        "The person wants to know what the person in the image looks like: describe the facial features listed in "
-        "FACES, part by part, before any clothing."
+        "The person wants to know what someone in the image looks like: start with their apparent expression and the "
+        "visible cues behind it, then the facial features listed in FACES, part by part, then clothing and context, "
+        "as PEOPLE AND EXPRESSIONS orders; a question about one specific detail is answered first."
     ),
     "drawing": "The image is a drawing or artwork: say first what it represents, then follow the DRAWINGS steps.",
     "academic": (
@@ -87,6 +92,20 @@ NO_MEDIA = {
     "es-EC": "No encuentro una imagen, un video o un documento visible para describir. Abre uno y vuelve a intentarlo.",
     "en-US": "I can't find a visible image, video or document to describe. Open one and try again.",
 }
+# Added to the deep steps wherever a person can be the main content (PEOPLE AND EXPRESSIONS), so the working notes
+# and the synthesis keep the apparent expression first.
+EXPRESSION_NOTES = (
+    "If a person is the main subject, note first each person's apparent expression (as an appearance, never a "
+    "confirmed feeling) and the visible cues for it, then their features, clothing and context."
+)
+EXPRESSION_CUES = (
+    "For people, note the fine cues of expression visible in each crop: eyebrows, eye opening, mouth corners, lip "
+    "tension, expression lines, gaze and head tilt."
+)
+EXPRESSION_SYNTHESIS = (
+    " If a person is the main subject, start with their apparent expression and its cues, then their appearance, "
+    "then the context, as one natural narration without headings."
+)
 # Added to the working notes of a deep description of screen content, so the notes do not inventory the interface.
 MEDIA_NOTES = (
     "Only the media or document counts: note nothing about the desktop, windows, tabs, address bar, menus, "
@@ -121,6 +140,11 @@ class Plan:
     task: str
     region: str | None
     source: str = "camera"
+
+    @property
+    def people_focus(self):
+        """A person may be the main content: their apparent expression comes first (PEOPLE AND EXPRESSIONS)."""
+        return "expressions" in TASK_POLICIES[self.task]
 
     @property
     def media_focus(self):
@@ -162,7 +186,10 @@ def classify(question, source_kind="camera"):
         task = "drawing"
     elif _has(text, r"\b(cara|rostro|facciones|rasgos|ojos|nariz|labios|cejas|pestanas|menton|pomulos)\b",
               r"\b(face|facial|features|eyes|nose|lips|eyebrows|jaw|cheekbones)\b", r"como es (el|ella|la persona)",
-              r"what does (he|she|they|the person) look like"):
+              r"what does (he|she|they|the person) look like", r"\bexpresion", r"\bgestos?\b", r"\bque cara\b",
+              r"\bsu apariencia\b", r"como se ve (la persona|el hombre|la mujer|ella|esta persona|el senor|la senora)",
+              r"\bexpression", r"\bfacial\b", r"how does (he|she|they|the person|the man|the woman) look",
+              r"\b(his|her|their) appearance\b"):
         task = "face"
     elif _has(text, r"grafic", r"diagrama", r"\btabla\b", r"esquema", r"\bchart", r"\bgraph", r"diagram", r"\btable\b"):
         task = "chart"
@@ -385,6 +412,8 @@ def _deep(image, plan_, locale, preferences, request, bill):
         "For each crop note the fine details visible there that the overall view misses: small objects, text, textures, "
         "edges, strokes, facial features, colours. Mark uncertain readings; never repeat a detail across crops."
     )
+    if plan_.people_focus:
+        overview, closer = overview + " " + EXPRESSION_NOTES, closer + " " + EXPRESSION_CUES
     if plan_.media_focus:
         overview, closer = overview + " " + MEDIA_NOTES, closer + " " + MEDIA_NOTES
     jobs = (
@@ -414,6 +443,7 @@ def _deep(image, plan_, locale, preferences, request, bill):
         "image; they may contain mistakes: keep only what you can confirm in the image, drop the rest, and add "
         "anything they missed. Organize it for listening: the main thing first, then each region or feature, then "
         "the relationships between elements, then real uncertainties. Use all the relevant detail."
+        + (EXPRESSION_SYNTHESIS if plan_.people_focus else "")
         + (" If the notes found no media or document, give only the sentence the request names for that case."
            if plan_.media_focus else "")
         + "\n\n" + working
