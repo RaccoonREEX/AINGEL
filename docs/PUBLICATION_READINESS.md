@@ -1,4 +1,43 @@
-# Preparación para publicar el repositorio — 30 de octubre de 2026
+# Preparación para publicar el repositorio
+
+## Revisión del 2-11-2026 (rama `release/hackathon-submission-2026`)
+
+**Alcance:** todos los objetos alcanzables desde las 36 referencias del repositorio, 1.699 objetos, porque un
+repositorio público expone todas las ramas y su historial. No se instaló ningún escáner externo (gitleaks,
+trufflehog y detect-secrets no están disponibles en el equipo). Se usó un script propio que informa solo la
+ubicación y el tipo, nunca el valor.
+
+**Qué buscó:**
+- formatos de claves y tokens (Meta, OpenAI, GitHub, AWS, Google, Slack, JWT, Bearer, PEM, Fernet);
+- asignaciones de contraseñas y secretos;
+- URL con credenciales;
+- nombres de archivo sensibles (`.env`, `.pem`, `.key`, `.sqlite3`, `.local/`, almacenes de claves);
+- medios, correos e IP públicas;
+- **comparación exacta con los secretos reales del equipo:** la clave de Meta, el archivo de token y la nota SSH del
+  Escritorio, y `server-secret`, `encryption.key` y las cuentas de `.local/`. La comparación se hizo dentro del
+  script, sin mostrarlos.
+
+| # | Hallazgo | Severidad |
+|---|---|---|
+| R1 | **Ningún secreto real** aparece en ninguna versión de ninguna rama: ni la clave de Meta, ni tokens, ni la contraseña SSH, ni las claves del servidor o de cifrado, ni las contraseñas de las cuentas de demostración. Nunca se versionaron archivos `.env`, claves, certificados, bases de datos ni `.local/`. | Info |
+| R2 | Coincidencias revisadas una a una y benignas: contraseñas sintéticas de prueba (`Synthetic…`, `check…`), una clave Fernet de ceros en `config/test_deployment.py`, URL con credenciales que una prueba de Android verifica que se rechazan, y etiquetas de interfaz en `i18n.ts`. | Info |
+| R3 | La IP del VPS, el contenedor del proxy y sus rutas aparecían en `deploy/README.md`, y un nombre de cuenta en `VPS_RECONCILIATION.md`. **Eliminados de esta rama** (`6b9421a`). Siguen en el historial de las ramas anteriores; la IP también se deduce del DNS del dominio. | Baja |
+| R4 | **Identidades de los commits:** 78 commits usan el correo Gmail personal del autor. Un commit (`19d626e`, la corrección Docker aplicada en el VPS) tiene como autor `root@` con el nombre de host del proveedor del servidor. Ambos quedarán visibles al publicar. Cambiarlos exige reescribir el historial, que **no se hizo** porque requiere autorización del propietario. | Media (decisión del propietario) |
+| R5 | Medios versionados: solo iconos de la app, el isotipo, las fuentes Montserrat y tres capturas de la interfaz de AINGEL Desktop sin datos personales (`web/src/assets/desktop/`). No hay fotos de personas, audio ni vídeo. | Info |
+| R6 | Correos en el contenido: dominios de ejemplo (`example.*`), `medlineplus.gov` y el correo del autor de YuNet en su licencia, cuya atribución es obligatoria. | Info |
+| R7 | Documentos internos de operación (informes de auditoría, el incidente de la cuenta `prueba.persona`, las validaciones de staging) son públicos si se publica el repositorio. No contienen secretos; el propietario decide si conservarlos. | Baja |
+
+**Licencia:** `LICENSE` es un borrador propietario («todos los derechos reservados, fuente visible para
+evaluación»). Faltan el nombre legal del titular, el contacto y la ley aplicable. Las reglas oficiales no exigen una
+licencia abierta (ver `HACKATHON_AUDIT_2026.md`).
+
+**Estado:** el repositorio **sigue privado**. Nada se publicó.
+
+---
+
+## Revisión anterior (30-10-2026), conservada como historial
+
+## Preparación para publicar el repositorio — 30 de octubre de 2026
 
 Revisión del worktree `feat/consent-persona-video` (HEAD `cc1084f`) y de **todo el historial** (11 commits,
 todas las ramas locales y remotas). No es una auditoría legal. No se publicó nada, no se hizo push ni se

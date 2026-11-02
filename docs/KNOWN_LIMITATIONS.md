@@ -1,18 +1,56 @@
-# Límites actuales — 2026-10-27
+# Límites actuales (2-11-2026, rama `release/hackathon-submission-2026`)
 
-- Esta entrega incluye web local, backend funcional y APK Android debug compilado. El APK ya se instaló y arrancó en Samsung SM-F721B/Android 16; pasó una prueba instrumentada de cliente, sesión cifrada, rutinas, memoria y MFA. No hay despliegue público todavía.
-- 89 pruebas backend y trece pruebas JVM Android pasan; Android Lint termina sin errores y tres llamadas Meta reales se han verificado con material sintético. No equivalen a una evaluación general de precisión ni a un producto clínico certificado.
-- Los datos reales siguen fuera de los flujos Meta hasta aclarar el uso de contenido asociado a créditos gratuitos. La casilla de material sintético es una declaración del usuario, no un detector de datos sensibles.
-- Preguntar usa herramientas estructuradas locales y una consulta educativa MedlinePlus por título; saludo, lectura, paginación y botón de apoyo aplican preferencias explícitas. Existe una pregunta conversacional de prueba a Spark con entrada sintética y fuente pública opcional, sin historial ni datos privados del perfil. No hay conversación continua con selección autónoma de herramientas ni inferencia de conducta basada en datos clínicos.
-- Rutinas: los avisos requieren la pantalla Hoy abierta. No hay alarmas de fondo, push, llamadas automáticas ni verificación de ingesta de medicinas.
-- Memorias: observaciones comunicadas por el usuario, búsqueda exacta por objeto y retención de siete días. No hay extracción automática de sucesos ni vídeo continuo.
-- Reconocimiento facial local experimental: consentimiento individual, un registro de 1–3 fotos propias distintas por cuidador, controles heurísticos de nitidez/consistencia (sin calibración real), máximo cuatro en el círculo, plantillas cifradas por treinta días. Falta medir precisión con familiares reales, falsos positivos, sesgos e iluminación; no hay liveness. No sirve para confirmar identidad ni autenticar.
-- Google Authenticator: flujo TOTP/QR/recuperación/replay validado en pruebas automatizadas. Falta probar el escaneo con un teléfono real. No hay recuperación administrativa ni restablecimiento por correo.
-- Subtítulos: relay real verificado con WAV sintético. El micrófono del navegador y la lectura de voz necesitan prueba manual en los dispositivos objetivo. AudioContext debe soportar 24 kHz; ante incompatibilidad, se muestra error.
-- Solo hay interfaz implementada en español e inglés. Otros idiomas están auditados/planificados; Android TTS, RTL completo y TalkBack no están validados.
-- SQLite, HTTP loopback y límites por proceso son configuración de pruebas. La base local de perfiles/rutinas contiene texto sin cifrado de campo; solo los secretos TOTP y plantillas faciales tienen cifrado de aplicación. No exponer a Internet.
-- El borrado físico de registros vencidos se ejecuta al arrancar localmente o mediante el comando de limpieza. Programar y verificar limpieza diaria, respaldo seguro y restauración antes de producción.
-- VizWiz: treinta anotaciones preparadas para evaluación, sin fotos, entrenamiento ni precisión publicada. LSEC, corpus clínicos y recursos restringidos siguen sin incorporarse.
-- Repositorio aún local, sin publicación, licencia propia por decidir y revisión completa de terceros pendiente. Track de inscripción no verificado; no se ha enviado ninguna candidatura ni aceptado términos nuevos.
+Sustituye la versión del 27-10-2026, que describía una versión local anterior a AINGEL 3.0.
 
-- La preferencia de lengua de señas se guarda y existe un mecanismo de clips revisados por frase completa, pero el catálogo está vacío. Dos vídeos neutrales se conservaron solo para investigación y revisión; no están validados ni disponibles en la app. No hay interpretación libre en LSEC/ASL ni avatar en tiempo real; no se ha entrenado un modelo.
+## Evidencia y validación
+
+- **Sin estudio con usuarios:** AINGEL no se ha validado en un estudio con personas con discapacidad. La
+  accesibilidad sigue pautas (contraste, texto grande, lectores de pantalla, teclado) y pruebas del proyecto. Ni
+  NVDA ni TalkBack tienen todavía un recorrido completo documentado.
+- **Pruebas automáticas con Meta:** interceptan el cliente HTTP. Demuestran lo que AINGEL envía, los permisos y las
+  cuotas, **no** la precisión de las respuestas de Meta. Las llamadas reales a Meta se hicieron con material
+  sintético y cuentas ficticias (`docs/VALIDACION_ASTRA_PR12_2026-11-01.md`). La visión profunda completa contra
+  Meta real quedó pendiente en staging.
+- **Descripción de personas:** se basa en una sola foto o fotograma. La expresión se describe como apariencia y
+  nunca prueba lo que alguien siente. No hay una evaluación de su precisión.
+
+## Funciones experimentales o desactivadas
+
+- **Reconocimiento facial de familiares:** desactivado (`AINGEL_FACE_RECOGNITION_ENABLED=0`). No forma parte del
+  producto ni de la demo.
+- **Vigilancia continua por vídeo:** experimental y desactivada para datos reales en producción
+  (`AINGEL_VIDEO_REAL=0`).
+- **Señas:**
+  - el avatar muestra 81 diseños propios (alfabeto, números y 43 palabras), **ninguno validado todavía** por
+    personas señantes en el registro de señas;
+  - no es una traducción de la LSEC; el reconocimiento de señas por cámara es experimental.
+- **Idiomas:** la interfaz está en español e inglés. Otros idiomas no están implementados.
+
+## Plataformas
+
+- **Android:**
+  - la APK candidata pasó en un Samsung SM-F721B el registro, el perfil, la sesión y el MFA contra un backend de
+    prueba;
+  - faltan en dispositivo la cámara con Meta real, la visión profunda y TalkBack.
+- **Desktop:**
+  - las comprobaciones locales cubren campos, consentimientos y la exclusión de las ventanas de AINGEL de las
+    capturas;
+  - la prueba integral contra staging (captura, descripción, PDF y subtítulos) sigue pendiente;
+  - requiere el runtime de escritorio de .NET 8.
+- **Web:** usa Montserrat desde Google Fonts, lo que revela la dirección IP del navegador a Google. Se puede
+  alojar la fuente si se quiere evitarlo.
+
+## Datos, costes y cumplimiento
+
+- **Topes de gasto:** son una estimación de AINGEL, no la factura de Meta. Una petición que falla antes de que Meta
+  responda no se cuenta.
+- **Territorios restringidos:**
+  - se controlan por declaración de la persona; una declaración falsa no se detecta;
+  - el control por país de la conexión solo funciona si el proxy proporciona una fuente GeoIP, y hoy no está
+    configurado;
+  - Crimea, Donetsk y Luhansk solo se cubren con la declaración.
+- **Audio de reuniones:** AINGEL no puede comprobar que las otras personas estén informadas.
+- **Retención en Meta:** no hay retención cero contratada (§4.4 de las condiciones de Meta).
+- **Rutinas:** los avisos necesitan la pantalla Hoy abierta. No hay notificaciones push ni alarmas en segundo plano.
+- **Salud:** la búsqueda en MedlinePlus es educativa. AINGEL no es un dispositivo médico, no diagnostica, no da
+  dosis y no garantiza que un lugar o una ruta sean seguros.

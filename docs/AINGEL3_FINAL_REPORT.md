@@ -1,7 +1,15 @@
 # AINGEL 3.0 · Informe final (31-10-2026)
 
-**Estado:** las seis fases están construidas y probadas en sus PR, ninguna está fusionada ni desplegada, y no se tocó
-el VPS. Este documento resume las seis fases. El detalle de cada una está en `docs/AINGEL3_PHASE1_DEEP_VISION.md` …
+> **Actualización (2-11-2026).**
+> - **Una sola rama:** las seis fases, el acceso público con consentimiento (PR #12), las correcciones de staging, las
+>   de las imágenes Docker (backend y Nginx), el enfoque `screen_media` de Desktop y la prioridad de expresiones están
+>   en `release/hackathon-submission-2026`, con un único PR hacia `main`. El orden de fusión de la sección 1 ya no
+>   aplica: la rama contiene todos esos PR por ascendencia.
+> - **Producción:** AINGEL 3.0 está desplegado en <https://aingel.mapatechstudio.com>, según `docs/DEPLOYMENT.md`.
+> - Lo que sigue describe el estado al 31-10-2026.
+
+**Estado (31-10-2026):** las seis fases estaban construidas y probadas en sus PR, ninguna fusionada ni desplegada, y
+no se había tocado el VPS. Este documento resume las seis fases. El detalle de cada una está en `docs/AINGEL3_PHASE1_DEEP_VISION.md` …
 `docs/AINGEL3_PHASE6_INSTALLER.md`.
 
 ## 1. PR y orden de fusión
